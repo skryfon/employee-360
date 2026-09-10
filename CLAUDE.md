@@ -1,63 +1,49 @@
 # CLAUDE.md
 
-Guidance for Claude Code in this repository. Employee360 is an open-source,
-self-hostable, multi-tenant employee platform (holidays, policies, benefits, career
-development, comp/tax, performance — one place).
+Employee360: open-source, self-hostable, multi-tenant employee platform (holidays,
+policies, benefits, career, comp/tax, performance).
 
-## Project Status
+## Status
 
-Only planning docs exist (`requirmement.md`, `plan/`) — no source code, build tooling,
-or tests yet. No commands to run. Update this file once implementation lands.
+Planning docs only (`requirmement.md`, `plan/`) — no code/build/tests yet.
 
-## Agent Dispatch
+## Dispatch
 
-| Task | Agent |
-|---|---|
-| Go backend (`backend/`) | `backend-agent` |
-| React/TS (`clients/admin/`, `clients/employee/`, `packages/*`) | `frontend-agent` |
+| Task | Agent | Skill |
+|---|---|---|
+| Go backend (`backend/`) | `backend-agent` | `create-migration`, `new-backend-feature` |
+| React/TS (`clients/*`, `packages/*`) | `frontend-agent` | `new-frontend-feature` |
+| Review a branch/PR vs its Plane ticket | — (call directly) | `team-mate-review` |
 
-Full rules live in each agent file (`.claude/agents/{backend,frontend}-agent.md`) — don't
-ad-hoc code in these areas without dispatching. For a feature spanning both layers,
-dispatch `backend-agent` first (API contract), then `frontend-agent` (wires against it).
+Rules: `.claude/agents/{backend,frontend}-agent.md`. Don't ad-hoc code in these areas —
+dispatch instead. Cross-layer feature: `backend-agent` first (API), then `frontend-agent`.
 
-## Project Skills
+## Cycles (not "phases")
 
-Skills in `.claude/skills/` encode project-specific patterns. Match the task to a skill
-before doing it ad-hoc:
+Each module ships across several narrowly-scoped cycles (migrations → API → frontend,
+etc.), each with its own doc: `plan/cycles/cycle-NN-<name>.md` — source of truth for
+current scope, read before starting work.
 
-| Skill | When to use |
-|---|---|
-| `create-migration` | Adding a new DB migration (up/down pair) |
-| `new-backend-feature` | A new backend resource/endpoint — scaffolds every Clean Architecture layer |
-| `new-frontend-feature` | A new page/screen in the admin or employee app — scaffolds the feature folder |
-| `team-mate-review` | Reviewing a teammate's branch/PR against its Plane ticket, or preparing work for review |
+- Cycle 1 (active) — Project Setup & Scaffolding — `cycle-01-project-setup.md`
+- Cycle 2 (planned, blocked on 1) — Holiday Calendar migrations+seeding — `cycle-02-holiday-calendar-migrations-seeding.md`
+- Later modules (Onboarding, Work Status, Leave, Courses, Benefits, Career Growth, Salary/Tax, Appraisal, Policies): no file until started — don't foreclose them.
 
-## Execution Model: Cycles
+New cycle: create `plan/cycles/cycle-NN-<name>.md`, scope narrowly, break into
+sub-features before coding.
 
-Work ships as a sequence of **cycles**, not "phases." A module is typically delivered
-across several cycles (e.g. migrations, then backend API, then frontend), each narrowly
-scoped. Each cycle has its own doc, `plan/cycles/cycle-NN-<name>.md` — read it before
-starting or resuming work; it's the source of truth for current scope, not this file.
+## Docs
 
-- **Cycle 1 — Project Setup & Scaffolding** (active) — `plan/cycles/cycle-01-project-setup.md`
-- **Cycle 2 — Holiday Calendar: Migrations & Seeding** (planned, blocked on Cycle 1) — `plan/cycles/cycle-02-holiday-calendar-migrations-seeding.md`
-- Further modules (Onboarding, Work Status, Leave Management, Courses/Certifications, Benefits, Career Growth, Salary/Taxation, Appraisal, Company Policies): no cycle file until work starts on them — don't build earlier cycles in a way that forecloses them.
+- `plan/cycles/` — current scope (authoritative)
+- `requirmement.md` — original requirements (historical)
+- `plan/initial-planning.md` — tech stack + early "Design Cycles" notes (unrelated naming to `plan/cycles/` — don't conflate)
+- `plan/architecture/{backend,frontend}.md` — full directory trees/architecture
+- `AGENTS.md` — equivalent guidance for other AI tools (`.agents/` skills/hooks/rules) — kept in sync with this file; same facts, different format
 
-New cycle: create `plan/cycles/cycle-NN-<name>.md` (next number), scope it narrowly,
-break it into sub-features before writing code.
+Prefer real code over these docs once it exists.
 
-## Planning Docs
-
-- `plan/cycles/` — authoritative per-cycle scope/status.
-- `requirmement.md` — original requirements doc (historical source).
-- `plan/initial-planning.md` — tech stack tables + early "Design Cycles" notes (unrelated to `plan/cycles/` despite similar naming — don't conflate).
-- `plan/architecture/backend.md` / `frontend.md` — full directory trees and detailed architecture.
-
-Once code exists, prefer reading it over these docs where they diverge.
-
-## Key Principles
+## Principles
 
 - **Open Source** — usable/customisable/contributable by any organisation.
-- **Multi-Tenant** — every tenant-owned table row-scoped by `tenant_id`, resolved server-side from the verified JWT/domain, never trusted from client input.
-- **Self-Hostable** — `docker-compose` for local/self-hosted deploy, no cloud-specific managed services.
-- **Headless** — versioned REST API (`/api/v1/...`), client-agnostic (works for web, mobile, other clients — no cookie-only auth).
+- **Multi-Tenant** — `tenant_id` row-scoped server-side, never trusted from client input.
+- **Self-Hostable** — `docker-compose`, no cloud-provider lock-in.
+- **Headless** — versioned `/api/v1` REST, client-agnostic, no cookie-only auth.
