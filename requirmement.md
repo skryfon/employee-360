@@ -66,6 +66,9 @@ Phase 1 will include:
 
 ## 5. Future Add-Ons
 
+- Employee Onboarding
+- Employee Work Status updation and monitoring,
+- Employee Leave Management
 - Courses and Certifications
 - Employee Benefits
 - Career Growth
