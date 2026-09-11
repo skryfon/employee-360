@@ -175,5 +175,11 @@ pnpm typecheck
   tree and design.
 - `plan/architecture/frontend.md` — complete frontend monorepo directory tree and
   design.
+- `plan/architecture/overview.md` — quick-glance Mermaid diagrams (system
+  context, request lifecycle) — start here for a visual before reading
+  backend.md/frontend.md.
+- `plan/architecture/diagrams/` — detailed, exportable HTML+SVG companion
+  diagrams for backend.md/frontend.md/overview.md (PNG/PDF export via the
+  `architecture-diagram` skill) — for deep dives, not quick reading.
 
 Prefer real code over these docs once it exists.

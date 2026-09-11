@@ -1,6 +1,6 @@
 # AGENTS.md
 
-@plan/shared-context.md
+@shared-context.md
 
 ---
 
@@ -33,5 +33,5 @@ Before using any of the above, check it against the active cycle's scope in
 
 In addition to the shared documentation map above:
 - `CLAUDE.md` — equivalent guidance for Claude Code sessions; imports the same
-  `plan/shared-context.md`, so only its tool-specific dispatch section can drift
+  `shared-context.md`, so only its tool-specific dispatch section can drift
   from this file.

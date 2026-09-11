@@ -1,6 +1,6 @@
 # CLAUDE.md
 
-@plan/shared-context.md
+@shared-context.md
 
 ## Dispatch
 
@@ -17,5 +17,5 @@ dispatch instead. Cross-layer feature: `backend-agent` first (API), then `fronte
 
 In addition to the shared documentation map above:
 - `AGENTS.md` — equivalent guidance for other AI tools (`.agents/` skills/hooks/rules);
-  imports the same `plan/shared-context.md`, so only its tool-specific dispatch section
+  imports the same `shared-context.md`, so only its tool-specific dispatch section
   can drift from this file.
