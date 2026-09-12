@@ -93,41 +93,63 @@ backend/
 │   │   └── event/                # Domain events
 │   │       └── events.go
 │   ├── usecase/                  # Application Business Rules
-│   │   ├── auth/                 # Admin login, Employee passwordless verification
-│   │   │   ├── login.go
-│   │   │   ├── verify_email.go
-│   │   │   └── token_refresh.go
-│   │   ├── user/                 # User management operations
-│   │   │   ├── create_user.go
-│   │   │   ├── update_user.go
-│   │   │   ├── get_user.go
-│   │   │   └── list_users.go
-│   │   ├── rbac/                 # Role & Permission operations
-│   │   │   ├── assign_role.go
-│   │   │   ├── remove_role.go
-│   │   │   └── list_roles.go
-│   │   ├── department/           # Department hierarchy operations
-│   │   │   ├── create_department.go
-│   │   │   ├── update_department.go
-│   │   │   └── list_departments.go
-│   │   ├── position/             # Position / Job title operations
-│   │   │   ├── create_position.go
-│   │   │   ├── update_position.go
-│   │   │   └── list_positions.go
-│   │   ├── holiday/              # Holiday business operations
-│   │   │   ├── create_holiday.go
-│   │   │   ├── update_holiday.go
-│   │   │   ├── delete_holiday.go
-│   │   │   ├── get_holidays.go
-│   │   │   └── list_by_year.go
-│   │   ├── category/             # Category management operations
-│   │   │   ├── create_category.go
-│   │   │   └── list_categories.go
-│   │   ├── tenant/               # Tenant lookup & resolution operations
-│   │   │   └── get_tenant.go
-│   │   └── audit/                # Audit trail logging operations
-│   │       ├── log_action.go
-│   │       └── get_audit_logs.go
+│   │   ├── interface/             # Usecase ports — one file per feature, one interface per operation
+│   │   │   ├── auth/
+│   │   │   │   └── auth.go        # LoginUseCase, VerifyEmailUseCase, TokenRefreshUseCase
+│   │   │   ├── user/
+│   │   │   │   └── user.go        # CreateUserUseCase, UpdateUserUseCase, GetUserUseCase, ListUsersUseCase
+│   │   │   ├── rbac/
+│   │   │   │   └── rbac.go        # AssignRoleUseCase, RemoveRoleUseCase, ListRolesUseCase
+│   │   │   ├── department/
+│   │   │   │   └── department.go  # CreateDepartmentUseCase, UpdateDepartmentUseCase, ListDepartmentsUseCase
+│   │   │   ├── position/
+│   │   │   │   └── position.go    # CreatePositionUseCase, UpdatePositionUseCase, ListPositionsUseCase
+│   │   │   ├── holiday/
+│   │   │   │   └── holiday.go     # CreateHolidayUseCase, UpdateHolidayUseCase, DeleteHolidayUseCase, GetHolidaysUseCase, ListByYearUseCase
+│   │   │   ├── category/
+│   │   │   │   └── category.go    # CreateCategoryUseCase, ListCategoriesUseCase
+│   │   │   ├── tenant/
+│   │   │   │   └── tenant.go      # GetTenantUseCase
+│   │   │   └── audit/
+│   │   │       └── audit.go       # LogActionUseCase, GetAuditLogsUseCase
+│   │   └── implementation/        # Usecase adapters — one file per operation, implements the matching interface
+│   │       ├── auth/              # Admin login, Employee passwordless verification
+│   │       │   ├── login.go
+│   │       │   ├── verify_email.go
+│   │       │   └── token_refresh.go
+│   │       ├── user/              # User management operations
+│   │       │   ├── create_user.go
+│   │       │   ├── update_user.go
+│   │       │   ├── get_user.go
+│   │       │   └── list_users.go
+│   │       ├── rbac/              # Role & Permission operations
+│   │       │   ├── assign_role.go
+│   │       │   ├── remove_role.go
+│   │       │   └── list_roles.go
+│   │       ├── department/        # Department hierarchy operations
+│   │       │   ├── create_department.go
+│   │       │   ├── update_department.go
+│   │       │   └── list_departments.go
+│   │       ├── position/          # Position / Job title operations
+│   │       │   ├── create_position.go
+│   │       │   ├── update_position.go
+│   │       │   └── list_positions.go
+│   │       ├── holiday/           # Holiday business operations
+│   │       │   ├── create_holiday.go
+│   │       │   ├── update_holiday.go
+│   │       │   ├── delete_holiday.go
+│   │       │   ├── get_holidays.go
+│   │       │   └── list_by_year.go
+│   │       ├── category/          # Category management operations
+│   │       │   ├── create_category.go
+│   │       │   └── list_categories.go
+│   │       ├── tenant/            # Tenant lookup & resolution operations
+│   │       │   └── get_tenant.go
+│   │       ├── audit/             # Audit trail logging operations
+│   │       │   ├── log_action.go
+│   │       │   └── get_audit_logs.go
+│   │       └── ucshared/          # Shared usecase-layer helpers (e.g. Transactor)
+│   │           └── transactor.go
 │   ├── infrastructure/           # Frameworks, Drivers & Adapters
 │   │   ├── database/             # PostgreSQL connection pool, GORM instance & seeder
 │   │   │   ├── postgres.go
@@ -226,8 +248,9 @@ PostgreSQL Database
    - **Zero dependencies** on Gin, GORM, database drivers, or external libraries.
 
 2. **Usecase Layer (`internal/usecase`)**:
-   - Contains application-specific business logic.
-   - Coordinates domain entities, repositories, and domain services.
+   - Split into `usecase/interface/<feature>/` (ports — one file per feature declaring one `XxxUseCase` interface per operation, each with a single `Execute(ctx, ...) (result, error)` method) and `usecase/implementation/<feature>/` (adapters — one file per operation, e.g. `create_user.go` defines `CreateUserUseCaseImpl` with injected repository/service dependencies, a `NewCreateUserUseCase` constructor, and a compile-time assertion `var _ userUC.CreateUserUseCase = (*CreateUserUseCaseImpl)(nil)`).
+   - The Delivery layer depends only on the `usecase/interface` types, never on `usecase/implementation` directly — implementations are wired in via the DI container (`infrastructure/container`).
+   - Contains application-specific business logic; coordinates domain entities, repositories, and domain services.
    - Independent of transport protocol (knows nothing about HTTP, Gin, or JSON).
 
 3. **Delivery Layer (`internal/delivery/http`)**:
