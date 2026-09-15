@@ -12,8 +12,8 @@ import (
 	"github.com/golang-migrate/migrate/v4"
 	_ "github.com/golang-migrate/migrate/v4/database/postgres"
 	_ "github.com/golang-migrate/migrate/v4/source/file"
-	"github.com/your-org/your-project/backend/config"
-	"github.com/your-org/your-project/backend/internal/infrastructure/database"
+	"github.com/skryfon/employee360/backend/config"
+	"github.com/skryfon/employee360/backend/internal/infrastructure/database"
 )
 
 func main() {

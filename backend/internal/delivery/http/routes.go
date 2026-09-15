@@ -4,9 +4,14 @@ package http
 import (
 	"github.com/gin-gonic/gin"
 	"github.com/rs/zerolog"
-	"github.com/your-org/your-project/backend/internal/delivery/http/handlers"
-	"github.com/your-org/your-project/backend/internal/delivery/http/middleware"
-	"github.com/your-org/your-project/backend/shared"
+	swaggerFiles "github.com/swaggo/files"
+	ginSwagger "github.com/swaggo/gin-swagger"
+	// Blank import registers the generated Swagger spec with gin-swagger.
+	// Regenerate via `make swagger` after changing @-annotations.
+	_ "github.com/skryfon/employee360/backend/docs"
+	"github.com/skryfon/employee360/backend/internal/delivery/http/handlers"
+	"github.com/skryfon/employee360/backend/internal/delivery/http/middleware"
+	"github.com/skryfon/employee360/backend/shared"
 )
 
 // Handlers groups all HTTP handlers required by the router.
@@ -42,4 +47,7 @@ func registerRoutes(engine *gin.Engine, h Handlers) {
 		// Versioned health check for client SDKs / smoke tests.
 		v1.GET("/health", h.Health.Health)
 	}
+
+	// Swagger UI: interactive API docs, always available (no environment gating).
+	engine.GET("/swagger/*any", ginSwagger.WrapHandler(swaggerFiles.Handler))
 }

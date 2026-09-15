@@ -9,7 +9,7 @@ import (
 	"testing"
 
 	"github.com/gin-gonic/gin"
-	usecaseinterface "github.com/your-org/your-project/backend/internal/usecase/interface"
+	usecaseinterface "github.com/skryfon/employee360/backend/internal/usecase/interface"
 )
 
 // fakeHealthUseCase implements usecaseinterface.HealthUseCase for tests.

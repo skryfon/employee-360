@@ -7,7 +7,7 @@ import (
 	"fmt"
 	"net/http"
 
-	"github.com/your-org/your-project/backend/config"
+	"github.com/skryfon/employee360/backend/config"
 )
 
 // Server wraps the standard HTTP server with lifecycle controls.

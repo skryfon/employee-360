@@ -7,13 +7,18 @@ import (
 	"os/signal"
 	"syscall"
 
-	"github.com/your-org/your-project/backend/config"
-	"github.com/your-org/your-project/backend/internal/infrastructure/container"
-	"github.com/your-org/your-project/backend/internal/infrastructure/database"
-	"github.com/your-org/your-project/backend/internal/infrastructure/server"
-	"github.com/your-org/your-project/backend/pkg/logger"
+	"github.com/skryfon/employee360/backend/config"
+	"github.com/skryfon/employee360/backend/internal/infrastructure/container"
+	"github.com/skryfon/employee360/backend/internal/infrastructure/database"
+	"github.com/skryfon/employee360/backend/internal/infrastructure/server"
+	"github.com/skryfon/employee360/backend/pkg/logger"
 )
 
+// @title       Employee360 API
+// @version     1.0
+// @description REST API for Employee360, an open-source, self-hostable, multi-tenant employee platform. Includes unversioned operational endpoints (health checks) and the versioned client-facing API under /api/v1.
+// @BasePath    /
+// @schemes     http https
 func main() {
 	cfg, err := config.Load()
 	if err != nil {

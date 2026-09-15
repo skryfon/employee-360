@@ -11,8 +11,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/your-org/your-project/backend/config"
-	"github.com/your-org/your-project/backend/internal/infrastructure/database"
+	"github.com/skryfon/employee360/backend/config"
+	"github.com/skryfon/employee360/backend/internal/infrastructure/database"
 )
 
 func isCI() bool {

@@ -6,7 +6,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/your-org/your-project/backend/config"
+	"github.com/skryfon/employee360/backend/config"
 )
 
 // TestServer_StartAndShutdown is a lighter, isolated Start/Shutdown test

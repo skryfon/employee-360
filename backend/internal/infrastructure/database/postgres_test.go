@@ -8,7 +8,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/your-org/your-project/backend/config"
+	"github.com/skryfon/employee360/backend/config"
 )
 
 func getTestDatabaseConfig() config.DatabaseConfig {

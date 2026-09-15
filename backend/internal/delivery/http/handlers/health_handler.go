@@ -3,8 +3,8 @@ package handlers
 
 import (
 	"github.com/gin-gonic/gin"
-	"github.com/your-org/your-project/backend/internal/delivery/http/response"
-	usecaseinterface "github.com/your-org/your-project/backend/internal/usecase/interface"
+	"github.com/skryfon/employee360/backend/internal/delivery/http/response"
+	usecaseinterface "github.com/skryfon/employee360/backend/internal/usecase/interface"
 )
 
 // HealthHandler reports application and database health status.
@@ -25,6 +25,15 @@ type healthResponse struct {
 }
 
 // Health handles health check requests and returns system status.
+//
+// @Summary      Report application and database health
+// @Description  Returns application and database connectivity status. Used by load balancers, Kubernetes probes, monitoring, and client SDK smoke tests.
+// @Tags         health
+// @Produce      json
+// @Success      200  {object}  response.Envelope
+// @Router       /health [get]
+// @Router       /healthz [get]
+// @Router       /api/v1/health [get]
 func (h *HealthHandler) Health(c *gin.Context) {
 	result := h.healthUseCase.Execute(c.Request.Context())
 

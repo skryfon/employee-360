@@ -4,11 +4,11 @@ package container
 import (
 	"github.com/gin-gonic/gin"
 	"github.com/rs/zerolog"
-	"github.com/your-org/your-project/backend/config"
-	deliveryhttp "github.com/your-org/your-project/backend/internal/delivery/http"
-	"github.com/your-org/your-project/backend/internal/delivery/http/handlers"
-	"github.com/your-org/your-project/backend/internal/infrastructure/database"
-	usecaseimpl "github.com/your-org/your-project/backend/internal/usecase/implementation"
+	"github.com/skryfon/employee360/backend/config"
+	deliveryhttp "github.com/skryfon/employee360/backend/internal/delivery/http"
+	"github.com/skryfon/employee360/backend/internal/delivery/http/handlers"
+	"github.com/skryfon/employee360/backend/internal/infrastructure/database"
+	usecaseimpl "github.com/skryfon/employee360/backend/internal/usecase/implementation"
 	"gorm.io/gorm"
 )
 

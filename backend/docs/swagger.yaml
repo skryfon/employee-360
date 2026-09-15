@@ -1,0 +1,85 @@
+basePath: /
+definitions:
+  github_com_skryfon_employee360_backend_internal_delivery_http_response.Envelope:
+    properties:
+      data: {}
+      error:
+        $ref: '#/definitions/github_com_skryfon_employee360_backend_internal_delivery_http_response.ErrorInfo'
+      meta:
+        $ref: '#/definitions/github_com_skryfon_employee360_backend_internal_delivery_http_response.Meta'
+      success:
+        type: boolean
+    type: object
+  github_com_skryfon_employee360_backend_internal_delivery_http_response.ErrorInfo:
+    properties:
+      code:
+        type: string
+      details: {}
+      message:
+        type: string
+    type: object
+  github_com_skryfon_employee360_backend_internal_delivery_http_response.Meta:
+    properties:
+      page:
+        type: integer
+      page_size:
+        type: integer
+      total_items:
+        type: integer
+      total_pages:
+        type: integer
+    type: object
+info:
+  contact: {}
+  description: REST API for Employee360, an open-source, self-hostable, multi-tenant
+    employee platform. Includes unversioned operational endpoints (health checks)
+    and the versioned client-facing API under /api/v1.
+  title: Employee360 API
+  version: "1.0"
+paths:
+  /api/v1/health:
+    get:
+      description: Returns application and database connectivity status. Used by load
+        balancers, Kubernetes probes, monitoring, and client SDK smoke tests.
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/github_com_skryfon_employee360_backend_internal_delivery_http_response.Envelope'
+      summary: Report application and database health
+      tags:
+      - health
+  /health:
+    get:
+      description: Returns application and database connectivity status. Used by load
+        balancers, Kubernetes probes, monitoring, and client SDK smoke tests.
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/github_com_skryfon_employee360_backend_internal_delivery_http_response.Envelope'
+      summary: Report application and database health
+      tags:
+      - health
+  /healthz:
+    get:
+      description: Returns application and database connectivity status. Used by load
+        balancers, Kubernetes probes, monitoring, and client SDK smoke tests.
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/github_com_skryfon_employee360_backend_internal_delivery_http_response.Envelope'
+      summary: Report application and database health
+      tags:
+      - health
+schemes:
+- http
+- https
+swagger: "2.0"

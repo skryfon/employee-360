@@ -6,7 +6,7 @@ import (
 	"testing"
 
 	"github.com/gin-gonic/gin"
-	"github.com/your-org/your-project/backend/shared"
+	"github.com/skryfon/employee360/backend/shared"
 )
 
 func newRequestIDEngine() *gin.Engine {

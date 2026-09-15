@@ -9,9 +9,9 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/rs/zerolog"
-	"github.com/your-org/your-project/backend/internal/delivery/http/handlers"
-	usecaseinterface "github.com/your-org/your-project/backend/internal/usecase/interface"
-	"github.com/your-org/your-project/backend/shared"
+	"github.com/skryfon/employee360/backend/internal/delivery/http/handlers"
+	usecaseinterface "github.com/skryfon/employee360/backend/internal/usecase/interface"
+	"github.com/skryfon/employee360/backend/shared"
 )
 
 type fakeHealthUseCase struct{}

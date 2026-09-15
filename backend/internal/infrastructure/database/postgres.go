@@ -7,7 +7,7 @@ import (
 	"os"
 	"time"
 
-	"github.com/your-org/your-project/backend/config"
+	"github.com/skryfon/employee360/backend/config"
 	"gorm.io/driver/postgres"
 	"gorm.io/gorm"
 	"gorm.io/gorm/logger"

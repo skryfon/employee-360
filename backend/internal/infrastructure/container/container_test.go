@@ -4,7 +4,7 @@ import (
 	"testing"
 
 	"github.com/rs/zerolog"
-	"github.com/your-org/your-project/backend/config"
+	"github.com/skryfon/employee360/backend/config"
 )
 
 // TestNew_ConstructsWithoutTouchingDB verifies the container can be built

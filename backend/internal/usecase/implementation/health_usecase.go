@@ -4,9 +4,9 @@ package usecaseimpl
 import (
 	"context"
 
-	"github.com/your-org/your-project/backend/internal/domain/service"
-	usecaseinterface "github.com/your-org/your-project/backend/internal/usecase/interface"
-	"github.com/your-org/your-project/backend/shared"
+	"github.com/skryfon/employee360/backend/internal/domain/service"
+	usecaseinterface "github.com/skryfon/employee360/backend/internal/usecase/interface"
+	"github.com/skryfon/employee360/backend/shared"
 )
 
 // HealthUseCaseImpl implements usecaseinterface.HealthUseCase.

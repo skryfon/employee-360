@@ -4,7 +4,7 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/your-org/your-project/backend/internal/domain/service"
+	"github.com/skryfon/employee360/backend/internal/domain/service"
 	"gorm.io/gorm"
 )
 

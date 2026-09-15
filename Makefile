@@ -8,7 +8,8 @@ SCOPE       ?= employee-360
         test test-all test-backend test-backend-cover cover-func cover-html test-clients \
         check check-backend check-structure fmt-check \
         lint lint-backend lint-clients typecheck \
-        build build-backend build-bin vet tidy clean
+        build build-backend build-bin vet tidy clean \
+        swagger generate
 
 help: ## Show this help menu
 	@awk 'BEGIN {FS = ":.*## "} /^[a-zA-Z_-]+:.*## / {printf "  \033[36m%-22s\033[0m %s\n", $$1, $$2}' $(MAKEFILE_LIST)
@@ -140,3 +141,14 @@ build-bin: ## Build backend binaries into backend/bin
 clean: ## Remove build artifacts and temporary files
 	rm -rf $(BACKEND_DIR)/bin $(BACKEND_DIR)/tmp $(BACKEND_DIR)/coverage.out
 	@if [ -f package.json ]; then pnpm -r exec rm -rf dist .turbo; fi
+
+## --- API Docs ---
+
+swagger: ## Regenerate Swagger/OpenAPI docs from annotations (run after changing @-annotations)
+	@cd $(BACKEND_DIR) && go run github.com/swaggo/swag/cmd/swag@v1.16.6 init \
+		-g cmd/api/main.go \
+		-o docs \
+		--parseDependency \
+		--parseInternal
+
+generate: swagger ## Alias for `make swagger` (regenerate all generated backend code/docs)

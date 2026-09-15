@@ -5,7 +5,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/rs/zerolog"
-	"github.com/your-org/your-project/backend/internal/delivery/http/response"
+	"github.com/skryfon/employee360/backend/internal/delivery/http/response"
 )
 
 // Recovery returns panic-recovery middleware with structured error responses.
