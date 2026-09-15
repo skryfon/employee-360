@@ -37,9 +37,6 @@ jobs:
       DATABASE_PASSWORD: postgres
       DATABASE_NAME: employee360
       DATABASE_SSLMODE: disable
-    defaults:
-      run:
-        working-directory: backend
     steps:
       - uses: actions/checkout@v4
 
@@ -50,12 +47,13 @@ jobs:
       - name: verify docker-compose configurations
         run: |
           docker compose -f docker-compose.yml config
-          docker compose -f ../docker-compose.yml config
+          docker compose -f backend/docker-compose.yml config
 
-      - name: run make check (build, vet, fmt, test)
-        run: make check
+      - name: run make check-backend (build, vet, fmt, test)
+        run: make check-backend
 
       - name: smoke-test dev and migrate entrypoints
+        working-directory: backend
         run: |
           timeout 10s go run ./cmd/api
           timeout 10s go run ./cmd/migrate up

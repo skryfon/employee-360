@@ -6,7 +6,9 @@ SCOPE       ?= employee-360
         migrate migrate-down migrate-status migrate-version migrate-reset \
         seed bootstrap-admin \
         test test-all test-backend test-backend-cover cover-func cover-html test-clients \
-        check lint lint-backend lint-clients typecheck build clean tidy
+        check check-backend check-structure fmt-check \
+        lint lint-backend lint-clients typecheck \
+        build build-backend build-bin vet tidy clean
 
 help: ## Show this help menu
 	@awk 'BEGIN {FS = ":.*## "} /^[a-zA-Z_-]+:.*## / {printf "  \033[36m%-22s\033[0m %s\n", $$1, $$2}' $(MAKEFILE_LIST)
@@ -77,14 +79,38 @@ test-clients: ## Run frontend tests
 
 ## --- Quality & Linting ---
 
-check: ## Run full verification suite (backend + frontend)
-	cd $(BACKEND_DIR) && $(MAKE) check
+check: check-backend ## Run full verification suite (backend + frontend)
 	@if [ -f package.json ]; then pnpm -r lint && pnpm -r typecheck; fi
+
+check-backend: build-backend vet fmt-check check-structure test-backend ## Run the backend-only verification suite (used by CI)
+
+fmt-check: ## Fail if any backend file needs gofmt formatting
+	@unformatted="$$(cd $(BACKEND_DIR) && gofmt -l .)"; \
+	if [ -n "$$unformatted" ]; then \
+		echo "gofmt needs to be run on:"; \
+		echo "$$unformatted"; \
+		exit 1; \
+	fi
+
+check-structure: ## Verify required backend scaffolding directories exist
+	@missing=0; \
+	for d in internal/usecase/interface internal/usecase/implementation internal/usecase/implementation/ucshared; do \
+		if [ ! -d "$(BACKEND_DIR)/$$d" ]; then \
+			echo "missing required directory: $(BACKEND_DIR)/$$d"; \
+			missing=1; \
+		fi; \
+	done; \
+	exit $$missing
 
 lint: lint-backend lint-clients ## Run all linters
 
-lint-backend: ## Run golangci-lint on backend
-	cd $(BACKEND_DIR) && $(MAKE) lint
+lint-backend: ## Run golangci-lint on backend (falls back to go vet if not installed)
+	@if command -v golangci-lint >/dev/null 2>&1; then \
+		cd $(BACKEND_DIR) && golangci-lint run ./...; \
+	else \
+		echo "golangci-lint not installed, falling back to go vet"; \
+		cd $(BACKEND_DIR) && go vet ./...; \
+	fi
 
 lint-clients: ## Run ESLint on frontend clients
 	@if [ -f package.json ]; then pnpm -r lint; else echo "Frontend clients not initialized yet (Cycle 1 scope)"; fi
@@ -92,14 +118,24 @@ lint-clients: ## Run ESLint on frontend clients
 typecheck: ## Run TypeScript type checking
 	@if [ -f package.json ]; then pnpm -r typecheck; else echo "Frontend clients not initialized yet (Cycle 1 scope)"; fi
 
+vet: ## Run go vet on backend
+	cd $(BACKEND_DIR) && go vet ./...
+
 tidy: ## Tidy Go module dependencies
 	cd $(BACKEND_DIR) && go mod tidy
 
 ## --- Build & Clean ---
 
-build: ## Build backend binaries and client bundles
-	cd $(BACKEND_DIR) && $(MAKE) build-bin
+build: build-backend ## Compile backend and build client bundles
 	@if [ -f package.json ]; then pnpm -r build; fi
+
+build-backend: ## Compile every backend package (matches "go build ./..." acceptance criterion)
+	cd $(BACKEND_DIR) && go build ./...
+
+build-bin: ## Build backend binaries into backend/bin
+	cd $(BACKEND_DIR) && go build -o bin/api ./cmd/api
+	cd $(BACKEND_DIR) && go build -o bin/migrate ./cmd/migrate
+	cd $(BACKEND_DIR) && go build -o bin/bootstrap ./cmd/bootstrap
 
 clean: ## Remove build artifacts and temporary files
 	rm -rf $(BACKEND_DIR)/bin $(BACKEND_DIR)/tmp $(BACKEND_DIR)/coverage.out

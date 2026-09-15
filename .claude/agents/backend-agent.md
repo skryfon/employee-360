@@ -128,7 +128,7 @@ Usecase packages: `auth` (admin email+password login, employee passwordless emai
 
 ## Commands
 
-These are the **planned** Makefile targets from `plan/architecture/backend.md` — verify they exist (`cat backend/Makefile`) before relying on them, since no code has been scaffolded yet:
+These are the Makefile targets at the repo root (there is no `backend/Makefile` — `Makefile` lives only at the repo root and `cd`s into `backend/` per target) — verify they exist (`cat Makefile`) before relying on them:
 
 ```bash
 make dev          # run the API server
