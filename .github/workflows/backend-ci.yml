@@ -1,0 +1,39 @@
+name: Backend CI
+
+on:
+  push:
+    paths:
+      - "backend/**"
+      - ".github/workflows/backend-ci.yml"
+  pull_request:
+    paths:
+      - "backend/**"
+      - ".github/workflows/backend-ci.yml"
+
+jobs:
+  check:
+    name: build, vet, fmt, test
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: backend
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: backend/go.mod
+
+      - run: make check
+
+      # Cycle 1 (A1) smoke check only: cmd/api and cmd/migrate are
+      # currently no-op stubs that print and exit immediately, so
+      # running them directly here is safe. Once A3 wires a real HTTP
+      # server into cmd/api, `go run ./cmd/api` will block forever and
+      # this step must be replaced with a background-start +
+      # health-check + kill sequence instead (A2 will similarly need a
+      # Postgres service added here once cmd/migrate does real work).
+      - name: smoke-test dev and migrate entrypoints
+        run: |
+          timeout 10s go run ./cmd/api
+          timeout 10s go run ./cmd/migrate up

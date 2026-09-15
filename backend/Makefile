@@ -1,4 +1,4 @@
-.PHONY: dev migrate migrate-down bootstrap test build lint tidy
+.PHONY: dev migrate migrate-down bootstrap test build build-bin vet fmt-check check lint tidy
 
 # Run the API server.
 dev:
@@ -22,11 +22,32 @@ bootstrap:
 test:
 	go test ./...
 
-# Build all binaries into ./bin.
+# Compile every package in the module — matches the "go build ./..."
+# acceptance criterion exactly.
 build:
+	go build ./...
+
+# Build runnable binaries into ./bin. Not required by any acceptance
+# criterion; a convenience for local use/deployment.
+build-bin:
 	go build -o bin/api ./cmd/api
 	go build -o bin/migrate ./cmd/migrate
 	go build -o bin/bootstrap ./cmd/bootstrap
+
+vet:
+	go vet ./...
+
+# Fail if any file needs gofmt formatting.
+fmt-check:
+	@unformatted="$$(gofmt -l .)"; \
+	if [ -n "$$unformatted" ]; then \
+		echo "gofmt needs to be run on:"; \
+		echo "$$unformatted"; \
+		exit 1; \
+	fi
+
+# Full verification suite — the single command CI runs.
+check: build vet fmt-check test
 
 # Run golangci-lint if it's installed; otherwise fall back to go vet.
 lint:
