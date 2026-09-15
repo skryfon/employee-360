@@ -17,6 +17,8 @@ func TestConfig_Defaults(t *testing.T) {
 	os.Unsetenv("DATABASE_DBNAME")
 	os.Unsetenv("SERVER_PORT")
 	os.Unsetenv("PORT")
+	os.Unsetenv("APP_ENV")
+	os.Unsetenv("ENVIRONMENT")
 
 	cfg, err := Load()
 	if err != nil {
@@ -66,7 +68,8 @@ func TestConfig_EnvOverrides(t *testing.T) {
 	t.Setenv("DATABASE_NAME", "custom_employee360")
 	t.Setenv("DATABASE_SSLMODE", "require")
 	t.Setenv("SERVER_PORT", "9090")
-	t.Setenv("APP_ENV", "production")
+	t.Setenv("APP_ENV", "staging")
+	t.Setenv("JWT_SECRET", "custom-32-byte-secure-jwt-secret-key-360")
 
 	cfg, err := Load()
 	if err != nil {
@@ -94,8 +97,28 @@ func TestConfig_EnvOverrides(t *testing.T) {
 	if cfg.Server.Port != "9090" {
 		t.Errorf("expected Server.Port '9090', got %q", cfg.Server.Port)
 	}
-	if cfg.App.Environment != "production" {
-		t.Errorf("expected App.Environment 'production', got %q", cfg.App.Environment)
+	if cfg.App.Environment != "staging" {
+		t.Errorf("expected App.Environment 'staging', got %q", cfg.App.Environment)
+	}
+}
+
+func TestConfig_JWTSecretValidationInProduction(t *testing.T) {
+	t.Setenv("APP_ENV", "production")
+	t.Setenv("JWT_SECRET", DefaultJWTSecret)
+
+	_, err := Load()
+	if err == nil {
+		t.Fatal("expected Load() to fail when default JWT secret is used in production")
+	}
+
+	// Now set a strong custom secret
+	t.Setenv("JWT_SECRET", "a-secure-production-jwt-secret-with-over-32-chars")
+	cfg, err := Load()
+	if err != nil {
+		t.Fatalf("expected Load() to succeed with strong secret in production: %v", err)
+	}
+	if cfg.JWT.Secret != "a-secure-production-jwt-secret-with-over-32-chars" {
+		t.Errorf("unexpected secret: %q", cfg.JWT.Secret)
 	}
 }
 

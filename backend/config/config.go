@@ -11,6 +11,9 @@ import (
 	"github.com/spf13/viper"
 )
 
+// DefaultJWTSecret is the fallback secret used exclusively in local development mode.
+const DefaultJWTSecret = "employee360-super-secret-key-change-in-production"
+
 // Config represents the root application configuration for Employee360.
 type Config struct {
 	Server   ServerConfig   `mapstructure:"server"`
@@ -79,6 +82,17 @@ type AppConfig struct {
 	LogLevel    string `mapstructure:"log_level"`
 }
 
+// Validate verifies that the configuration meets environment and security requirements.
+func (c *Config) Validate() error {
+	env := strings.ToLower(c.App.Environment)
+	if env == "production" || env == "staging" {
+		if c.JWT.Secret == DefaultJWTSecret || len(c.JWT.Secret) < 32 {
+			return fmt.Errorf("jwt.secret must be explicitly set to a custom strong secret (min 32 chars) in %q environment", c.App.Environment)
+		}
+	}
+	return nil
+}
+
 // Load loads configuration from defaults, .env files, config.yaml files, and environment variables.
 func Load(searchPaths ...string) (*Config, error) {
 	v := viper.New()
@@ -126,6 +140,11 @@ func Load(searchPaths ...string) (*Config, error) {
 		return nil, fmt.Errorf("unable to decode configuration into struct: %w", err)
 	}
 
+	// 7. Validate configuration
+	if err := cfg.Validate(); err != nil {
+		return nil, fmt.Errorf("configuration validation failed: %w", err)
+	}
+
 	return &cfg, nil
 }
 
@@ -150,7 +169,7 @@ func setDefaults(v *viper.Viper) {
 	v.SetDefault("database.conn_timeout", 5*time.Second)
 
 	// JWT defaults
-	v.SetDefault("jwt.secret", "employee360-super-secret-key-change-in-production")
+	v.SetDefault("jwt.secret", DefaultJWTSecret)
 	v.SetDefault("jwt.access_expiry", 15*time.Minute)
 	v.SetDefault("jwt.refresh_expiry", 7*24*time.Hour)
 
