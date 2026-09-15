@@ -31,14 +31,6 @@ func main() {
 		cmd = strings.ToLower(args[0])
 	}
 
-	if cmd == "create" {
-		if len(args) < 2 {
-			fatal("usage: migrate create <name>")
-		}
-		runCreate(dir, args[1])
-		return
-	}
-
 	cfg, err := config.Load()
 	if err != nil {
 		fatal("failed to load configuration: " + err.Error())
@@ -162,40 +154,6 @@ func isNoChangeOrEmpty(err error) bool {
 	}
 	msg := err.Error()
 	return strings.Contains(msg, "file does not exist") || strings.Contains(msg, "no change")
-}
-
-func runCreate(dir, name string) {
-	if err := os.MkdirAll(dir, 0755); err != nil {
-		fatal("create: " + err.Error())
-	}
-
-	entries, err := os.ReadDir(dir)
-	if err != nil {
-		fatal("create: " + err.Error())
-	}
-
-	next := 1
-	for _, e := range entries {
-		if len(e.Name()) < 6 {
-			continue
-		}
-		if n, err := strconv.Atoi(e.Name()[:6]); err == nil && n >= next {
-			next = n + 1
-		}
-	}
-
-	cleanName := strings.ToLower(strings.TrimSpace(name))
-	cleanName = strings.ReplaceAll(cleanName, " ", "_")
-	cleanName = strings.ReplaceAll(cleanName, "-", "_")
-
-	prefix := fmt.Sprintf("%06d_%s", next, cleanName)
-	for _, suffix := range []string{".up.sql", ".down.sql"} {
-		path := filepath.Join(dir, prefix+suffix)
-		if err := os.WriteFile(path, []byte(""), 0644); err != nil {
-			fatal("create: " + err.Error())
-		}
-		fmt.Println("created:", path)
-	}
 }
 
 func findMigrationsDir() string {

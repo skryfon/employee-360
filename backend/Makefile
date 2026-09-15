@@ -1,4 +1,4 @@
-.PHONY: dev migrate migrate-down migrate-status migrate-version migrate-create migrate-reset bootstrap test build build-bin vet fmt-check check-structure check lint tidy
+.PHONY: dev migrate migrate-down migrate-status migrate-version migrate-reset bootstrap test build build-bin vet fmt-check check-structure check lint tidy
 
 # Run the API server.
 dev:
@@ -19,10 +19,6 @@ migrate-status:
 # Show current migration version.
 migrate-version:
 	go run ./cmd/migrate version
-
-# Create a new migration pair (e.g. make migrate-create name=create_tenants).
-migrate-create:
-	go run ./cmd/migrate create $(name)
 
 # Reset database migrations (revert all and reapply).
 migrate-reset:

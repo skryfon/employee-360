@@ -1,6 +1,6 @@
 MAKEFLAGS += --no-print-directory
 
-.PHONY: dev migrate migrate-down migrate-status migrate-version migrate-create migrate-reset bootstrap test check build
+.PHONY: dev migrate migrate-down migrate-status migrate-version migrate-reset bootstrap test check build
 
 dev:
 	cd backend && go run ./cmd/api
@@ -16,9 +16,6 @@ migrate-status:
 
 migrate-version:
 	cd backend && go run ./cmd/migrate version
-
-migrate-create:
-	cd backend && go run ./cmd/migrate create $(name)
 
 migrate-reset:
 	cd backend && go run ./cmd/migrate reset
