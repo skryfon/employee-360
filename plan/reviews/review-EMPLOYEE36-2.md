@@ -1,6 +1,6 @@
 # Review: EMPLOYEE36-2 — A1 — Backend: project scaffolding & structure
 
-> Branch: ebin/feat/EPIC-A/EMPLOYEE36-2 | Last reviewed: 2026-09-15 11:14 | Iteration: 1 | Verdict: 🔴
+> Branch: ebin/feat/EPIC-A/EMPLOYEE36-2 | Last reviewed: 2026-09-15 11:40 | Iteration: 3 | Verdict: 🟢
 
 ## Ticket
 **Identifier:** EMPLOYEE36-2
@@ -12,31 +12,45 @@
 Pure scaffolding for the backend module per `plan/architecture/backend.md`. No feature code, no auth, no tenant resolution — this is the foundation everything else in EPIC-A builds on. Lists the full target directory tree, the three Makefile targets (`make dev`, `make migrate`, `make test`), and notes the `go.mod` module path is a deliberate placeholder until A2/A3.
 
 ### Acceptance Criteria
-- [ ] AC-1: `go build ./...` succeeds
-- [ ] AC-2: `go vet ./...` passes clean
-- [ ] AC-3: `make dev` runs without error
-- [ ] AC-4: `make migrate` runs without error
-- [ ] AC-5: `make test` runs without error (no-op)
-- [ ] AC-6: `usecase/interface` / `usecase/implementation` split scaffolded, with `ucshared` in place, even though no use cases exist yet
+- [x] AC-1: `go build ./...` succeeds — `.github/workflows/backend-ci.yml`'s `check` job runs `make check` → `go build ./...` on every push/PR touching `backend/**` (backend/Makefile:26-28)
+- [x] AC-2: `go vet ./...` passes clean — same `make check` chain, `backend/Makefile:34-35`
+- [x] AC-3: `make dev` runs without error — CI's "smoke-test dev and migrate entrypoints" step runs `timeout 10s go run ./cmd/api` (.github/workflows/backend-ci.yml:35-36)
+- [x] AC-4: `make migrate` runs without error — same smoke-test step, `timeout 10s go run ./cmd/migrate up` (.github/workflows/backend-ci.yml:37)
+- [x] AC-5: `make test` runs without error (no-op) — `make check` → `go test ./...` (backend/Makefile:44)
+- [x] AC-6: `usecase/interface` / `usecase/implementation` split scaffolded, with `ucshared` in place, even though no use cases exist yet — implementation at `backend/internal/usecase/{interface,implementation,implementation/ucshared}/doc.go`; automated evidence via `make check-structure` (backend/Makefile:49-62), wired into `make check` and therefore `backend-ci.yml`. Verified this actually catches the regression it's meant to: manually removed `ucshared/` and confirmed `make check-structure` fails with a clear message and non-zero exit, then restored it and confirmed it passes again.
 
 ## Latest commit reviewed
-`27f79c4` — Scaffold backend project structure (EMPLOYEE36-2 / A1)
+`0a72b1c` — Add make check-structure to close AC-6 evidence gap (EMPLOYEE36-2)
 
 ## Findings
 
 ### 🔴 Critical
-- [ ] `plan/reviews/review-EMPLOYEE36-2.md` (this review) — AC-1 through AC-6 have implementation evidence but no automated test/CI evidence in the diff — Per this skill's checklist §1/§9, an AC is only met when both implementation *and* a test that specifically exercises it exist in the diff. This repo has no `.github/workflows` (or any CI config) and no test files anywhere under `backend/`, so nothing in the committed code automatically verifies `go build ./...`, `go vet ./...`, `make dev`, `make migrate`, or `make test` succeed, or that the `usecase/interface`/`implementation`/`ucshared` split exists. I manually ran all five commands during this review and they passed (see Notes), but that verification is not committed/repeatable — a future change could silently break any of them. — Suggested fix: either (a) add a minimal CI workflow (e.g. `cd backend && go build ./... && go vet ./... && make test`) as part of this ticket or a fast-follow, or (b) if this team intends Cycle-1 scaffolding tickets to be exempt from automated-test verification (consistent with the ticket's own "make test → no-op placeholder, real tests start Cycle 2+" framing), make that an explicit, agreed exception rather than a silent gap — a call for the team, not this review, to make.
+- [x] `plan/reviews/review-EMPLOYEE36-2.md` (this review) — AC-1 through AC-6 have implementation evidence but no automated test/CI evidence in the diff — (resolved in `1bc26e2` for AC-1–AC-5: `.github/workflows/backend-ci.yml` now runs `make check` and a smoke-test step on every push/PR touching `backend/**`, giving committed, repeatable evidence for build/vet/dev/migrate/test.)
+- [x] `backend/internal/usecase/{interface,implementation,implementation/ucshared}/` (AC-6) — no automated check verifies these specific packages exist — (resolved in `0a72b1c`: `make check-structure` explicitly asserts all three paths exist and is wired into `make check` → CI; negative-tested by deliberately deleting `ucshared/` and confirming the target fails.)
 
 ### 🟡 Major
-- (none beyond the AC/CI gap captured above)
+- (none)
 
 ### 🟢 Minor
 - (none)
 
 ## Verdict
-- **Score:** N/A — hard gate triggered (see below)
-- **Flag:** 🔴 Block
-- **Notes:** This is a clean, well-scoped implementation — every AC's *implementation* is genuinely present and correct, and I independently re-ran the underlying commands during this review: `go build ./...` (exit 0), `go vet ./...` (exit 0), `gofmt -l .` (clean), `make dev` / `make migrate` / `make test` all completed without error, and the `usecase/interface` (package `usecaseinterface`) / `usecase/implementation` (package `usecaseimpl`) / `usecase/implementation/ucshared` split all exist exactly as the ticket's AC-6 describes. Cycle-scope adherence is also correct: this diff strictly matches A1's scope and does not reach into sibling tickets A2 (config/DB/migrate) or A3 (middleware/health/server) — every package that would belong to those tickets is a `doc.go`-style placeholder rather than functional code, and `go.mod` has zero third-party dependencies, consistent with the ticket's own note that real imports don't land until A2/A3. Project invariants (multi-tenancy, headless API, self-hostability, layering) are not yet applicable since there is no functional code, and none are violated. The sole reason this review is flagged 🔴 Block is procedural, not substantive: per this skill's strict AC-evidence rule, every AC here lacks committed automated-test/CI evidence, and the repo has no CI pipeline at all yet. Given the ticket text itself defers "real tests" to Cycle 2+, the team may reasonably decide this gate doesn't apply to pure-scaffolding tickets — but that's a policy call for a human, so this review surfaces it rather than silently passing or failing it.
+- **Score:** 100/100
+- **Flag:** 🟢 Merge
+- **Notes:** All 6 acceptance criteria are now met with both implementation and committed, repeatable automated evidence: `.github/workflows/backend-ci.yml` runs `make check` (build ./..., vet, gofmt check, check-structure, test) plus a smoke-test step for `cmd/api`/`cmd/migrate` on every push/PR touching `backend/**`. I independently re-verified every piece this iteration: `make check-structure` passes when the paths exist and fails with a clear message when `ucshared/` is deliberately removed (restored afterward), and the full `make check` chain exits 0. Cycle-scope discipline holds throughout — this branch never reached into sibling tickets A2 (config/DB/migrate) or A3 (middleware/health/server); every package belonging to those tickets remains a `doc.go`-style placeholder, and `go.mod` still has zero third-party dependencies. No project invariants apply yet (no functional/tenant/auth code exists in this ticket's scope) and none are violated. Zero open findings. Clear to merge.
 
 ## Re-review Log
-_(empty — first review)_
+
+### Iteration 2 — 2026-09-15 — sha `1bc26e2`
+- **Resolved:** AC-1 (build), AC-2 (vet), AC-3 (dev smoke-test), AC-4 (migrate smoke-test), AC-5 (test) — all now backed by `.github/workflows/backend-ci.yml`'s `check` job + smoke-test step. Original broad "no CI at all" 🔴 finding resolved.
+- **Still open:** AC-6 — no automated check verifies the `usecase/interface`/`implementation`/`ucshared` split exists (new, narrower 🔴 finding replacing the broad one for this specific AC).
+- **New issues:** none.
+- **Score:** N/A → N/A (hard gate still triggered, now solely by AC-6)
+- **Verdict:** 🔴 Block
+
+### Iteration 3 — 2026-09-15 — sha `0a72b1c`
+- **Resolved:** AC-6 — `make check-structure` now asserts `usecase/interface`, `usecase/implementation`, and `usecase/implementation/ucshared` exist, wired into `make check` → CI. Negative-tested (deleted `ucshared/`, confirmed failure; restored, confirmed pass).
+- **Still open:** none.
+- **New issues:** none.
+- **Score:** N/A → 100 (+100)
+- **Verdict:** 🟢 Merge
