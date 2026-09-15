@@ -25,8 +25,13 @@ bootstrap: ## Install frontend and backend dependencies
 dev: ## Run backend API + admin + employee clients concurrently
 	@$(MAKE) -j3 dev-api dev-admin dev-employee
 
-dev-api: ## Run the Go backend API
-	cd $(BACKEND_DIR) && go run ./cmd/api
+dev-api: ## Run the Go backend API (hot reload via air if installed, else go run)
+	@if command -v air >/dev/null 2>&1; then \
+		cd $(BACKEND_DIR) && air; \
+	else \
+		echo "air not installed (go install github.com/air-verse/air@latest) — falling back to go run"; \
+		cd $(BACKEND_DIR) && go run ./cmd/api; \
+	fi
 
 dev-admin: ## Run admin client (clients/admin)
 	pnpm --filter admin dev
