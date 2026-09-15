@@ -1,15 +1,36 @@
-// Command api is the Employee360 API server entrypoint.
-//
-// This is Cycle 1 (project scaffolding, ticket A1) — the binary exists
-// so `go build ./...` and `make dev` succeed, but config loading, the
-// database connection, the middleware chain, routes, and graceful
-// shutdown are not wired yet. They land in A2 (config, DB connectivity
-// & migration runner) and A3 (middleware chain, health route & server
-// bootstrap).
 package main
 
-import "fmt"
+import (
+	"fmt"
+	"os"
+
+	"github.com/your-org/your-project/backend/config"
+	"github.com/your-org/your-project/backend/internal/infrastructure/database"
+)
 
 func main() {
-	fmt.Println("employee360 api: scaffolding only (Cycle 1 / A1) — server bootstrap lands in A3")
+	cfg, err := config.Load()
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "failed to load configuration: %v\n", err)
+		os.Exit(1)
+	}
+
+	// Connect to database (fail fast if unreachable)
+	if err := database.EnsureDatabaseExists(cfg.Database); err != nil {
+		database.FailFast(err)
+	}
+
+	db, err := database.Connect(cfg.Database)
+	if err != nil {
+		database.FailFast(err)
+	}
+
+	sqlDB, err := db.DB()
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "failed to get underlying database connection: %v\n", err)
+		os.Exit(1)
+	}
+	defer sqlDB.Close()
+
+	fmt.Printf("employee360 api: connected to database %s on %s:%s\n", cfg.Database.DBName, cfg.Database.Host, cfg.Database.Port)
 }

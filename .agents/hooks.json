@@ -6,12 +6,12 @@
         "hooks": [
           {
             "type": "command",
-            "command": "bash .agents/hooks/check-migration.sh",
+            "command": "bash /home/ebinb/employee-360/.agents/hooks/check-migration.sh",
             "timeout": 30
           },
           {
             "type": "command",
-            "command": "bash .agents/hooks/tenant-scope-reminder.sh",
+            "command": "bash /home/ebinb/employee-360/.agents/hooks/tenant-scope-reminder.sh",
             "timeout": 30
           }
         ]
@@ -25,12 +25,12 @@
         "hooks": [
           {
             "type": "command",
-            "command": "bash .agents/hooks/backend-check.sh",
+            "command": "bash /home/ebinb/employee-360/.agents/hooks/backend-check.sh",
             "timeout": 60
           },
           {
             "type": "command",
-            "command": "bash .agents/hooks/frontend-check.sh",
+            "command": "bash /home/ebinb/employee-360/.agents/hooks/frontend-check.sh",
             "timeout": 120
           }
         ]

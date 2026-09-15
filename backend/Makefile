@@ -1,4 +1,4 @@
-.PHONY: dev migrate migrate-down bootstrap test build build-bin vet fmt-check check-structure check lint tidy
+.PHONY: dev migrate migrate-down migrate-status migrate-version migrate-create migrate-reset bootstrap test build build-bin vet fmt-check check-structure check lint tidy
 
 # Run the API server.
 dev:
@@ -11,6 +11,22 @@ migrate:
 # Revert all applied migrations.
 migrate-down:
 	go run ./cmd/migrate down
+
+# Show migration status / version.
+migrate-status:
+	go run ./cmd/migrate status
+
+# Show current migration version.
+migrate-version:
+	go run ./cmd/migrate version
+
+# Create a new migration pair (e.g. make migrate-create name=create_tenants).
+migrate-create:
+	go run ./cmd/migrate create $(name)
+
+# Reset database migrations (revert all and reapply).
+migrate-reset:
+	go run ./cmd/migrate reset
 
 # Seed system tenant, core roles, and platform Super Admin.
 # No-op beyond a connectivity check until Cycle 2+ adds the entities to seed.

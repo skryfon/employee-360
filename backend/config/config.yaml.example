@@ -1,5 +1,31 @@
-# Employee360 backend configuration.
-#
-# Placeholder — this is Cycle 1 (project scaffolding, ticket A1). The
-# real config schema and Viper wiring land in ticket A2 (config, DB
-# connectivity & migration runner).
+# ==============================================================================
+# Employee360 Backend Configuration Example
+# ==============================================================================
+
+server:
+  port: "8080"
+  host: "0.0.0.0"
+  read_timeout: 10s
+  write_timeout: 10s
+  shutdown_timeout: 10s
+
+database:
+  host: "localhost"
+  port: "5432"
+  user: "postgres"
+  password: "postgres"
+  dbname: "employee360"
+  sslmode: "disable"
+  max_open_conns: 25
+  max_idle_conns: 5
+  conn_max_lifetime: 15m
+  conn_timeout: 5s
+
+jwt:
+  secret: "change-me-in-production-secret-key-360"
+  access_expiry: 15m
+  refresh_expiry: 168h
+
+app:
+  environment: "development"
+  log_level: "debug"
