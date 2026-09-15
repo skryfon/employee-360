@@ -6,7 +6,45 @@ import (
 	"os/exec"
 	"strings"
 	"testing"
+
+	"github.com/your-org/your-project/backend/config"
+	"github.com/your-org/your-project/backend/internal/infrastructure/database"
 )
+
+func TestAPI_LiveDatabaseSuccess(t *testing.T) {
+	cfg, err := config.Load()
+	if err != nil {
+		if os.Getenv("CI") == "true" || os.Getenv("GITHUB_ACTIONS") == "true" {
+			t.Fatalf("failed to load config in CI: %v", err)
+		}
+		t.Skipf("skipping live database test: %v", err)
+	}
+
+	db, err := database.Connect(cfg.Database)
+	if err != nil {
+		if os.Getenv("CI") == "true" || os.Getenv("GITHUB_ACTIONS") == "true" {
+			t.Fatalf("PostgreSQL must be reachable in CI: %v", err)
+		}
+		t.Skipf("skipping live database test (PostgreSQL unreachable: %v)", err)
+	}
+	if sqlDB, err := db.DB(); err == nil {
+		_ = sqlDB.Close()
+	}
+
+	cmd := exec.Command("go", "run", ".")
+	cmd.Dir = "."
+	var stdout, stderr bytes.Buffer
+	cmd.Stdout = &stdout
+	cmd.Stderr = &stderr
+
+	if err := cmd.Run(); err != nil {
+		t.Fatalf("expected api to succeed against live database, got err: %v, stderr: %s", err, stderr.String())
+	}
+
+	if !strings.Contains(stdout.String(), "employee360 api: connected to database") {
+		t.Errorf("expected stdout to contain connection confirmation, got: %q", stdout.String())
+	}
+}
 
 func TestAPI_DatabaseUnreachableFailsFast(t *testing.T) {
 	cmd := exec.Command("go", "run", ".")

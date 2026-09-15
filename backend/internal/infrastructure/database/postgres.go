@@ -5,7 +5,6 @@ import (
 	"database/sql"
 	"fmt"
 	"os"
-	"strings"
 	"time"
 
 	"github.com/your-org/your-project/backend/config"
@@ -55,60 +54,9 @@ func Connect(cfg config.DatabaseConfig) (*gorm.DB, error) {
 	return db, nil
 }
 
-// EnsureDatabaseExists checks if the configured database exists. If it does not exist (SQLSTATE 3D000),
-// it connects to the default maintenance database ("postgres") and creates the database automatically.
-func EnsureDatabaseExists(cfg config.DatabaseConfig) error {
-	// First check if direct connection succeeds
-	db, err := Connect(cfg)
-	if err == nil {
-		if sqlDB, err := db.DB(); err == nil {
-			_ = sqlDB.Close()
-		}
-		return nil
-	}
-
-	errStr := err.Error()
-	if !isDatabaseNotExistError(errStr) {
-		// Not a "database does not exist" error; return original error (e.g. host unreachable, auth error)
-		return err
-	}
-
-	// Database does not exist — connect to maintenance DB "postgres" to create it
-	maintCfg := cfg
-	maintCfg.DBName = "postgres"
-
-	maintDB, maintErr := Connect(maintCfg)
-	if maintErr != nil {
-		// If maintenance DB is also unreachable, return original error
-		return err
-	}
-
-	sqlDB, err := maintDB.DB()
-	if err == nil {
-		defer sqlDB.Close()
-	}
-
-	// Create database safely quoting identifier
-	escapedDBName := strings.ReplaceAll(cfg.DBName, "\"", "\"\"")
-	createQuery := fmt.Sprintf("CREATE DATABASE \"%s\"", escapedDBName)
-
-	if err := maintDB.Exec(createQuery).Error; err != nil {
-		return fmt.Errorf("failed to create database %q: %w", cfg.DBName, err)
-	}
-
-	return nil
-}
-
-func isDatabaseNotExistError(errStr string) bool {
-	return strings.Contains(errStr, "3D000") ||
-		strings.Contains(errStr, "does not exist") ||
-		strings.Contains(errStr, "database \"")
-}
-
 // MustConnect establishes a GORM PostgreSQL connection or fails fast by logging
 // "database unreachable: <error>" to stderr and exiting with exit code 1.
 func MustConnect(cfg config.DatabaseConfig) *gorm.DB {
-	_ = EnsureDatabaseExists(cfg)
 	db, err := Connect(cfg)
 	if err != nil {
 		FailFast(err)

@@ -16,10 +16,6 @@ func main() {
 	}
 
 	// Connect to database (fail fast if unreachable)
-	if err := database.EnsureDatabaseExists(cfg.Database); err != nil {
-		database.FailFast(err)
-	}
-
 	db, err := database.Connect(cfg.Database)
 	if err != nil {
 		database.FailFast(err)

@@ -44,11 +44,6 @@ func main() {
 		fatal("failed to load configuration: " + err.Error())
 	}
 
-	// Ensure database exists (auto-creates if missing on local server)
-	if err := database.EnsureDatabaseExists(cfg.Database); err != nil {
-		database.FailFast(err)
-	}
-
 	// Verify database connectivity (fail fast with "database unreachable" if down)
 	db, err := database.Connect(cfg.Database)
 	if err != nil {
