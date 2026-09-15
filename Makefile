@@ -6,9 +6,9 @@ SCOPE       ?= employee-360
         migrate migrate-down migrate-status migrate-version migrate-reset \
         seed bootstrap-admin \
         test test-all test-backend test-backend-cover cover-func cover-html test-clients \
-        check check-backend check-structure fmt-check \
+        check check-backend check-clients check-structure fmt-check \
         lint lint-backend lint-clients typecheck \
-        build build-backend build-bin vet tidy clean \
+        build build-backend build-clients build-bin vet tidy clean \
         swagger generate
 
 help: ## Show this help menu
@@ -91,6 +91,8 @@ check: check-backend ## Run full verification suite (backend + frontend)
 
 check-backend: build-backend vet fmt-check check-structure test-backend ## Run the backend-only verification suite (used by CI)
 
+check-clients: lint-clients typecheck test-clients build-clients ## Run the frontend-only verification suite (used by CI)
+
 fmt-check: ## Fail if any backend file needs gofmt formatting
 	@unformatted="$$(cd $(BACKEND_DIR) && gofmt -l .)"; \
 	if [ -n "$$unformatted" ]; then \
@@ -138,6 +140,9 @@ build: build-backend ## Compile backend and build client bundles
 
 build-backend: ## Compile every backend package (matches "go build ./..." acceptance criterion)
 	cd $(BACKEND_DIR) && go build ./...
+
+build-clients: ## Build frontend client bundles
+	@if [ -f package.json ]; then pnpm -r build; else echo "Frontend clients not initialized yet (Cycle 1 scope)"; fi
 
 build-bin: ## Build backend binaries into backend/bin
 	cd $(BACKEND_DIR) && go build -o bin/api ./cmd/api
