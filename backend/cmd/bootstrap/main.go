@@ -1,10 +1,4 @@
-// Command bootstrap will seed the system tenant, core roles, and the
-// platform Super Admin (internal/infrastructure/database/seeder).
-//
-// This is Cycle 1 (project scaffolding, ticket A1) — there are no
-// Tenant/Role/User entities or migrations yet, and database
-// connectivity lands in A2. Seeding itself lands in a later cycle once
-// those exist.
+// Command bootstrap seeds the initial system tenant, core roles, and Super Admin.
 package main
 
 import "fmt"

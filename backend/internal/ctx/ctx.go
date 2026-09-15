@@ -1,13 +1,4 @@
-// Package ctx defines the context keys and typed accessors used to pass
-// request-scoped values (tenant id, user id, roles) down through the
-// usecase and infrastructure layers without those layers depending on
-// Gin or *gin.Context directly.
-//
-// Nothing populates these yet — the auth and tenant-resolution
-// middleware that call WithTenantID/WithUserID/WithRoles land in
-// Cycle 2. This package only defines the contract in advance so that
-// layer code introduced later has a stable, already-reviewed place to
-// read/write these values, per plan/architecture/backend.md.
+// Package ctx provides typed context accessors for request-scoped values.
 package ctx
 
 import "context"
@@ -20,15 +11,12 @@ const (
 	rolesKey    contextKey = "employee360:roles"
 )
 
-// WithTenantID returns a new context carrying the given tenant id.
+// WithTenantID returns a new context carrying the given tenant ID.
 func WithTenantID(parent context.Context, tenantID string) context.Context {
 	return context.WithValue(parent, tenantIDKey, tenantID)
 }
 
-// TenantIDFromContext extracts the tenant id injected by the (future)
-// tenant-resolution middleware. Persistence-layer code must use this —
-// and never a client-supplied tenant id — to scope every query and
-// mutation on a tenant-owned table.
+// TenantIDFromContext extracts the tenant ID from the context.
 func TenantIDFromContext(c context.Context) (string, bool) {
 	tenantID, ok := c.Value(tenantIDKey).(string)
 	return tenantID, ok

@@ -29,3 +29,7 @@ jwt:
 app:
   environment: "development"
   log_level: "debug"
+
+cors:
+  allowed_origins:
+    - "*"

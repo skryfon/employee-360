@@ -8,11 +8,7 @@ import (
 	"github.com/your-org/your-project/backend/internal/delivery/http/response"
 )
 
-// Recovery returns a panic-recovery middleware. It must be the outermost
-// middleware in effect around handler execution so a panic anywhere in a
-// later middleware or handler is caught, logged with a stack trace, and
-// turned into a standardized 500 error envelope instead of crashing the
-// process or leaking a raw stack trace to the client.
+// Recovery returns panic-recovery middleware with structured error responses.
 func Recovery(log zerolog.Logger) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		defer func() {

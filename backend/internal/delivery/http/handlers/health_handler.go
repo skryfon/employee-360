@@ -1,31 +1,36 @@
-// Package handlers holds thin Gin request handlers: bind/validate input,
-// call a usecase, and write a response via internal/delivery/http/response.
-// Handlers must never touch GORM/the database directly.
+// Package handlers holds HTTP request handlers.
 package handlers
 
 import (
 	"github.com/gin-gonic/gin"
 	"github.com/your-org/your-project/backend/internal/delivery/http/response"
-	"github.com/your-org/your-project/backend/shared"
+	usecaseinterface "github.com/your-org/your-project/backend/internal/usecase/interface"
 )
 
-// HealthHandler intentionally has no dependencies — it does not check the DB.
-type HealthHandler struct{}
+// HealthHandler reports application and database health status.
+type HealthHandler struct {
+	healthUseCase usecaseinterface.HealthUseCase
+}
 
-// NewHealthHandler constructs a HealthHandler.
-func NewHealthHandler() *HealthHandler {
-	return &HealthHandler{}
+// NewHealthHandler constructs a HealthHandler with the provided usecase.
+func NewHealthHandler(healthUseCase usecaseinterface.HealthUseCase) *HealthHandler {
+	return &HealthHandler{healthUseCase: healthUseCase}
 }
 
 // healthResponse is the health endpoint's response body.
 type healthResponse struct {
-	Status string `json:"status"`
-	App    string `json:"app"`
+	Status   string `json:"status"`
+	App      string `json:"app"`
+	Database string `json:"database"`
 }
 
+// Health handles health check requests and returns system status.
 func (h *HealthHandler) Health(c *gin.Context) {
+	result := h.healthUseCase.Execute(c.Request.Context())
+
 	response.Success(c, healthResponse{
-		Status: "ok",
-		App:    shared.AppName,
+		Status:   "ok",
+		App:      result.App,
+		Database: result.Database,
 	})
 }

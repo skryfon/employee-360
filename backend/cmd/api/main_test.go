@@ -79,7 +79,7 @@ func TestAPI_LiveDatabaseSuccess(t *testing.T) {
 		t.Fatalf("failed to start api binary: %v", err)
 	}
 
-	healthURL := "http://127.0.0.1:" + port + "/health"
+	healthURL := "http://127.0.0.1:" + port + "/api/v1/health"
 	var getErr error
 	var resp *http.Response
 	deadline := time.Now().Add(15 * time.Second)
@@ -102,8 +102,8 @@ func TestAPI_LiveDatabaseSuccess(t *testing.T) {
 	if resp.StatusCode != http.StatusOK {
 		t.Errorf("expected 200 from health endpoint, got %d, body: %s", resp.StatusCode, body[:n])
 	}
-	if strings.Contains(string(body[:n]), `"database"`) {
-		t.Errorf("expected health response body to omit database status, got: %s", body[:n])
+	if !strings.Contains(string(body[:n]), `"database":"ok"`) {
+		t.Errorf("expected health response body to report database ok (live Postgres is reachable at this point), got: %s", body[:n])
 	}
 	if !strings.Contains(string(body[:n]), `"status":"ok"`) {
 		t.Errorf("expected health response body to report ok status, got: %s", body[:n])

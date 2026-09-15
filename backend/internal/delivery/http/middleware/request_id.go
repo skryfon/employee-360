@@ -1,6 +1,4 @@
-// Package middleware holds Gin middleware: request_id, logger, cors,
-// recovery (the base chain). Auth and tenant-resolution middleware are
-// added in Cycle 2 once there's something to protect.
+// Package middleware holds standard Gin HTTP middleware.
 package middleware
 
 import (
@@ -9,18 +7,10 @@ import (
 	"github.com/your-org/your-project/backend/shared"
 )
 
-// ContextKeyRequestID is the Gin context key the request id is stored
-// under, for handlers/other middleware running later in the chain.
+// ContextKeyRequestID is the Gin context key where request ID is stored.
 const ContextKeyRequestID = "request_id"
 
-// RequestID assigns a unique id to every request: it reuses an inbound
-// X-Request-ID header when the client supplied one (useful for tracing
-// across services), otherwise it generates a new UUID. The id is stored
-// on the Gin context and echoed back on the response header so clients
-// and downstream services can correlate logs.
-//
-// Must run first in the middleware chain so every later middleware
-// (logger, recovery) and every handler can rely on it being present.
+// RequestID assigns or propagates a unique X-Request-ID for every request.
 func RequestID() gin.HandlerFunc {
 	return func(c *gin.Context) {
 		requestID := c.GetHeader(shared.RequestIDHeader)

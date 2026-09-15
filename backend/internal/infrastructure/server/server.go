@@ -1,5 +1,4 @@
-// Package server owns HTTP server lifecycle: starting the listener and
-// shutting it down gracefully on signal.
+// Package server manages HTTP server lifecycle and graceful shutdown.
 package server
 
 import (
@@ -11,15 +10,12 @@ import (
 	"github.com/your-org/your-project/backend/config"
 )
 
-// Server wraps a standard library *http.Server configured from
-// config.ServerConfig, exposing a minimal Start/Shutdown lifecycle so
-// callers (cmd/api/main.go) don't need to know about net/http directly.
+// Server wraps the standard HTTP server with lifecycle controls.
 type Server struct {
 	httpServer *http.Server
 }
 
-// New constructs a Server bound to cfg.Address(), serving handler, with
-// read/write timeouts taken from cfg.
+// New constructs an HTTP server with the provided configuration and handler.
 func New(cfg config.ServerConfig, handler http.Handler) *Server {
 	return &Server{
 		httpServer: &http.Server{
@@ -31,11 +27,7 @@ func New(cfg config.ServerConfig, handler http.Handler) *Server {
 	}
 }
 
-// Start begins serving requests and blocks until the server stops. It
-// returns nil on a graceful shutdown (triggered by Shutdown) and a
-// non-nil error for any other failure (e.g. the listener address is
-// already in use). Intended to be run in its own goroutine, with its
-// return value reported back over a channel.
+// Start begins listening and serving incoming HTTP requests.
 func (s *Server) Start() error {
 	if err := s.httpServer.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
 		return fmt.Errorf("server error: %w", err)

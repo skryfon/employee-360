@@ -7,12 +7,7 @@ import (
 	"github.com/rs/zerolog"
 )
 
-// Logger returns a structured request logging middleware built on top of
-// the given zerolog.Logger. It logs one line per request (method, path,
-// status, latency, client ip, request id) after the handler chain
-// completes, so it must run after RequestID (to have an id to log) and
-// before Recovery would be a mistake — Recovery must wrap it so a panic
-// downstream is still reported with a 500 status in this log line.
+// Logger returns structured HTTP request logging middleware.
 func Logger(log zerolog.Logger) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		start := time.Now()

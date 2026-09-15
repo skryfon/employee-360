@@ -58,6 +58,9 @@ func TestConfig_Defaults(t *testing.T) {
 	if cfg.Database.ConnTimeout != 5*time.Second {
 		t.Errorf("expected Database.ConnTimeout 5s, got %v", cfg.Database.ConnTimeout)
 	}
+	if len(cfg.CORS.AllowedOrigins) != 1 || cfg.CORS.AllowedOrigins[0] != "*" {
+		t.Errorf("expected CORS.AllowedOrigins ['*'], got %v", cfg.CORS.AllowedOrigins)
+	}
 }
 
 func TestConfig_EnvOverrides(t *testing.T) {
@@ -99,6 +102,29 @@ func TestConfig_EnvOverrides(t *testing.T) {
 	}
 	if cfg.App.Environment != "staging" {
 		t.Errorf("expected App.Environment 'staging', got %q", cfg.App.Environment)
+	}
+}
+
+func TestConfig_CORSAllowedOriginsEnvOverride(t *testing.T) {
+	t.Setenv("CORS_ALLOWED_ORIGINS", "https://admin.employee360.example, https://app.employee360.example ,https://third.example.com")
+
+	cfg, err := Load()
+	if err != nil {
+		t.Fatalf("expected Load() to succeed, got: %v", err)
+	}
+
+	expected := []string{
+		"https://admin.employee360.example",
+		"https://app.employee360.example",
+		"https://third.example.com",
+	}
+	if len(cfg.CORS.AllowedOrigins) != len(expected) {
+		t.Fatalf("expected %d allowed origins, got %v", len(expected), cfg.CORS.AllowedOrigins)
+	}
+	for i, o := range expected {
+		if cfg.CORS.AllowedOrigins[i] != o {
+			t.Errorf("expected origin[%d] %q, got %q", i, o, cfg.CORS.AllowedOrigins[i])
+		}
 	}
 }
 

@@ -20,6 +20,7 @@ type Config struct {
 	Database DatabaseConfig `mapstructure:"database"`
 	JWT      JWTConfig      `mapstructure:"jwt"`
 	App      AppConfig      `mapstructure:"app"`
+	CORS     CORSConfig     `mapstructure:"cors"`
 }
 
 // ServerConfig contains HTTP server configuration parameters.
@@ -82,6 +83,13 @@ type AppConfig struct {
 	LogLevel    string `mapstructure:"log_level"`
 }
 
+// CORSConfig contains cross-origin resource sharing configuration.
+type CORSConfig struct {
+	// AllowedOrigins is the CORS allowlist. A single "*" entry allows any
+	// origin but disables credentialed requests (see middleware.CORS).
+	AllowedOrigins []string `mapstructure:"allowed_origins"`
+}
+
 // Validate verifies that the configuration meets environment and security requirements.
 func (c *Config) Validate() error {
 	env := strings.ToLower(c.App.Environment)
@@ -140,6 +148,10 @@ func Load(searchPaths ...string) (*Config, error) {
 		return nil, fmt.Errorf("unable to decode configuration into struct: %w", err)
 	}
 
+	// Viper's Unmarshal doesn't split a comma-separated env var into a
+	// slice automatically, so CORS_ALLOWED_ORIGINS is handled explicitly.
+	applyCORSEnvOverride(&cfg)
+
 	// 7. Validate configuration
 	if err := cfg.Validate(); err != nil {
 		return nil, fmt.Errorf("configuration validation failed: %w", err)
@@ -176,6 +188,9 @@ func setDefaults(v *viper.Viper) {
 	// App defaults
 	v.SetDefault("app.environment", "development")
 	v.SetDefault("app.log_level", "debug")
+
+	// CORS defaults
+	v.SetDefault("cors.allowed_origins", []string{"*"})
 }
 
 func loadDotEnv(searchPaths ...string) {
@@ -197,6 +212,26 @@ func loadDotEnv(searchPaths ...string) {
 			_ = godotenv.Overload(path)
 			break
 		}
+	}
+}
+
+// applyCORSEnvOverride parses the comma-separated CORS_ALLOWED_ORIGINS environment variable.
+func applyCORSEnvOverride(cfg *Config) {
+	raw, ok := os.LookupEnv("CORS_ALLOWED_ORIGINS")
+	if !ok {
+		return
+	}
+
+	parts := strings.Split(raw, ",")
+	origins := make([]string, 0, len(parts))
+	for _, p := range parts {
+		if trimmed := strings.TrimSpace(p); trimmed != "" {
+			origins = append(origins, trimmed)
+		}
+	}
+
+	if len(origins) > 0 {
+		cfg.CORS.AllowedOrigins = origins
 	}
 }
 

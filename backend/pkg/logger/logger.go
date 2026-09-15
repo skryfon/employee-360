@@ -1,6 +1,4 @@
-// Package logger provides a small zerolog wrapper so every part of the
-// application (app-level bootstrap, the request logger middleware, etc.)
-// constructs its structured logger the same way.
+// Package logger provides structured zerolog logger construction.
 package logger
 
 import (
@@ -11,14 +9,7 @@ import (
 	"github.com/rs/zerolog"
 )
 
-// New constructs a structured, JSON-output zerolog.Logger configured from
-// the given level string (e.g. "debug", "info", "warn", "error"). Unknown
-// or empty levels fall back to "info" so misconfiguration never disables
-// logging entirely.
-//
-// Every part of the application (app-level logging, the request logger
-// middleware, etc.) should construct its logger through this function so
-// output format and level parsing stay consistent.
+// New constructs a structured JSON zerolog.Logger for the specified log level.
 func New(level string) zerolog.Logger {
 	zerolog.TimeFieldFormat = time.RFC3339Nano
 
@@ -34,8 +25,7 @@ func New(level string) zerolog.Logger {
 		Logger()
 }
 
-// Nop returns a logger that discards all output. Useful for tests and any
-// code path that needs a logger.Logger value but doesn't want output.
+// Nop returns a no-op logger that discards all log output.
 func Nop() zerolog.Logger {
 	return zerolog.Nop()
 }

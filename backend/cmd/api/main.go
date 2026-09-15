@@ -36,11 +36,7 @@ func main() {
 	}
 	defer sqlDB.Close()
 
-	log.Info().
-		Str("database", cfg.Database.DBName).
-		Str("host", cfg.Database.Host).
-		Str("port", cfg.Database.Port).
-		Msg("employee360 api: connected to database")
+	log.Info().Msg("employee360 api: connected to database")
 
 	// Wire dependencies.
 	c, err := container.New(cfg, db, log)
