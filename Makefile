@@ -22,7 +22,8 @@ bootstrap: ## Install frontend and backend dependencies
 
 ## --- Dev ---
 
-dev: dev-api ## Run backend API (or full stack in future cycles)
+dev: ## Run backend API + admin + employee clients concurrently
+	@$(MAKE) -j3 dev-api dev-admin dev-employee
 
 dev-api: ## Run the Go backend API
 	cd $(BACKEND_DIR) && go run ./cmd/api
