@@ -17,8 +17,8 @@ func NewHealthHandler(healthUseCase usecaseinterface.HealthUseCase) *HealthHandl
 	return &HealthHandler{healthUseCase: healthUseCase}
 }
 
-// healthResponse is the health endpoint's response body.
-type healthResponse struct {
+// HealthResponse is the health endpoint's response body.
+type HealthResponse struct {
 	Status   string `json:"status"`
 	App      string `json:"app"`
 	Database string `json:"database"`
@@ -30,14 +30,14 @@ type healthResponse struct {
 // @Description  Returns application and database connectivity status. Used by load balancers, Kubernetes probes, monitoring, and client SDK smoke tests.
 // @Tags         health
 // @Produce      json
-// @Success      200  {object}  response.Envelope
+// @Success      200  {object}  response.Envelope{data=handlers.HealthResponse}
 // @Router       /health [get]
 // @Router       /healthz [get]
 // @Router       /api/v1/health [get]
 func (h *HealthHandler) Health(c *gin.Context) {
 	result := h.healthUseCase.Execute(c.Request.Context())
 
-	response.Success(c, healthResponse{
+	response.Success(c, HealthResponse{
 		Status:   "ok",
 		App:      result.App,
 		Database: result.Database,

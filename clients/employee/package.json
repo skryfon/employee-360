@@ -11,6 +11,8 @@
     "preview": "vite preview"
   },
   "dependencies": {
+    "@employee360/api-client": "workspace:*",
+    "@tanstack/react-query": "^5.103.1",
     "react": "^19.3.0",
     "react-dom": "^19.3.0"
   },

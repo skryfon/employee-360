@@ -29,7 +29,19 @@ const docTemplate = `{
                     "200": {
                         "description": "OK",
                         "schema": {
-                            "$ref": "#/definitions/github_com_skryfon_employee360_backend_internal_delivery_http_response.Envelope"
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/github_com_skryfon_employee360_backend_internal_delivery_http_response.Envelope"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/internal_delivery_http_handlers.HealthResponse"
+                                        }
+                                    }
+                                }
+                            ]
                         }
                     }
                 }
@@ -49,7 +61,19 @@ const docTemplate = `{
                     "200": {
                         "description": "OK",
                         "schema": {
-                            "$ref": "#/definitions/github_com_skryfon_employee360_backend_internal_delivery_http_response.Envelope"
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/github_com_skryfon_employee360_backend_internal_delivery_http_response.Envelope"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/internal_delivery_http_handlers.HealthResponse"
+                                        }
+                                    }
+                                }
+                            ]
                         }
                     }
                 }
@@ -69,7 +93,19 @@ const docTemplate = `{
                     "200": {
                         "description": "OK",
                         "schema": {
-                            "$ref": "#/definitions/github_com_skryfon_employee360_backend_internal_delivery_http_response.Envelope"
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/github_com_skryfon_employee360_backend_internal_delivery_http_response.Envelope"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/internal_delivery_http_handlers.HealthResponse"
+                                        }
+                                    }
+                                }
+                            ]
                         }
                     }
                 }
@@ -118,6 +154,20 @@ const docTemplate = `{
                 },
                 "total_pages": {
                     "type": "integer"
+                }
+            }
+        },
+        "internal_delivery_http_handlers.HealthResponse": {
+            "type": "object",
+            "properties": {
+                "app": {
+                    "type": "string"
+                },
+                "database": {
+                    "type": "string"
+                },
+                "status": {
+                    "type": "string"
                 }
             }
         }

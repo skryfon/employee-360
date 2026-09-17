@@ -162,4 +162,5 @@ swagger: ## Regenerate Swagger/OpenAPI docs from annotations (run after changing
 		--parseDependency \
 		--parseInternal
 
-generate: swagger ## Alias for `make swagger` (regenerate all generated backend code/docs)
+generate: swagger ## Regenerate backend Swagger/OpenAPI docs and the frontend Orval API client
+	@if [ -f package.json ]; then pnpm generate:api; fi

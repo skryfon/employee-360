@@ -29,6 +29,15 @@ definitions:
       total_pages:
         type: integer
     type: object
+  internal_delivery_http_handlers.HealthResponse:
+    properties:
+      app:
+        type: string
+      database:
+        type: string
+      status:
+        type: string
+    type: object
 info:
   contact: {}
   description: REST API for Employee360, an open-source, self-hostable, multi-tenant
@@ -47,7 +56,12 @@ paths:
         "200":
           description: OK
           schema:
-            $ref: '#/definitions/github_com_skryfon_employee360_backend_internal_delivery_http_response.Envelope'
+            allOf:
+            - $ref: '#/definitions/github_com_skryfon_employee360_backend_internal_delivery_http_response.Envelope'
+            - properties:
+                data:
+                  $ref: '#/definitions/internal_delivery_http_handlers.HealthResponse'
+              type: object
       summary: Report application and database health
       tags:
       - health
@@ -61,7 +75,12 @@ paths:
         "200":
           description: OK
           schema:
-            $ref: '#/definitions/github_com_skryfon_employee360_backend_internal_delivery_http_response.Envelope'
+            allOf:
+            - $ref: '#/definitions/github_com_skryfon_employee360_backend_internal_delivery_http_response.Envelope'
+            - properties:
+                data:
+                  $ref: '#/definitions/internal_delivery_http_handlers.HealthResponse'
+              type: object
       summary: Report application and database health
       tags:
       - health
@@ -75,7 +94,12 @@ paths:
         "200":
           description: OK
           schema:
-            $ref: '#/definitions/github_com_skryfon_employee360_backend_internal_delivery_http_response.Envelope'
+            allOf:
+            - $ref: '#/definitions/github_com_skryfon_employee360_backend_internal_delivery_http_response.Envelope'
+            - properties:
+                data:
+                  $ref: '#/definitions/internal_delivery_http_handlers.HealthResponse'
+              type: object
       summary: Report application and database health
       tags:
       - health
