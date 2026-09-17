@@ -19,8 +19,11 @@ on:
       - ".github/workflows/frontend-ci.yml"
 
 jobs:
-  check:
-    name: install, lint, typecheck, build
+  # ─────────────────────────────────────────────────────────
+  # lint — ESLint across all workspace packages.
+  # ─────────────────────────────────────────────────────────
+  lint:
+    name: Lint
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -35,8 +38,93 @@ jobs:
       - name: install dependencies
         run: pnpm install --frozen-lockfile
 
-      - name: run make check-clients (lint, typecheck, build)
-        run: make check-clients
+      - name: eslint
+        run: pnpm -r lint
+
+  # ─────────────────────────────────────────────────────────
+  # typecheck — TypeScript project-reference typechecking.
+  # ─────────────────────────────────────────────────────────
+  typecheck:
+    name: Typecheck
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: pnpm
+
+      - name: install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: typecheck
+        run: pnpm -r typecheck
+
+  # ─────────────────────────────────────────────────────────
+  # test — Vitest unit/component tests across all workspace packages.
+  # ─────────────────────────────────────────────────────────
+  test:
+    name: Client Unit Tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: pnpm
+
+      - name: install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: test
+        run: pnpm -r test
+
+  # ─────────────────────────────────────────────────────────
+  # build — production bundles for both apps + packages.
+  # ─────────────────────────────────────────────────────────
+  build:
+    name: Build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: pnpm
+
+      - name: install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: build
+        run: pnpm -r build
+
+  # ─────────────────────────────────────────────────────────
+  # smoke-test — boot both apps' real dev servers and confirm they render.
+  # ─────────────────────────────────────────────────────────
+  smoke-test:
+    name: Smoke Test (dev servers)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: pnpm
+
+      - name: install dependencies
+        run: pnpm install --frozen-lockfile
 
       - name: smoke-test admin and employee dev servers
         run: |

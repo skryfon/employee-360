@@ -13,8 +13,91 @@ on:
       - ".github/workflows/backend-ci.yml"
 
 jobs:
-  check:
-    name: build, vet, fmt, test, live-db
+  # ─────────────────────────────────────────────────────────
+  # build — compile, vet, gofmt, scaffolding structure. No DB needed.
+  # ─────────────────────────────────────────────────────────
+  build:
+    name: Build, Vet, Fmt, Structure
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: backend/go.mod
+
+      - name: build
+        run: make build-backend
+
+      - name: vet
+        run: make vet
+
+      - name: fmt check
+        run: make fmt-check
+
+      - name: check-structure
+        run: make check-structure
+
+  # ─────────────────────────────────────────────────────────
+  # unit — go unit tests, no live DB required.
+  # ─────────────────────────────────────────────────────────
+  unit:
+    name: Go Unit Tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: backend/go.mod
+
+      - name: run unit tests
+        run: make test-backend
+
+  # ─────────────────────────────────────────────────────────
+  # integration — go integration tests (backend/integration/),
+  # with a real Postgres service container.
+  # ─────────────────────────────────────────────────────────
+  integration:
+    name: Go Integration Tests
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: employee360
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    env:
+      DATABASE_HOST: localhost
+      DATABASE_PORT: 5432
+      DATABASE_USER: postgres
+      DATABASE_PASSWORD: postgres
+      DATABASE_NAME: employee360
+      DATABASE_SSLMODE: disable
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: backend/go.mod
+
+      - name: run integration tests
+        run: make test-backend-integration
+
+  # ─────────────────────────────────────────────────────────
+  # smoke-test — docker-compose config + real dev/migrate entrypoints
+  # against a live Postgres service container.
+  # ─────────────────────────────────────────────────────────
+  smoke-test:
+    name: Smoke Test (dev, migrate, docker-compose)
     runs-on: ubuntu-latest
     services:
       postgres:
@@ -48,9 +131,6 @@ jobs:
         run: |
           docker compose -f docker-compose.yml config
           docker compose -f backend/docker-compose.yml config
-
-      - name: run make check-backend (build, vet, fmt, test)
-        run: make check-backend
 
       - name: smoke-test dev and migrate entrypoints
         working-directory: backend
