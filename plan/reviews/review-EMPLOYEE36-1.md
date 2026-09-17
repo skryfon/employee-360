@@ -1,6 +1,6 @@
 # Review: EMPLOYEE36-1 — EPIC-A: Cycle 1 — Project Setup & Scaffolding (Overview)
 
-> Branch: feature/EPIC-A | Last reviewed: 2026-09-17 11:42 | Iteration: 1 | Verdict: 🟡
+> Branch: feature/EPIC-A | Last reviewed: 2026-09-17 11:45 | Iteration: 2 | Verdict: 🟡
 
 ## Ticket
 **Identifier:** EMPLOYEE36-1 (epic-anchor mode — id doesn't carry an `EPIC-` prefix, but the
@@ -110,7 +110,7 @@ the local `feature/EPIC-A` (`253619e`) — the EMPLOYEE36-6 test-coverage and lo
 fixes from this session are local-only, not yet pushed.
 
 ## Latest commit reviewed
-`253619e` — fix(frontend): regenerate lockfile for admin/employee test deps (EMPLOYEE36-6)
+`95b3470` — chore(reviews): stop ignoring plan/reviews and re-commit review handoffs (EMPLOYEE36-1)
 
 ## Findings
 
@@ -120,7 +120,7 @@ fixes from this session are local-only, not yet pushed.
 - [ ] (none)
 
 ### 🟡 Major
-- [ ] **[EMPLOYEE36-3 / A2]** `.gitignore` (commit `5911325`, "chore: ignore review folder and contents in .gitignore") adds `plan/reviews/` and `reviews/` to `.gitignore`, bundled into a backend-connectivity ticket with no relation to its scope. This has already deleted `review-EMPLOYEE36-2.md` and `review-EMPLOYEE36-3.md` from git tracking (confirmed still ignored: `git check-ignore -v plan/reviews/review-EMPLOYEE36-2.md` → `.gitignore:3:reviews/`), and a later commit on `origin/feature/EPIC-A` (`312d8dd`, "Delete plan/reviews directory") removed the whole directory from the remote branch. This defeats the team-mate-review skill's design of persisting review handoffs in-repo for teammates — every review in this cycle (including this one) currently exists only in this local working tree. Fix: revert the `.gitignore` review-folder exclusion (or make untracking review artifacts a deliberate, separately-discussed decision), and re-commit the review files if the team wants them shared.
+- [x] **[EMPLOYEE36-3 / A2]** `.gitignore` (commit `5911325`, "chore: ignore review folder and contents in .gitignore") adds `plan/reviews/` and `reviews/` to `.gitignore`, bundled into a backend-connectivity ticket with no relation to its scope, deleting `review-EMPLOYEE36-2.md`/`-3.md` from tracking. **(resolved in `95b3470`)** — reverted the `.gitignore` exclusion (confirmed: `git check-ignore -v plan/reviews/review-EMPLOYEE36-1.md` now returns "not ignored"), restored `review-EMPLOYEE36-2.md` from its last committed version (`git show 42798d2:...`), and committed all six review files (`review-EMPLOYEE36-{1,2,3,4,5,6}.md`) to `feature/EPIC-A`.
 - [ ] **[EMPLOYEE36-5 / A4]** Commit `730e146` ("feat(backend): wire air hot reload into make dev-api", tagged EMPLOYEE36-5) bundles unrelated backend dev-tooling into a frontend-scaffolding ticket. Low risk and additive, not a cycle-scope violation (still Cycle 1 tooling), but makes the ticket harder to review/revert independently. No retroactive action needed — process note for future tickets to keep unrelated-layer changes in their own commit/ticket.
 
 ### 🟢 Minor
@@ -132,9 +132,15 @@ fixes from this session are local-only, not yet pushed.
 - [ ] **[EMPLOYEE36-6 / A5]** AC-10's evidence is a one-time manual sign-off performed directly in this session (real Postgres + backend + both dev servers + headless-Chromium-rendered DOM), not a repeatable CI check — nothing will catch a future regression of the e2e chain automatically. Suggest a fast-follow Playwright CI job.
 
 ## Verdict
-- **Score:** 84/100 (100 − 2×5 major − 6×1 minor)
+- **Score:** 89/100 (100 − 1×5 major − 6×1 minor)
 - **Flag:** 🟡 Reviewer call
-- **Notes:** All 37 acceptance criteria across all 5 child stories (A1–A5) are met with both implementation and test/verification evidence — the hard gate passes cleanly, and this is a genuinely solid Cycle 1 skeleton: `go run ./cmd/api` boots, connects to a real Postgres, exits fast-and-loud on DB failure, `golang-migrate` runs clean against zero migrations, the Gin middleware chain and `/api/v1/health` are fully tested (including DB ping status), both frontend apps boot/lint/typecheck/build with Tailwind working, and the full client→API-client→Gin→handler→Postgres chain was independently, live-verified end to end in this session (real browser, real backend, real DB — not curl, not mocks). I independently re-ran the combined verification suite (`make check`, `make check-structure`, `make check-clients`) at the current tip and everything passes; nothing has regressed across the 5 stacked tickets. What keeps this at Reviewer call rather than Merge is two still-open 🟡 Major findings, both about commit hygiene rather than functional risk: (1) an unrelated `.gitignore` change bundled into the A2 (EMPLOYEE36-3) branch stripped `plan/reviews/` from git tracking — meaning every review this cycle, including this epic-level one, currently lives only in local working trees, not the shared repo, which quietly breaks the team-mate-review skill's persistence model; and (2) an unrelated backend `air` hot-reload change bundled into the A4 (EMPLOYEE36-5) branch. Neither blocks functionality, but the `.gitignore` one in particular should be resolved (or explicitly, deliberately kept) before treating this epic as done, since it affects whether this very review survives to be read by a teammate. Six 🟢 Minor items (listed above) are non-blocking polish/process notes.
+- **Notes:** All 37 acceptance criteria across all 5 child stories (A1–A5) are met with both implementation and test/verification evidence — the hard gate passes cleanly, and this is a genuinely solid Cycle 1 skeleton: `go run ./cmd/api` boots, connects to a real Postgres, exits fast-and-loud on DB failure, `golang-migrate` runs clean against zero migrations, the Gin middleware chain and `/api/v1/health` are fully tested (including DB ping status), both frontend apps boot/lint/typecheck/build with Tailwind working, and the full client→API-client→Gin→handler→Postgres chain was independently, live-verified end to end in this session (real browser, real backend, real DB — not curl, not mocks). I independently re-ran the combined verification suite (`make check`, `make check-structure`, `make check-clients`) at the current tip and everything passes; nothing has regressed across the 5 stacked tickets. The `plan/reviews/` `.gitignore` exclusion (the more serious of the two Major findings — it was silently breaking the team-mate-review skill's persistence model for every review this cycle) is now fixed and all six review files are committed to `feature/EPIC-A`. What keeps this at Reviewer call rather than Merge is one remaining 🟡 Major, purely a commit-hygiene note: an unrelated backend `air` hot-reload change bundled into the A4 (EMPLOYEE36-5) branch (commit `730e146`) — no functional risk, no retroactive fix expected, just flagged per the rubric's "any major open caps at Reviewer call" rule. Six 🟢 Minor items (listed above) are non-blocking polish/process notes.
 
 ## Re-review Log
-_(empty — first review)_
+
+### Iteration 2 — 2026-09-17 — sha `95b3470`
+- **Resolved:** 🟡 Major — `plan/reviews/` `.gitignore` exclusion reverted; `review-EMPLOYEE36-2.md` restored from `42798d2`; all six review files (`-1` through `-6`) committed to `feature/EPIC-A`.
+- **Still open:** 🟡 Major — unrelated backend `air` hot-reload commit bundled into A4/EMPLOYEE36-5 (`730e146`, no action needed retroactively); all 6 🟢 Minor items unchanged.
+- **New issues:** none
+- **Score:** 84 → 89 (+5)
+- **Verdict:** 🟡 Reviewer call → 🟡 Reviewer call
