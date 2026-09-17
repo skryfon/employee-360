@@ -138,22 +138,25 @@ jobs:
 
       - name: smoke-test dev entrypoint (health check)
         working-directory: backend
-        # go run ./cmd/api blocks forever once it starts (it's an HTTP
-        # server with graceful shutdown), so `timeout Ns go run ...` would
-        # *always* exit 124 on a successful boot once the timer fires,
-        # which aborts the script under bash's default -e. Boot it in the
-        # background, poll the health endpoint instead, and kill it
-        # ourselves once we've proven it's up.
+        # Build the binary first so compilation errors are caught immediately
+        # and startup does not suffer cold compilation delays in the background.
         run: |
-          go run ./cmd/api > /tmp/api-smoke.log 2>&1 &
+          go build -o /tmp/api-smoke-bin ./cmd/api
+          /tmp/api-smoke-bin > /tmp/api-smoke.log 2>&1 &
           api_pid=$!
-          for i in $(seq 1 15); do
+          healthy=0
+          for i in $(seq 1 30); do
             if curl -sf http://localhost:8080/api/v1/health -o /tmp/health.json; then
+              healthy=1
+              break
+            fi
+            if ! kill -0 "$api_pid" 2>/dev/null; then
+              echo "api process exited prematurely"
               break
             fi
             sleep 1
           done
-          if ! curl -sf http://localhost:8080/api/v1/health -o /tmp/health.json; then
+          if [ "$healthy" -ne 1 ]; then
             echo "api never became healthy; log:"
             cat /tmp/api-smoke.log
             exit 1
