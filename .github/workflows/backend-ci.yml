@@ -132,9 +132,38 @@ jobs:
           docker compose -f docker-compose.yml config
           docker compose -f backend/docker-compose.yml config
 
-      - name: smoke-test dev and migrate entrypoints
+      - name: download go modules
+        working-directory: backend
+        run: go mod download
+
+      - name: smoke-test dev entrypoint (health check)
+        working-directory: backend
+        # go run ./cmd/api blocks forever once it starts (it's an HTTP
+        # server with graceful shutdown), so `timeout Ns go run ...` would
+        # *always* exit 124 on a successful boot once the timer fires,
+        # which aborts the script under bash's default -e. Boot it in the
+        # background, poll the health endpoint instead, and kill it
+        # ourselves once we've proven it's up.
+        run: |
+          go run ./cmd/api > /tmp/api-smoke.log 2>&1 &
+          api_pid=$!
+          for i in $(seq 1 15); do
+            if curl -sf http://localhost:8080/api/v1/health -o /tmp/health.json; then
+              break
+            fi
+            sleep 1
+          done
+          if ! curl -sf http://localhost:8080/api/v1/health -o /tmp/health.json; then
+            echo "api never became healthy; log:"
+            cat /tmp/api-smoke.log
+            exit 1
+          fi
+          cat /tmp/health.json
+          kill "$api_pid" 2>/dev/null || true
+          wait "$api_pid" 2>/dev/null || true
+
+      - name: smoke-test migrate entrypoints
         working-directory: backend
         run: |
-          timeout 10s go run ./cmd/api
           timeout 10s go run ./cmd/migrate up
           timeout 10s go run ./cmd/migrate status
