@@ -127,9 +127,14 @@ jobs:
         run: pnpm install --frozen-lockfile
 
       - name: smoke-test admin and employee dev servers
+        env:
+          ADMIN_PORT: "5183"
+          EMPLOYEE_PORT: "5184"
         run: |
-          pnpm --filter admin dev --port 5183 --strictPort > /tmp/admin-dev.log 2>&1 &
-          pnpm --filter employee dev --port 5184 --strictPort > /tmp/employee-dev.log 2>&1 &
+          pnpm --filter admin dev > /tmp/admin-dev.log 2>&1 &
+          admin_pid=$!
+          pnpm --filter employee dev > /tmp/employee-dev.log 2>&1 &
+          employee_pid=$!
           for i in $(seq 1 15); do
             if curl -sf http://localhost:5183/ -o /tmp/admin.html && curl -sf http://localhost:5184/ -o /tmp/employee.html; then
               break
@@ -138,5 +143,4 @@ jobs:
           done
           grep -q "Employee360 Admin" /tmp/admin.html
           grep -q "Employee360 Employee Portal" /tmp/employee.html
-          pkill -f "vite.*--port 5183" 2>/dev/null || true
-          pkill -f "vite.*--port 5184" 2>/dev/null || true
+          kill "$admin_pid" "$employee_pid" 2>/dev/null || true
