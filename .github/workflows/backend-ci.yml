@@ -1,11 +1,6 @@
 name: Backend CI
 
 on:
-  push:
-    paths:
-      - "backend/**"
-      - "docker-compose.yml"
-      - ".github/workflows/backend-ci.yml"
   pull_request:
     paths:
       - "backend/**"
@@ -13,8 +8,91 @@ on:
       - ".github/workflows/backend-ci.yml"
 
 jobs:
-  check:
-    name: build, vet, fmt, test, live-db
+  # ─────────────────────────────────────────────────────────
+  # build — compile, vet, gofmt, scaffolding structure. No DB needed.
+  # ─────────────────────────────────────────────────────────
+  build:
+    name: Build, Vet, Fmt, Structure
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: backend/go.mod
+
+      - name: build
+        run: make build-backend
+
+      - name: vet
+        run: make vet
+
+      - name: fmt check
+        run: make fmt-check
+
+      - name: check-structure
+        run: make check-structure
+
+  # ─────────────────────────────────────────────────────────
+  # unit — go unit tests, no live DB required.
+  # ─────────────────────────────────────────────────────────
+  unit:
+    name: Go Unit Tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: backend/go.mod
+
+      - name: run unit tests
+        run: make test-backend
+
+  # ─────────────────────────────────────────────────────────
+  # integration — go integration tests (backend/integration/),
+  # with a real Postgres service container.
+  # ─────────────────────────────────────────────────────────
+  integration:
+    name: Go Integration Tests
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: employee360
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    env:
+      DATABASE_HOST: localhost
+      DATABASE_PORT: 5432
+      DATABASE_USER: postgres
+      DATABASE_PASSWORD: postgres
+      DATABASE_NAME: employee360
+      DATABASE_SSLMODE: disable
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: backend/go.mod
+
+      - name: run integration tests
+        run: make test-backend-integration
+
+  # ─────────────────────────────────────────────────────────
+  # smoke-test — docker-compose config + real dev/migrate entrypoints
+  # against a live Postgres service container.
+  # ─────────────────────────────────────────────────────────
+  smoke-test:
+    name: Smoke Test (dev, migrate, docker-compose)
     runs-on: ubuntu-latest
     services:
       postgres:
@@ -49,12 +127,41 @@ jobs:
           docker compose -f docker-compose.yml config
           docker compose -f backend/docker-compose.yml config
 
-      - name: run make check-backend (build, vet, fmt, test)
-        run: make check-backend
+      - name: download go modules
+        working-directory: backend
+        run: go mod download
 
-      - name: smoke-test dev and migrate entrypoints
+      - name: smoke-test dev entrypoint (health check)
+        working-directory: backend
+        # Build the binary first so compilation errors are caught immediately
+        # and startup does not suffer cold compilation delays in the background.
+        run: |
+          go build -o /tmp/api-smoke-bin ./cmd/api
+          /tmp/api-smoke-bin > /tmp/api-smoke.log 2>&1 &
+          api_pid=$!
+          healthy=0
+          for i in $(seq 1 30); do
+            if curl -sf http://localhost:8080/api/v1/health -o /tmp/health.json; then
+              healthy=1
+              break
+            fi
+            if ! kill -0 "$api_pid" 2>/dev/null; then
+              echo "api process exited prematurely"
+              break
+            fi
+            sleep 1
+          done
+          if [ "$healthy" -ne 1 ]; then
+            echo "api never became healthy; log:"
+            cat /tmp/api-smoke.log
+            exit 1
+          fi
+          cat /tmp/health.json
+          kill "$api_pid" 2>/dev/null || true
+          wait "$api_pid" 2>/dev/null || true
+
+      - name: smoke-test migrate entrypoints
         working-directory: backend
         run: |
-          timeout 10s go run ./cmd/api
           timeout 10s go run ./cmd/migrate up
           timeout 10s go run ./cmd/migrate status

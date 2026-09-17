@@ -209,7 +209,7 @@ func loadDotEnv(searchPaths ...string) {
 
 	for _, path := range candidates {
 		if _, err := os.Stat(path); err == nil {
-			_ = godotenv.Overload(path)
+			_ = godotenv.Load(path)
 			break
 		}
 	}

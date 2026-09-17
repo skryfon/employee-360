@@ -5,8 +5,8 @@ SCOPE       ?= employee-360
 .PHONY: help bootstrap dev dev-api dev-admin dev-employee \
         migrate migrate-down migrate-status migrate-version migrate-reset \
         seed bootstrap-admin \
-        test test-all test-backend test-backend-cover cover-func cover-html test-clients \
-        check check-backend check-clients check-structure fmt-check \
+        test test-all test-backend test-backend-integration test-backend-cover cover-func cover-html test-clients \
+        check check-backend check-clients check-structure fmt-check fmt \
         lint lint-backend lint-clients typecheck \
         build build-backend build-clients build-bin vet tidy clean \
         swagger generate
@@ -69,8 +69,11 @@ test-all: check ## Run lint, typecheck, and all test suites
 
 test: test-backend test-clients ## Run backend and frontend tests
 
-test-backend: ## Run Go unit tests
+test-backend: ## Run Go unit tests (excludes integration-tagged tests, no DB required)
 	cd $(BACKEND_DIR) && go test ./...
+
+test-backend-integration: ## Run Go integration tests (requires a live PostgreSQL)
+	cd $(BACKEND_DIR) && go test -tags=integration ./...
 
 test-backend-cover: ## Run Go tests with coverage output
 	cd $(BACKEND_DIR) && go test -coverprofile=coverage.out ./...
@@ -89,7 +92,7 @@ test-clients: ## Run frontend tests
 check: check-backend ## Run full verification suite (backend + frontend)
 	@if [ -f package.json ]; then pnpm -r lint && pnpm -r typecheck; fi
 
-check-backend: build-backend vet fmt-check check-structure test-backend ## Run the backend-only verification suite (used by CI)
+check-backend: build-backend vet fmt-check check-structure test-backend test-backend-integration ## Run the backend-only verification suite (used by CI; requires a live PostgreSQL for integration tests)
 
 check-clients: lint-clients typecheck test-clients build-clients ## Run the frontend-only verification suite (used by CI)
 
@@ -100,6 +103,9 @@ fmt-check: ## Fail if any backend file needs gofmt formatting
 		echo "$$unformatted"; \
 		exit 1; \
 	fi
+
+fmt: ## Auto-format backend Go files with gofmt
+	cd $(BACKEND_DIR) && gofmt -w .
 
 check-structure: ## Verify required backend scaffolding directories exist
 	@missing=0; \
