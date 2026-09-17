@@ -1,7 +1,3 @@
-# Review reports
-plan/reviews/
-reviews/
-
 # Binaries and build output
 bin/
 backend/bin/
