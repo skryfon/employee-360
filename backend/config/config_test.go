@@ -8,6 +8,12 @@ import (
 )
 
 func TestConfig_Defaults(t *testing.T) {
+	// Isolate from any real .env/config.yaml discoverable from the repo
+	// tree (e.g. a developer's own root .env) by running from an empty
+	// temp dir — loadDotEnv()'s relative candidates and Viper's default
+	// config search paths are all relative to the working directory.
+	t.Chdir(t.TempDir())
+
 	// Ensure clean env for testing defaults
 	os.Unsetenv("DATABASE_HOST")
 	os.Unsetenv("DATABASE_PORT")
@@ -189,7 +195,26 @@ database:
 		t.Fatalf("failed to write temp yaml file: %v", err)
 	}
 
-	cfg, err := Load(tempDir)
+	// Isolate from any real .env discoverable from the repo tree (its
+	// env-sourced values would otherwise outrank the yaml file's, per
+	// Viper's env > config-file precedence) by running from tempDir
+	// itself, which also makes Load()'s default "." search path find
+	// config.yaml directly.
+	t.Chdir(tempDir)
+
+	// Defensively clear the same keys the yaml sets — Viper's env > config
+	// file precedence means any of these already present in the real OS
+	// environment (independent of any .env file) would otherwise silently
+	// outrank the yaml values below.
+	for _, key := range []string{
+		"SERVER_PORT", "PORT",
+		"DATABASE_HOST", "DATABASE_PORT", "DATABASE_USER", "DATABASE_PASSWORD",
+		"DATABASE_NAME", "DATABASE_DBNAME", "DATABASE_SSLMODE",
+	} {
+		os.Unsetenv(key)
+	}
+
+	cfg, err := Load()
 	if err != nil {
 		t.Fatalf("failed to load config from yaml directory: %v", err)
 	}
