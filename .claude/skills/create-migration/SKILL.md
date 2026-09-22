@@ -58,7 +58,7 @@ If the up migration is destructive (e.g. `DROP COLUMN`), the down should be a no
 Tell the user the two file paths created and remind them to run (once `cmd/migrate` exists):
 
 ```bash
-cd backend && make migrate
+make migrate
 ```
 
 to apply, or check migration status first if such a target exists.

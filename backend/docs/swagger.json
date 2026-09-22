@@ -1,0 +1,172 @@
+{
+    "schemes": [
+        "http",
+        "https"
+    ],
+    "swagger": "2.0",
+    "info": {
+        "description": "REST API for Employee360, an open-source, self-hostable, multi-tenant employee platform. Includes unversioned operational endpoints (health checks) and the versioned client-facing API under /api/v1.",
+        "title": "Employee360 API",
+        "contact": {},
+        "version": "1.0"
+    },
+    "basePath": "/",
+    "paths": {
+        "/api/v1/health": {
+            "get": {
+                "description": "Returns application and database connectivity status. Used by load balancers, Kubernetes probes, monitoring, and client SDK smoke tests.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "health"
+                ],
+                "summary": "Report application and database health",
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/github_com_skryfon_employee360_backend_internal_delivery_http_response.Envelope"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/internal_delivery_http_handlers.HealthResponse"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    }
+                }
+            }
+        },
+        "/health": {
+            "get": {
+                "description": "Returns application and database connectivity status. Used by load balancers, Kubernetes probes, monitoring, and client SDK smoke tests.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "health"
+                ],
+                "summary": "Report application and database health",
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/github_com_skryfon_employee360_backend_internal_delivery_http_response.Envelope"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/internal_delivery_http_handlers.HealthResponse"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    }
+                }
+            }
+        },
+        "/healthz": {
+            "get": {
+                "description": "Returns application and database connectivity status. Used by load balancers, Kubernetes probes, monitoring, and client SDK smoke tests.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "health"
+                ],
+                "summary": "Report application and database health",
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/github_com_skryfon_employee360_backend_internal_delivery_http_response.Envelope"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/internal_delivery_http_handlers.HealthResponse"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    }
+                }
+            }
+        }
+    },
+    "definitions": {
+        "github_com_skryfon_employee360_backend_internal_delivery_http_response.Envelope": {
+            "type": "object",
+            "properties": {
+                "data": {},
+                "error": {
+                    "$ref": "#/definitions/github_com_skryfon_employee360_backend_internal_delivery_http_response.ErrorInfo"
+                },
+                "meta": {
+                    "$ref": "#/definitions/github_com_skryfon_employee360_backend_internal_delivery_http_response.Meta"
+                },
+                "success": {
+                    "type": "boolean"
+                }
+            }
+        },
+        "github_com_skryfon_employee360_backend_internal_delivery_http_response.ErrorInfo": {
+            "type": "object",
+            "properties": {
+                "code": {
+                    "type": "string"
+                },
+                "details": {},
+                "message": {
+                    "type": "string"
+                }
+            }
+        },
+        "github_com_skryfon_employee360_backend_internal_delivery_http_response.Meta": {
+            "type": "object",
+            "properties": {
+                "page": {
+                    "type": "integer"
+                },
+                "page_size": {
+                    "type": "integer"
+                },
+                "total_items": {
+                    "type": "integer"
+                },
+                "total_pages": {
+                    "type": "integer"
+                }
+            }
+        },
+        "internal_delivery_http_handlers.HealthResponse": {
+            "type": "object",
+            "properties": {
+                "app": {
+                    "type": "string"
+                },
+                "database": {
+                    "type": "string"
+                },
+                "status": {
+                    "type": "string"
+                }
+            }
+        }
+    }
+}
