@@ -1,0 +1,182 @@
+# Cycle 2 — Auth, Email Service & Onboarding Invitations
+
+| | |
+|---|---|
+| **Status** | Active |
+| **Module** | Authentication (admin email+password, employee passwordless), transactional email, and onboarding invitations |
+| **Depends on** | `plan/cycles/cycle-01-project-setup.md` (backend must run, DB must be reachable, `cmd/migrate`/`cmd/bootstrap` runners must work) |
+| **Source** | `plan/architecture/backend.md` (entity/migration list, layering), `plan/initial-planning.md` (auth flow decisions), `requirmement.md` |
+
+This is the scope/status doc for Cycle 2. Read this before starting or resuming work.
+Cross-cutting principles (open source, multi-tenant, self-hostable, headless) live in
+`CLAUDE.md`, not here.
+
+**Renumbering note:** this cycle was originally filed as Holiday Calendar migrations +
+seeding. That content moved unchanged to
+`plan/cycles/cycle-03-holiday-calendar-migrations-seeding.md`. Cycle 2 was repurposed
+for auth/onboarding because `plan/cycles/cycle-01-project-setup.md` already deferred
+"auth/tenant middleware" to Cycle 2 ("once there's something to protect"), and every
+later module needs real users, roles, and a working login before its own API is worth
+building.
+
+**Scope note:** unlike Cycle 1's scaffolding-only and Cycle 3's migrations-only slices,
+this cycle runs the full stack for this one feature set — migrations through handlers —
+because auth without a callable endpoint isn't testable. Frontend (admin login UI,
+employee OTP UI, invitation accept flow) is **out of scope**; it gets its own cycle once
+this API exists. Dispatch backend work to `backend-agent` per `CLAUDE.md`.
+
+---
+
+## Objective
+
+Stand up real authentication (replacing Cycle 1's middleware stubs), a reusable
+transactional email service, and an admin-driven onboarding-invitation flow, so that:
+
+1. Tenant Admins and the platform Super Admin can log in with email + password.
+2. Employees can log in passwordlessly via email.
+3. Admin users can recover access via "forgot password".
+4. Tenant Admins can invite new users (admin or employee) by email; invitees land as
+   pending users until they accept.
+
+---
+
+## Decisions made for this cycle
+
+`plan/initial-planning.md` left the employee login mechanism as an open question
+("magic link vs OTP vs company SSO"). This cycle decides: **OTP over email**, not magic
+links. Reasoning: an OTP is a 6-digit code typed into the employee client, so it needs no
+deep-link route or token-in-URL handling on the frontend — simpler to build and revisit
+later without touching the token/email plumbing built here. If product wants magic links
+or SSO instead, that's a follow-up cycle, not a blocker to this one.
+
+Email delivery is **synchronous SMTP**, not an outbox/queue pattern. An event
+outbox + async worker is more reliable at scale, but Employee360 has no job queue yet
+(Cycle 1 didn't scaffold one), so this cycle sends mail directly and synchronously.
+Revisit async/outbox delivery in a later cycle if synchronous send proves unreliable in
+practice.
+
+**Default provider: Resend, via its SMTP interface** (`smtp.resend.com`), not its
+REST API/SDK. Calling a provider through its proprietary SDK would hard-code
+`mail_service.go` to one vendor. Going through Resend's SMTP credentials instead
+(username `resend`, password = the Resend API key) keeps `mail_service.go` a plain,
+provider-agnostic SMTP client — same code path works against Resend, Amazon SES,
+Postmark, or a self-hosted relay, just by changing
+`SMTP_HOST`/`SMTP_PORT`/`SMTP_USERNAME`/`SMTP_PASSWORD` in config. This satisfies the
+**Self-Hostable** principle (`CLAUDE.md`: no cloud-provider lock-in) while still
+defaulting to a widely-used, cost-effective provider (Resend: 3,000 emails/month free,
+then usage-based) instead of requiring self-hosted SMTP infrastructure this project
+doesn't have yet. Local dev points `SMTP_HOST` at Mailpit instead so email is
+verifiable without hitting Resend at all.
+
+Roles stay the fixed three-role model from `CLAUDE.md`'s Platform Roles & Governance
+Model (`super_admin`, `admin`, `employee`) — no granular permissions table. A
+resource/action permission system solves a different (multi-role, per-resource ACL)
+problem than this project's fixed role set, so it's not part of this cycle.
+
+---
+
+## Sub-Features
+
+### Migrations (`backend/migrations/`, via the `create-migration` skill)
+
+In dependency order, per `plan/architecture/backend.md` (unchanged numbering for
+000001–000006; 000007–000010 are new, added by this cycle):
+
+- [ ] `000001_create_tenants` — no `tenant_id` column (this is the one table that doesn't get one)
+- [ ] `000002_create_departments` — `tenant_id` FK + index
+- [ ] `000003_create_positions` — `tenant_id` FK + index
+- [ ] `000004_create_users` — `tenant_id` FK + index; FKs to department/position (both nullable — a user can exist before being assigned either); `password_hash` nullable (employees are passwordless); `email_verified_at`, `last_login_at`, `is_active`
+- [ ] `000005_create_roles` — `tenant_id` FK + index
+- [ ] `000006_create_user_roles` — join table, FKs to users + roles
+- [ ] `000007_create_audit_logs` — `tenant_id` FK + index; nullable `actor_user_id` FK (system-initiated actions have no actor)
+- [ ] `000008_create_password_reset_tokens` — `tenant_id` FK, `user_id` FK, `token_hash` (never store the raw token), `expires_at`, `used_at`
+- [ ] `000009_create_refresh_tokens` — `tenant_id` FK, `user_id` FK, `token_hash`, `family` (uuid, for rotation/revocation), `revoked_at`, `expires_at`, `ip_address`, `user_agent` — access tokens stay fully stateless per `CLAUDE.md`; refresh tokens are tracked so logout/revocation is possible
+- [ ] `000010_create_user_invitations` — `tenant_id` FK, `email`, `role_id` FK, nullable `department_id`/`position_id` FK, `invited_by` FK (users), `token_hash`, `expires_at`, `accepted_at`, `revoked_at`
+
+Each: up + down pair, `created_at`/`updated_at` on every entity table, an index on every
+FK column. See the `create-migration` skill for the full invariant checklist.
+
+### Domain Layer (`backend/internal/domain/`)
+
+- [ ] Entities: `user.go`, `role.go`, `user_role.go`, `password_reset_token.go`, `refresh_token.go`, `user_invitation.go`, `audit_log.go`
+- [ ] Repository interfaces: `user_repository.go`, `role_repository.go`, `user_role_repository.go`, `password_reset_repository.go`, `refresh_token_repository.go`, `user_invitation_repository.go`, `audit_repository.go`
+- [ ] `service/token_service.go` — JWT issue/verify (access + refresh claims carrying `tenant_id`, `user_id`, roles)
+- [ ] `service/hash_service.go` — password hashing (bcrypt) + generic secret-token hashing (sha256, for reset/invitation/refresh token storage — never store raw tokens)
+- [ ] `service/email_service.go` — `EmailService` interface (`Send(ctx, EmailMessage) error`) + `EmailMessage`/`EmailTemplateName` types, infrastructure-agnostic (depends only on domain constructs, not SMTP/Resend specifics). Template set for this cycle: `PasswordReset`, `OTPCode`, `UserInvitation`.
+
+### Email Service (`backend/internal/infrastructure/service/`)
+
+- [ ] `mail_service.go` — plain SMTP implementation of `EmailService` (Viper config: `SMTP_HOST`, `SMTP_PORT`, `SMTP_USERNAME`, `SMTP_PASSWORD`, `SMTP_FROM`; TLS as needed) — no Resend SDK, no vendor-specific code
+- [ ] `mail/templates/` — subject + text + HTML template per `EmailTemplateName` (`PasswordReset`, `OTPCode`, `UserInvitation`), loaded via Go's `html/template`/`text/template`
+- [ ] `.env.example` — default production values pointed at Resend's SMTP endpoint: `SMTP_HOST=smtp.resend.com`, `SMTP_PORT=465` (or `587`), `SMTP_USERNAME=resend`, `SMTP_PASSWORD=<RESEND_API_KEY>`
+- [ ] Local dev: `.env` points `SMTP_HOST` at a local catcher (e.g. Mailpit) instead, so email is verifiable without hitting Resend
+
+### Auth Usecases (`backend/internal/usecase/{interface,implementation}/auth/`)
+
+- [ ] `LoginUseCase` — admin/super_admin email + password → access + refresh token pair
+- [ ] `RequestOTPUseCase` / `VerifyOTPUseCase` — employee passwordless login (send code, verify code → token pair); reuses `VerifyEmailUseCase` naming already planned in `plan/architecture/backend.md` if it fits, otherwise add alongside it
+- [ ] `TokenRefreshUseCase` — rotate refresh token (per `plan/architecture/backend.md`)
+- [ ] `LogoutUseCase` — revoke the presented refresh token
+- [ ] `ForgotPasswordUseCase` — admin/super_admin only (employees have no password); enumeration-safe (always returns success regardless of whether the email exists), generates + emails a reset token (random bytes, hashed before storage, short expiry)
+- [ ] `ResetPasswordUseCase` — consumes a reset token, sets new password, invalidates the token and all existing refresh tokens for that user
+
+### Onboarding Invitation Usecases (`backend/internal/usecase/{interface,implementation}/invitation/`)
+
+- [ ] `InviteUserUseCase` — admin invites by email + role (+ optional department/position); creates a pending `users` row (`is_active = false`, no password) and an invitation row; emails `UserInvitation`. Tenant-scoped: an admin can only invite into their own tenant.
+- [ ] `AcceptInvitationUseCase` — consumes the invitation token; for an invited admin, sets a password and activates the user; for an invited employee, just activates the user (they'll use OTP login going forward)
+- [ ] `ResendInvitationUseCase` — reissues token + re-sends the email, only while pending
+- [ ] `RevokeInvitationUseCase` — admin cancels a pending invitation
+- [ ] `ListInvitationsUseCase` — tenant-scoped list for the admin UI (later cycle)
+
+### Middleware (`backend/internal/delivery/http/middleware/`)
+
+- [ ] `auth.go` — real JWT validation + role extraction, replacing Cycle 1's stub
+- [ ] `tenant.go` — real tenant resolution from JWT claims into `context.Context`, replacing Cycle 1's stub
+
+### Delivery / Routes (`backend/internal/delivery/http/`)
+
+- [ ] `auth_handler.go` — `POST /api/v1/auth/login`, `POST /api/v1/auth/otp/request`, `POST /api/v1/auth/otp/verify`, `POST /api/v1/auth/refresh`, `POST /api/v1/auth/logout`, `POST /api/v1/auth/forgot-password`, `POST /api/v1/auth/reset-password` — all unauthenticated except logout
+- [ ] `invitation_handler.go` (or fold into `user_handler.go`) — `POST /api/v1/users/invitations` (admin-only), `POST /api/v1/users/invitations/:id/resend`, `DELETE /api/v1/users/invitations/:id`, `GET /api/v1/users/invitations`, and an unauthenticated `POST /api/v1/invitations/accept`
+- [ ] Wire `auth.go`/`tenant.go` middleware onto every route above except login/OTP-request/OTP-verify/refresh/forgot-password/reset-password/invitation-accept
+
+### Seeding (`backend/internal/infrastructure/database/seeder/`, run via `cmd/bootstrap`)
+
+- [ ] Seed one system tenant
+- [ ] Seed default roles (`super_admin`, `admin`, `employee`)
+- [ ] Seed the platform Super Admin user (password from env config, never hardcoded)
+- [ ] `seeder_test.go` — verify bootstrap is idempotent (running it twice doesn't duplicate the tenant/roles/admin)
+
+**Done when:** `make migrate` applies all 10 migrations cleanly, `make migrate-down`
+reverses them cleanly, `cmd/bootstrap` seeds a working system tenant + super admin, and
+end-to-end via curl: an admin can log in, request a password reset and complete it, and
+invite a new user whose invitation email is visible in a local SMTP catcher and can be
+accepted to produce an active user.
+
+---
+
+## Out of Scope for This Cycle
+
+- Any frontend work (admin login page, employee OTP page, invitation-accept page) — a
+  later cycle.
+- SSO / OAuth login for employees — not decided yet, see "Decisions made for this
+  cycle".
+- Async/outbox-based email delivery and a job queue — deferred; synchronous SMTP is
+  this cycle's scope.
+- Granular permissions (resource/action ACLs) — out of scope; this project uses the
+  fixed three-role model.
+- Holiday Calendar, or any other planned module (Work Status, Leave Management,
+  Courses/Certifications, Benefits, Career Growth, Salary/Taxation, Appraisal, Company
+  Policies) — see `CLAUDE.md`'s Execution Model section.
+
+---
+
+## Reference
+
+- Entity list, migration file list, layering: `plan/architecture/backend.md`
+- Auth flow decisions and open questions: `plan/initial-planning.md`
+- Skill to use for each migration pair: `create-migration` (`.claude/skills/`)
+- Skill to use for the usecase/handler/route scaffolding: `new-backend-feature`
+  (`.claude/skills/`)
+- Agent to use: `backend-agent` (`.claude/agents/`)
+- Previous cycle: `plan/cycles/cycle-01-project-setup.md`
+- Next cycle: `plan/cycles/cycle-03-holiday-calendar-migrations-seeding.md`

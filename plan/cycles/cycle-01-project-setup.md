@@ -66,4 +66,4 @@ routes besides health. That's Cycle 2.
 - Backend directory tree & layering: `plan/architecture/backend.md`
 - Frontend monorepo layout: `plan/architecture/frontend.md`
 - Agents to use while executing this cycle: `backend-agent`, `frontend-agent` (`.claude/agents/`)
-- Next cycle: `plan/cycles/cycle-02-holiday-calendar-migrations-seeding.md`
+- Next cycle: `plan/cycles/cycle-02-auth-onboarding.md`

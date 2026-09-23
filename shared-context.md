@@ -10,8 +10,8 @@ policies, benefits, career, comp/tax, performance).
 ## Status
 
 Cycle 1 (Project Setup & Scaffolding) is complete — backend and frontend skeletons
-boot, connect to Postgres, and expose a working health route. Cycle 2 (Holiday
-Calendar migrations + seeding) is now active.
+boot, connect to Postgres, and expose a working health route. Cycle 2 (Auth, Email
+Service & Onboarding Invitations) is now active.
 
 ---
 
@@ -26,15 +26,22 @@ work; it is the authoritative current scope**, not the tech-stack description be
 - **Cycle 1 (complete)** — Project Setup & Scaffolding: folder structure, DB
   connectivity, config/env, a health route. No feature work. →
   `plan/cycles/cycle-01-project-setup.md`
-- **Cycle 2 (active)** — Holiday Calendar: migrations +
+- **Cycle 2 (active)** — Auth, Email Service & Onboarding Invitations: real
+  auth/tenant middleware (replacing Cycle 1's stubs), admin email+password login,
+  employee passwordless (OTP) login, forgot/reset password, a transactional SMTP
+  email service, and admin-driven user onboarding invitations. Full stack
+  (migrations through handlers), frontend excluded. →
+  `plan/cycles/cycle-02-auth-onboarding.md`
+- **Cycle 3 (planned, blocked on Cycle 2)** — Holiday Calendar: migrations +
   seeding only. No handlers, no routes, no frontend. →
-  `plan/cycles/cycle-02-holiday-calendar-migrations-seeding.md`
+  `plan/cycles/cycle-03-holiday-calendar-migrations-seeding.md`
 - Backend API and frontend for Holiday Calendar are later, not-yet-filed cycles —
   don't build them yet, even though the target architecture is described below for
-  context.
-- Further modules (Onboarding, Work Status, Leave Management,
-  Courses/Certifications, Benefits, Career Growth, Salary/Taxation, Appraisal,
-  Company Policies): no cycle file until work starts on them — don't foreclose them.
+  context. Frontend for Cycle 2's auth/onboarding is likewise a later, not-yet-filed
+  cycle.
+- Further modules (Work Status, Leave Management, Courses/Certifications, Benefits,
+  Career Growth, Salary/Taxation, Appraisal, Company Policies): no cycle file until
+  work starts on them — don't foreclose them.
 
 New cycle: create `plan/cycles/cycle-NN-<name>.md`, scope narrowly, break into
 sub-features before coding.
