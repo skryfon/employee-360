@@ -9,7 +9,9 @@ policies, benefits, career, comp/tax, performance).
 
 ## Status
 
-Planning docs only (`requirmement.md`, `plan/`) — no code/build/tests yet.
+Cycle 1 (Project Setup & Scaffolding) is complete — backend and frontend skeletons
+boot, connect to Postgres, and expose a working health route. Cycle 2 (Holiday
+Calendar migrations + seeding) is now active.
 
 ---
 
@@ -21,10 +23,10 @@ frontend), never the whole module at once. Each cycle has its own scope doc:
 `plan/cycles/cycle-NN-<name>.md` — **read the active cycle's file before doing any
 work; it is the authoritative current scope**, not the tech-stack description below.
 
-- **Cycle 1 (active)** — Project Setup & Scaffolding: folder structure, DB
+- **Cycle 1 (complete)** — Project Setup & Scaffolding: folder structure, DB
   connectivity, config/env, a health route. No feature work. →
   `plan/cycles/cycle-01-project-setup.md`
-- **Cycle 2 (planned, blocked on Cycle 1)** — Holiday Calendar: migrations +
+- **Cycle 2 (active)** — Holiday Calendar: migrations +
   seeding only. No handlers, no routes, no frontend. →
   `plan/cycles/cycle-02-holiday-calendar-migrations-seeding.md`
 - Backend API and frontend for Holiday Calendar are later, not-yet-filed cycles —

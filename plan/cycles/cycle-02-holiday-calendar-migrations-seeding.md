@@ -2,7 +2,7 @@
 
 | | |
 |---|---|
-| **Status** | Planned — blocked on Cycle 1 |
+| **Status** | Active |
 | **Module** | Holiday Calendar Management (this cycle covers schema + seed data only) |
 | **Depends on** | `plan/cycles/cycle-01-project-setup.md` (backend must run, DB must be reachable, `cmd/migrate` runner must work) |
 | **Source** | `plan/architecture/backend.md` (entity list, migration file list), `requirmement.md` |

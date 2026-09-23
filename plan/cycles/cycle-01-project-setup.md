@@ -2,7 +2,7 @@
 
 | | |
 |---|---|
-| **Status** | Active |
+| **Status** | Complete |
 | **Module** | Initial backend + frontend scaffolding (no feature work) |
 | **Source** | `plan/architecture/backend.md`, `plan/architecture/frontend.md`, `plan/initial-planning.md` |
 
@@ -27,28 +27,28 @@ works.
 
 ### Backend (`backend/`)
 
-- [ ] `go.mod` + directory tree per `plan/architecture/backend.md` (`cmd/api`, `cmd/migrate`, `cmd/bootstrap`, `internal/{delivery,domain,usecase,infrastructure,ctx}`, `pkg/`, `shared/`, `migrations/`, `config/`)
-- [ ] Viper config loading (`config/config.go` + `config.yaml.example`) — reads from env vars / `.env`
-- [ ] `docker-compose.yml` — Postgres service for local dev
-- [ ] DB connection (`internal/infrastructure/database/postgres.go`) — GORM + Postgres, reads config, fails fast with a clear error if unreachable
-- [ ] `golang-migrate` wired via `cmd/migrate` (even with zero migrations yet — the runner must work)
-- [ ] Base middleware chain stubbed in order: `request_id → logger → cors → recovery` (auth/tenant middleware comes in Cycle 2 once there's something to protect)
-- [ ] Health route: `GET /api/v1/health` (or `/healthz`) — returns 200 + DB ping status, no auth required
-- [ ] `cmd/api/main.go` — server boot, dependency wiring stub, graceful shutdown
-- [ ] `Makefile` targets: `make dev`, `make migrate`, `make test` (even if `make test` has nothing to test yet)
+- [x] `go.mod` + directory tree per `plan/architecture/backend.md` (`cmd/api`, `cmd/migrate`, `cmd/bootstrap`, `internal/{delivery,domain,usecase,infrastructure,ctx}`, `pkg/`, `shared/`, `migrations/`, `config/`)
+- [x] Viper config loading (`config/config.go` + `config.yaml.example`) — reads from env vars / `.env`
+- [x] `docker-compose.yml` — Postgres service for local dev
+- [x] DB connection (`internal/infrastructure/database/postgres.go`) — GORM + Postgres, reads config, fails fast with a clear error if unreachable
+- [x] `golang-migrate` wired via `cmd/migrate` (even with zero migrations yet — the runner must work)
+- [x] Base middleware chain stubbed in order: `request_id → logger → cors → recovery` (auth/tenant middleware comes in Cycle 2 once there's something to protect)
+- [x] Health route: `GET /api/v1/health` (or `/healthz`) — returns 200 + DB ping status, no auth required
+- [x] `cmd/api/main.go` — server boot, dependency wiring stub, graceful shutdown
+- [x] `Makefile` targets: `make dev`, `make migrate`, `make test` (even if `make test` has nothing to test yet)
 
 **Done when:** `go run ./cmd/api` starts, `docker-compose up -d` brings up Postgres and the
 app connects to it, and `curl localhost:PORT/api/v1/health` returns 200.
 
 ### Frontend (root + `clients/`, `packages/`)
 
-- [ ] Root `pnpm-workspace.yaml` + root `package.json`
-- [ ] `clients/admin/` — Vite + React + TS scaffold, Tailwind configured, renders a placeholder page
-- [ ] `clients/employee/` — same scaffold
-- [ ] `packages/api-client/` — Axios instance + interceptor stubs (JWT, `X-Tenant-ID` — wired but with nothing to attach yet), one typed call to the backend health route as the first smoke test
-- [ ] `packages/ui/` — optional, empty/minimal placeholder package is fine for this cycle
-- [ ] `.env.example` per app (API base URL, etc.)
-- [ ] Root workspace scripts: `pnpm dev`, `pnpm build`, `pnpm lint`, `pnpm typecheck`
+- [x] Root `pnpm-workspace.yaml` + root `package.json`
+- [x] `clients/admin/` — Vite + React + TS scaffold, Tailwind configured, renders a placeholder page
+- [x] `clients/employee/` — same scaffold
+- [x] `packages/api-client/` — Axios instance + interceptor stubs (JWT, `X-Tenant-ID` — wired but with nothing to attach yet), one typed call to the backend health route as the first smoke test
+- [x] `packages/ui/` — optional, empty/minimal placeholder package is fine for this cycle
+- [x] `.env.example` per app (API base URL, etc.)
+- [x] Root workspace scripts: `pnpm dev`, `pnpm build`, `pnpm lint`, `pnpm typecheck`
 
 **Done when:** `pnpm --filter admin dev` and `pnpm --filter employee dev` both boot, and
 each app successfully calls the backend health route through `packages/api-client` and
