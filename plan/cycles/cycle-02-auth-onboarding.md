@@ -73,33 +73,54 @@ Model (`super_admin`, `admin`, `employee`) — no granular permissions table. A
 resource/action permission system solves a different (multi-role, per-resource ACL)
 problem than this project's fixed role set, so it's not part of this cycle.
 
+`plan/initial-planning.md` also left tenant resolution as an open question ("email
+domain, subdomain, or explicit tenant selection at login"). This cycle decides:
+**email domain**, resolved via a separate `tenant_domains` table (one tenant to many
+domains) rather than a single column on `tenants` — a company invited on `acme.com` may
+also send mail from `acme-hr.com` or acquire a second brand's domain later, and a join
+table avoids a schema change when that happens. Reasoning for email domain over the
+alternatives: subdomain routing needs wildcard DNS configured by whoever is hosting the
+instance, which conflicts with the **Self-Hostable** principle (`CLAUDE.md`:
+`docker-compose`, no extra infra assumptions) — a self-hoster on a bare IP or a single
+domain can't cleanly offer `*.example.com`. Email domain needs no extra infra and
+matches the parenthetical already in `plan/initial-planning.md:55`.
+
+DNS-based domain-ownership verification is still out of scope for this cycle: tenant
+(and tenant-domain) provisioning is a **Platform Super Admin** action (`CLAUDE.md`'s
+governance model — no self-service tenant signup yet), so domains are set by a trusted
+operator, not claimed by an untrusted party, and don't need a verification workflow to
+prevent spoofing at this stage. Revisit if self-service signup becomes a real
+requirement.
+
 ---
 
 ## Sub-Features
 
 ### Migrations (`backend/migrations/`, via the `create-migration` skill)
 
-In dependency order, per `plan/architecture/backend.md` (unchanged numbering for
-000001–000006; 000007–000010 are new, added by this cycle):
+In dependency order, per `plan/architecture/backend.md` (`000002` and `000008`–`000011`
+are new, added by this cycle; `000003`–`000007` keep their original names but shift by
+one position to make room for `000002_create_tenant_domains`):
 
-- [ ] `000001_create_tenants` — no `tenant_id` column (this is the one table that doesn't get one)
-- [ ] `000002_create_departments` — `tenant_id` FK + index
-- [ ] `000003_create_positions` — `tenant_id` FK + index
-- [ ] `000004_create_users` — `tenant_id` FK + index; FKs to department/position (both nullable — a user can exist before being assigned either); `password_hash` nullable (employees are passwordless); `email_verified_at`, `last_login_at`, `is_active`
-- [ ] `000005_create_roles` — `tenant_id` FK + index
-- [ ] `000006_create_user_roles` — join table, FKs to users + roles
-- [ ] `000007_create_audit_logs` — `tenant_id` FK + index; nullable `actor_user_id` FK (system-initiated actions have no actor)
-- [ ] `000008_create_password_reset_tokens` — `tenant_id` FK, `user_id` FK, `token_hash` (never store the raw token), `expires_at`, `used_at`
-- [ ] `000009_create_refresh_tokens` — `tenant_id` FK, `user_id` FK, `token_hash`, `family` (uuid, for rotation/revocation), `revoked_at`, `expires_at`, `ip_address`, `user_agent` — access tokens stay fully stateless per `CLAUDE.md`; refresh tokens are tracked so logout/revocation is possible
-- [ ] `000010_create_user_invitations` — `tenant_id` FK, `email`, `role_id` FK, nullable `department_id`/`position_id` FK, `invited_by` FK (users), `token_hash`, `expires_at`, `accepted_at`, `revoked_at`
+- [ ] `000001_create_tenants` — no `tenant_id` column (this is the one table that doesn't get one). Columns: `id` (uuid, PK), `name` (text), `is_active` (boolean, default true), `created_at`, `updated_at`
+- [ ] `000002_create_tenant_domains` — `tenant_id` FK + index; `domain` (text, unique across all tenants — this is what login resolution matches against); `created_at`, `updated_at`
+- [ ] `000003_create_departments` — `tenant_id` FK + index
+- [ ] `000004_create_positions` — `tenant_id` FK + index
+- [ ] `000005_create_users` — `tenant_id` FK + index; FKs to department/position (both nullable — a user can exist before being assigned either); `password_hash` nullable (employees are passwordless); `email_verified_at`, `last_login_at`, `is_active`
+- [ ] `000006_create_roles` — `tenant_id` FK + index
+- [ ] `000007_create_user_roles` — join table, FKs to users + roles
+- [ ] `000008_create_audit_logs` — `tenant_id` FK + index; nullable `actor_user_id` FK (system-initiated actions have no actor)
+- [ ] `000009_create_password_reset_tokens` — `tenant_id` FK, `user_id` FK, `token_hash` (never store the raw token), `expires_at`, `used_at`
+- [ ] `000010_create_refresh_tokens` — `tenant_id` FK, `user_id` FK, `token_hash`, `family` (uuid, for rotation/revocation), `revoked_at`, `expires_at`, `ip_address`, `user_agent` — access tokens stay fully stateless per `CLAUDE.md`; refresh tokens are tracked so logout/revocation is possible
+- [ ] `000011_create_user_invitations` — `tenant_id` FK, `email`, `role_id` FK, nullable `department_id`/`position_id` FK, `invited_by` FK (users), `token_hash`, `expires_at`, `accepted_at`, `revoked_at`
 
 Each: up + down pair, `created_at`/`updated_at` on every entity table, an index on every
 FK column. See the `create-migration` skill for the full invariant checklist.
 
 ### Domain Layer (`backend/internal/domain/`)
 
-- [ ] Entities: `user.go`, `role.go`, `user_role.go`, `password_reset_token.go`, `refresh_token.go`, `user_invitation.go`, `audit_log.go`
-- [ ] Repository interfaces: `user_repository.go`, `role_repository.go`, `user_role_repository.go`, `password_reset_repository.go`, `refresh_token_repository.go`, `user_invitation_repository.go`, `audit_repository.go`
+- [ ] Entities: `tenant_domain.go`, `user.go`, `role.go`, `user_role.go`, `password_reset_token.go`, `refresh_token.go`, `user_invitation.go`, `audit_log.go`
+- [ ] Repository interfaces: `tenant_domain_repository.go` (includes a `FindTenantByDomain` lookup — how login resolves `tenant_id` from an email's domain), `user_repository.go`, `role_repository.go`, `user_role_repository.go`, `password_reset_repository.go`, `refresh_token_repository.go`, `user_invitation_repository.go`, `audit_repository.go`
 - [ ] `service/token_service.go` — JWT issue/verify (access + refresh claims carrying `tenant_id`, `user_id`, roles)
 - [ ] `service/hash_service.go` — password hashing (bcrypt) + generic secret-token hashing (sha256, for reset/invitation/refresh token storage — never store raw tokens)
 - [ ] `service/email_service.go` — `EmailService` interface (`Send(ctx, EmailMessage) error`) + `EmailMessage`/`EmailTemplateName` types, infrastructure-agnostic (depends only on domain constructs, not SMTP/Resend specifics). Template set for this cycle: `PasswordReset`, `OTPCode`, `UserInvitation`.
@@ -146,7 +167,7 @@ FK column. See the `create-migration` skill for the full invariant checklist.
 - [ ] Seed the platform Super Admin user (password from env config, never hardcoded)
 - [ ] `seeder_test.go` — verify bootstrap is idempotent (running it twice doesn't duplicate the tenant/roles/admin)
 
-**Done when:** `make migrate` applies all 10 migrations cleanly, `make migrate-down`
+**Done when:** `make migrate` applies all 11 migrations cleanly, `make migrate-down`
 reverses them cleanly, `cmd/bootstrap` seeds a working system tenant + super admin, and
 end-to-end via curl: an admin can log in, request a password reset and complete it, and
 invite a new user whose invitation email is visible in a local SMTP catcher and can be

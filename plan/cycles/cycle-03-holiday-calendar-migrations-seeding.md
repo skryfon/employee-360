@@ -39,8 +39,8 @@ two tables specific to this module.
 
 ### Migrations (`backend/migrations/`, via the `create-migration` skill)
 
-- [ ] `000011_create_holiday_categories` — `tenant_id` FK + index
-- [ ] `000012_create_holidays` — `tenant_id` FK + index; FK to `holiday_categories`
+- [ ] `000012_create_holiday_categories` — `tenant_id` FK + index
+- [ ] `000013_create_holidays` — `tenant_id` FK + index; FK to `holiday_categories`
 
 Each: up + down pair, `created_at`/`updated_at` on every entity table, an index on every
 FK column. See the `create-migration` skill for the full invariant checklist.
