@@ -45,6 +45,7 @@ backend/
 │   │   └── http/
 │   │       ├── handlers/         # Gin request handlers (input parsing & response writing)
 │   │       │   ├── auth_handler.go
+│   │       │   ├── invitation_handler.go
 │   │       │   ├── user_handler.go
 │   │       │   ├── role_handler.go
 │   │       │   ├── department_handler.go
@@ -67,6 +68,7 @@ backend/
 │   ├── domain/                   # Enterprise Core (No external dependencies)
 │   │   ├── entity/               # Core domain models
 │   │   │   ├── tenant.go
+│   │   │   ├── tenant_domain.go
 │   │   │   ├── user.go
 │   │   │   ├── role.go
 │   │   │   ├── user_role.go
@@ -74,9 +76,13 @@ backend/
 │   │   │   ├── position.go
 │   │   │   ├── holiday.go
 │   │   │   ├── holiday_category.go
-│   │   │   └── audit_log.go
+│   │   │   ├── audit_log.go
+│   │   │   ├── password_reset_token.go
+│   │   │   ├── refresh_token.go
+│   │   │   └── user_invitation.go
 │   │   ├── repository/           # Repository interfaces (Ports)
 │   │   │   ├── tenant_repository.go
+│   │   │   ├── tenant_domain_repository.go
 │   │   │   ├── user_repository.go
 │   │   │   ├── role_repository.go
 │   │   │   ├── user_role_repository.go
@@ -84,10 +90,14 @@ backend/
 │   │   │   ├── position_repository.go
 │   │   │   ├── holiday_repository.go
 │   │   │   ├── category_repository.go
-│   │   │   └── audit_repository.go
-│   │   ├── service/              # Domain service interfaces (Token service, Hasher)
+│   │   │   ├── audit_repository.go
+│   │   │   ├── password_reset_repository.go
+│   │   │   ├── refresh_token_repository.go
+│   │   │   └── user_invitation_repository.go
+│   │   ├── service/              # Domain service interfaces (Token service, Hasher, Email)
 │   │   │   ├── token_service.go
-│   │   │   └── hash_service.go
+│   │   │   ├── hash_service.go
+│   │   │   └── email_service.go  # EmailService interface, EmailMessage/EmailTemplateName
 │   │   ├── errors/               # Domain-specific sentinel errors
 │   │   │   └── errors.go
 │   │   └── event/                # Domain events
@@ -95,7 +105,9 @@ backend/
 │   ├── usecase/                  # Application Business Rules
 │   │   ├── interface/             # Usecase ports — one file per feature, one interface per operation
 │   │   │   ├── auth/
-│   │   │   │   └── auth.go        # LoginUseCase, VerifyEmailUseCase, TokenRefreshUseCase
+│   │   │   │   └── auth.go        # LoginUseCase, RequestOTPUseCase, VerifyOTPUseCase, TokenRefreshUseCase, LogoutUseCase, ForgotPasswordUseCase, ResetPasswordUseCase
+│   │   │   ├── invitation/
+│   │   │   │   └── invitation.go  # InviteUserUseCase, AcceptInvitationUseCase, ResendInvitationUseCase, RevokeInvitationUseCase, ListInvitationsUseCase
 │   │   │   ├── user/
 │   │   │   │   └── user.go        # CreateUserUseCase, UpdateUserUseCase, GetUserUseCase, ListUsersUseCase
 │   │   │   ├── rbac/
@@ -115,8 +127,18 @@ backend/
 │   │   └── implementation/        # Usecase adapters — one file per operation, implements the matching interface
 │   │       ├── auth/              # Admin login, Employee passwordless verification
 │   │       │   ├── login.go
-│   │       │   ├── verify_email.go
-│   │       │   └── token_refresh.go
+│   │       │   ├── request_otp.go
+│   │       │   ├── verify_otp.go
+│   │       │   ├── token_refresh.go
+│   │       │   ├── logout.go
+│   │       │   ├── forgot_password.go
+│   │       │   └── reset_password.go
+│   │       ├── invitation/        # Admin-driven onboarding invitations
+│   │       │   ├── invite_user.go
+│   │       │   ├── accept_invitation.go
+│   │       │   ├── resend_invitation.go
+│   │       │   ├── revoke_invitation.go
+│   │       │   └── list_invitations.go
 │   │       ├── user/              # User management operations
 │   │       │   ├── create_user.go
 │   │       │   ├── update_user.go
@@ -158,6 +180,7 @@ backend/
 │   │   │       └── seeder_test.go
 │   │   ├── persistence/          # GORM repository implementations (Adapters)
 │   │   │   ├── tenant_repo.go
+│   │   │   ├── tenant_domain_repo.go
 │   │   │   ├── user_repo.go
 │   │   │   ├── role_repo.go
 │   │   │   ├── user_role_repo.go
@@ -165,11 +188,16 @@ backend/
 │   │   │   ├── position_repo.go
 │   │   │   ├── holiday_repo.go
 │   │   │   ├── category_repo.go
-│   │   │   └── audit_repo.go
+│   │   │   ├── audit_repo.go
+│   │   │   ├── password_reset_repo.go
+│   │   │   ├── refresh_token_repo.go
+│   │   │   └── user_invitation_repo.go
 │   │   ├── service/              # External service implementations
 │   │   │   ├── jwt_service.go    # JWT generation & validation
 │   │   │   ├── bcrypt_service.go # Password hashing & comparison
-│   │   │   └── mail_service.go   # Email delivery (OTP / Magic Link)
+│   │   │   ├── mail_service.go   # SMTP EmailService implementation (OTP / password reset / invitation)
+│   │   │   └── mail/
+│   │   │       └── templates/    # Subject + text + HTML template per EmailTemplateName
 │   │   ├── container/            # Dependency Injection container
 │   │   │   └── container.go      # Initializes and wires all layers
 │   │   └── server/               # HTTP server lifecycle & graceful shutdown
@@ -186,22 +214,30 @@ backend/
 ├── migrations/                   # Versioned SQL migrations (golang-migrate)
 │   ├── 000001_create_tenants.up.sql
 │   ├── 000001_create_tenants.down.sql
-│   ├── 000002_create_departments.up.sql
-│   ├── 000002_create_departments.down.sql
-│   ├── 000003_create_positions.up.sql
-│   ├── 000003_create_positions.down.sql
-│   ├── 000004_create_users.up.sql
-│   ├── 000004_create_users.down.sql
-│   ├── 000005_create_roles.up.sql
-│   ├── 000005_create_roles.down.sql
-│   ├── 000006_create_user_roles.up.sql
-│   ├── 000006_create_user_roles.down.sql
-│   ├── 000007_create_holiday_categories.up.sql
-│   ├── 000007_create_holiday_categories.down.sql
-│   ├── 000008_create_holidays.up.sql
-│   ├── 000008_create_holidays.down.sql
-│   ├── 000009_create_audit_logs.up.sql
-│   └── 000009_create_audit_logs.down.sql
+│   ├── 000002_create_tenant_domains.up.sql
+│   ├── 000002_create_tenant_domains.down.sql
+│   ├── 000003_create_departments.up.sql
+│   ├── 000003_create_departments.down.sql
+│   ├── 000004_create_positions.up.sql
+│   ├── 000004_create_positions.down.sql
+│   ├── 000005_create_users.up.sql
+│   ├── 000005_create_users.down.sql
+│   ├── 000006_create_roles.up.sql
+│   ├── 000006_create_roles.down.sql
+│   ├── 000007_create_user_roles.up.sql
+│   ├── 000007_create_user_roles.down.sql
+│   ├── 000008_create_audit_logs.up.sql
+│   ├── 000008_create_audit_logs.down.sql
+│   ├── 000009_create_password_reset_tokens.up.sql
+│   ├── 000009_create_password_reset_tokens.down.sql
+│   ├── 000010_create_refresh_tokens.up.sql
+│   ├── 000010_create_refresh_tokens.down.sql
+│   ├── 000011_create_user_invitations.up.sql
+│   ├── 000011_create_user_invitations.down.sql
+│   ├── 000012_create_holiday_categories.up.sql
+│   ├── 000012_create_holiday_categories.down.sql
+│   ├── 000013_create_holidays.up.sql
+│   └── 000013_create_holidays.down.sql
 ├── config/                       # Configuration definition & loading (Viper)
 │   ├── config.go
 │   └── config.yaml.example
@@ -242,7 +278,7 @@ PostgreSQL Database
 ### 3.2 Layer Rules & Boundaries
 
 1. **Domain Layer (`internal/domain`)**:
-   - Contains pure Go structs representing core business entities (`User`, `Role`, `UserRole`, `Department`, `Position`, `Holiday`, `HolidayCategory`, `AuditLog`, `Tenant`).
+   - Contains pure Go structs representing core business entities (`User`, `Role`, `UserRole`, `Department`, `Position`, `Holiday`, `HolidayCategory`, `AuditLog`, `Tenant`, `TenantDomain`, `PasswordResetToken`, `RefreshToken`, `UserInvitation`).
    - Defines repository and external service interfaces.
    - Defines domain errors.
    - **Zero dependencies** on Gin, GORM, database drivers, or external libraries.

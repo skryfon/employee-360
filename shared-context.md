@@ -9,7 +9,9 @@ policies, benefits, career, comp/tax, performance).
 
 ## Status
 
-Planning docs only (`requirmement.md`, `plan/`) — no code/build/tests yet.
+Cycle 1 (Project Setup & Scaffolding) is complete — backend and frontend skeletons
+boot, connect to Postgres, and expose a working health route. Cycle 2 (Auth, Email
+Service & Onboarding Invitations) is now active.
 
 ---
 
@@ -21,18 +23,26 @@ frontend), never the whole module at once. Each cycle has its own scope doc:
 `plan/cycles/cycle-NN-<name>.md` — **read the active cycle's file before doing any
 work; it is the authoritative current scope**, not the tech-stack description below.
 
-- **Cycle 1 (active)** — Project Setup & Scaffolding: folder structure, DB
+- **Cycle 1 (complete)** — Project Setup & Scaffolding: folder structure, DB
   connectivity, config/env, a health route. No feature work. →
   `plan/cycles/cycle-01-project-setup.md`
-- **Cycle 2 (planned, blocked on Cycle 1)** — Holiday Calendar: migrations +
+- **Cycle 2 (active)** — Auth, Email Service & Onboarding Invitations: real
+  auth/tenant middleware (replacing Cycle 1's stubs), admin email+password login,
+  employee passwordless (OTP) login, forgot/reset password, a transactional SMTP
+  email service, and admin-driven user onboarding invitations. Full stack,
+  migrations through handlers **and the frontend that consumes them** (admin login,
+  employee OTP login, forgot/reset password, admin invitation-management UI,
+  invitation-accept page). →
+  `plan/cycles/cycle-02-auth-onboarding.md`
+- **Cycle 3 (planned, blocked on Cycle 2)** — Holiday Calendar: migrations +
   seeding only. No handlers, no routes, no frontend. →
-  `plan/cycles/cycle-02-holiday-calendar-migrations-seeding.md`
+  `plan/cycles/cycle-03-holiday-calendar-migrations-seeding.md`
 - Backend API and frontend for Holiday Calendar are later, not-yet-filed cycles —
   don't build them yet, even though the target architecture is described below for
   context.
-- Further modules (Onboarding, Work Status, Leave Management,
-  Courses/Certifications, Benefits, Career Growth, Salary/Taxation, Appraisal,
-  Company Policies): no cycle file until work starts on them — don't foreclose them.
+- Further modules (Work Status, Leave Management, Courses/Certifications, Benefits,
+  Career Growth, Salary/Taxation, Appraisal, Company Policies): no cycle file until
+  work starts on them — don't foreclose them.
 
 New cycle: create `plan/cycles/cycle-NN-<name>.md`, scope narrowly, break into
 sub-features before coding.
