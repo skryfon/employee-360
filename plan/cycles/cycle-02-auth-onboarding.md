@@ -20,10 +20,13 @@ later module needs real users, roles, and a working login before its own API is 
 building.
 
 **Scope note:** unlike Cycle 1's scaffolding-only and Cycle 3's migrations-only slices,
-this cycle runs the full stack for this one feature set — migrations through handlers —
-because auth without a callable endpoint isn't testable. Frontend (admin login UI,
-employee OTP UI, invitation accept flow) is **out of scope**; it gets its own cycle once
-this API exists. Dispatch backend work to `backend-agent` per `CLAUDE.md`.
+this cycle runs the full stack for this one feature set — migrations through handlers,
+**and now the frontend that consumes them** (admin login UI, employee OTP UI, forgot/reset
+password UI, admin invitation-management UI, invitation-accept flow) — because auth
+without a callable endpoint isn't testable, and the API isn't validated end-to-end until a
+real client calls it. Dispatch backend work to `backend-agent` and frontend work to
+`frontend-agent` per `CLAUDE.md`; frontend work should start once the corresponding backend
+endpoint exists (see dependency notes in the Frontend sub-feature below).
 
 ---
 
@@ -32,11 +35,14 @@ this API exists. Dispatch backend work to `backend-agent` per `CLAUDE.md`.
 Stand up real authentication (replacing Cycle 1's middleware stubs), a reusable
 transactional email service, and an admin-driven onboarding-invitation flow, so that:
 
-1. Tenant Admins and the platform Super Admin can log in with email + password.
-2. Employees can log in passwordlessly via email.
-3. Admin users can recover access via "forgot password".
+1. Tenant Admins and the platform Super Admin can log in with email + password, via a real
+   admin login page.
+2. Employees can log in passwordlessly via email, via a real OTP login page.
+3. Admin users can recover access via "forgot password", via real forgot/reset password
+   pages.
 4. Tenant Admins can invite new users (admin or employee) by email; invitees land as
-   pending users until they accept.
+   pending users until they accept, via a real admin invitation-management UI and an
+   invitation-accept page.
 
 ---
 
@@ -44,7 +50,11 @@ transactional email service, and an admin-driven onboarding-invitation flow, so 
 
 `plan/initial-planning.md` left the employee login mechanism as an open question
 ("magic link vs OTP vs company SSO"). This cycle decides: **OTP over email**, not magic
-links. Reasoning: an OTP is a 6-digit code typed into the employee client, so it needs no
+links. This is a free choice, not a constraint: `requirmement.md` only requires
+"Employee authentication using company email" (`requirmement.md:44-45`) and never
+specifies a mechanism — `plan/initial-planning.md:55`'s "magic link" mention was an early
+narrative aside, not a locked-in requirement, and line 80 explicitly flagged the mechanism
+as open. Reasoning for OTP: it's a 6-digit code typed into the employee client, so it needs no
 deep-link route or token-in-URL handling on the frontend — simpler to build and revisit
 later without touching the token/email plumbing built here. If product wants magic links
 or SSO instead, that's a follow-up cycle, not a blocker to this one.
@@ -167,18 +177,42 @@ FK column. See the `create-migration` skill for the full invariant checklist.
 - [ ] Seed the platform Super Admin user (password from env config, never hardcoded)
 - [ ] `seeder_test.go` — verify bootstrap is idempotent (running it twice doesn't duplicate the tenant/roles/admin)
 
+### Frontend (`clients/admin/`, `clients/employee/`, `packages/api-client/`, via the
+`new-frontend-feature` skill)
+
+Depends on the corresponding backend endpoint from the sections above; don't start a
+frontend item before its backend endpoint is callable.
+
+- [ ] `packages/api-client` — auth + invitation API methods (login, OTP request/verify,
+  refresh, logout, forgot/reset password, invite/accept/resend/revoke/list invitations);
+  Axios interceptors for attaching the access token and `X-Tenant-ID`, and for silent
+  refresh-on-401 using `TokenRefreshUseCase`'s endpoint
+- [ ] `clients/admin/src/features/auth/` — login page (email + password), forgot-password
+  page, reset-password page; Zustand store for the access token / auth state, TanStack
+  Query mutations via the API client
+- [ ] `clients/admin/src/features/invitations/` — invite-user form (email + role +
+  optional department/position), invitations list (pending/accepted/revoked), resend and
+  revoke actions
+- [ ] `clients/employee/src/features/auth/` — OTP login page: request-code step, then
+  verify-code step; Zustand store for auth state
+- [ ] Invitation-accept page — a token-in-URL route (unauthenticated) that calls
+  `POST /api/v1/invitations/accept`; for an invited admin, prompts to set a password; for
+  an invited employee, activates directly. Lives wherever `plan/architecture/frontend.md`
+  places shared/public routes — confirm before building if that's not yet decided.
+
 **Done when:** `make migrate` applies all 11 migrations cleanly, `make migrate-down`
 reverses them cleanly, `cmd/bootstrap` seeds a working system tenant + super admin, and
-end-to-end via curl: an admin can log in, request a password reset and complete it, and
-invite a new user whose invitation email is visible in a local SMTP catcher and can be
-accepted to produce an active user.
+end-to-end **through the UI**: an admin can log in on the admin login page, request a
+password reset and complete it via the forgot/reset password pages, invite a new user from
+the admin invitation-management UI (invitation email visible in a local SMTP catcher), and
+that invitee can complete the invitation-accept page to become an active user who can then
+log in (via the admin login page if invited as admin, via the employee OTP page if invited
+as employee).
 
 ---
 
 ## Out of Scope for This Cycle
 
-- Any frontend work (admin login page, employee OTP page, invitation-accept page) — a
-  later cycle.
 - SSO / OAuth login for employees — not decided yet, see "Decisions made for this
   cycle".
 - Async/outbox-based email delivery and a job queue — deferred; synchronous SMTP is

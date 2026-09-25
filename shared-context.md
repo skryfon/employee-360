@@ -29,16 +29,17 @@ work; it is the authoritative current scope**, not the tech-stack description be
 - **Cycle 2 (active)** — Auth, Email Service & Onboarding Invitations: real
   auth/tenant middleware (replacing Cycle 1's stubs), admin email+password login,
   employee passwordless (OTP) login, forgot/reset password, a transactional SMTP
-  email service, and admin-driven user onboarding invitations. Full stack
-  (migrations through handlers), frontend excluded. →
+  email service, and admin-driven user onboarding invitations. Full stack,
+  migrations through handlers **and the frontend that consumes them** (admin login,
+  employee OTP login, forgot/reset password, admin invitation-management UI,
+  invitation-accept page). →
   `plan/cycles/cycle-02-auth-onboarding.md`
 - **Cycle 3 (planned, blocked on Cycle 2)** — Holiday Calendar: migrations +
   seeding only. No handlers, no routes, no frontend. →
   `plan/cycles/cycle-03-holiday-calendar-migrations-seeding.md`
 - Backend API and frontend for Holiday Calendar are later, not-yet-filed cycles —
   don't build them yet, even though the target architecture is described below for
-  context. Frontend for Cycle 2's auth/onboarding is likewise a later, not-yet-filed
-  cycle.
+  context.
 - Further modules (Work Status, Leave Management, Courses/Certifications, Benefits,
   Career Growth, Salary/Taxation, Appraisal, Company Policies): no cycle file until
   work starts on them — don't foreclose them.
