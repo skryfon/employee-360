@@ -12,6 +12,7 @@ import (
 	"github.com/skryfon/employee360/backend/internal/domain/event"
 	"github.com/skryfon/employee360/backend/internal/domain/repository"
 	"github.com/skryfon/employee360/backend/internal/domain/service"
+	authtypes "github.com/skryfon/employee360/backend/internal/types/auth"
 	"github.com/skryfon/employee360/backend/internal/usecase/implementation/ucshared"
 	authusecase "github.com/skryfon/employee360/backend/internal/usecase/interface/auth"
 )
@@ -27,6 +28,7 @@ type ForgotPasswordUseCaseImpl struct {
 	hashService       service.HashService
 	eventPublisher    service.EventPublisher
 	transactor        ucshared.Transactor
+	logger            service.Logger
 	tokenExpiry       time.Duration
 }
 
@@ -39,6 +41,7 @@ func NewForgotPasswordUseCase(
 	hashService service.HashService,
 	eventPublisher service.EventPublisher,
 	transactor ucshared.Transactor,
+	logger service.Logger,
 ) *ForgotPasswordUseCaseImpl {
 	return &ForgotPasswordUseCaseImpl{
 		userRepo:          userRepo,
@@ -46,13 +49,14 @@ func NewForgotPasswordUseCase(
 		hashService:       hashService,
 		eventPublisher:    eventPublisher,
 		transactor:        transactor,
+		logger:            logger,
 		tokenExpiry:       defaultResetTokenExpiry,
 	}
 }
 
 // Execute initiates an enumeration-safe password reset flow.
 // It always returns nil to prevent user enumeration attacks.
-func (u *ForgotPasswordUseCaseImpl) Execute(ctx context.Context, input authusecase.ForgotPasswordInput) error {
+func (u *ForgotPasswordUseCaseImpl) Execute(ctx context.Context, tenantID uuid.UUID, input authtypes.ForgotPasswordRequest) error {
 	email := strings.TrimSpace(strings.ToLower(input.Email))
 	if email == "" {
 		_ = u.hashService.HashToken("dummy-timing-mitigation-token")
@@ -65,7 +69,7 @@ func (u *ForgotPasswordUseCaseImpl) Execute(ctx context.Context, input authuseca
 		return nil
 	}
 
-	user, err := u.userRepo.GetByEmail(ctx, email)
+	user, err := u.userRepo.GetByTenantAndEmail(ctx, tenantID, email)
 	if err != nil || user == nil || !user.IsActive {
 		_ = u.hashService.HashToken("dummy-timing-mitigation-token")
 		return nil
@@ -107,7 +111,7 @@ func (u *ForgotPasswordUseCaseImpl) Execute(ctx context.Context, input authuseca
 		OccurredAt: now,
 	}
 
-	_ = u.transactor.WithinTransaction(ctx, func(txCtx context.Context) error {
+	if err := u.transactor.WithinTransaction(ctx, func(txCtx context.Context) error {
 		if err := u.passwordResetRepo.InvalidateAllForUser(txCtx, user.ID); err != nil {
 			return err
 		}
@@ -121,7 +125,15 @@ func (u *ForgotPasswordUseCaseImpl) Execute(ctx context.Context, input authuseca
 		}
 
 		return nil
-	})
+	}); err != nil {
+		// Enumeration-safety requires Execute to always return nil to the
+		// caller, but the failure must not be silently swallowed: record it
+		// so operators can detect and investigate.
+		if u.logger != nil {
+			u.logger.Error(ctx, "forgot_password: failed to persist password reset request", err)
+		}
+		return nil
+	}
 
 	return nil
 }

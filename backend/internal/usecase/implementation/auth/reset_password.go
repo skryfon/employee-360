@@ -8,6 +8,7 @@ import (
 	domainerrors "github.com/skryfon/employee360/backend/internal/domain/errors"
 	"github.com/skryfon/employee360/backend/internal/domain/repository"
 	"github.com/skryfon/employee360/backend/internal/domain/service"
+	authtypes "github.com/skryfon/employee360/backend/internal/types/auth"
 	"github.com/skryfon/employee360/backend/internal/usecase/implementation/ucshared"
 	authusecase "github.com/skryfon/employee360/backend/internal/usecase/interface/auth"
 )
@@ -41,7 +42,7 @@ func NewResetPasswordUseCase(
 }
 
 // Execute consumes a valid reset token, updates the password, and revokes all active sessions.
-func (u *ResetPasswordUseCaseImpl) Execute(ctx context.Context, input authusecase.ResetPasswordInput) error {
+func (u *ResetPasswordUseCaseImpl) Execute(ctx context.Context, input authtypes.ResetPasswordRequest) error {
 	plainToken := strings.TrimSpace(input.Token)
 	if plainToken == "" {
 		return domainerrors.ErrInvalidToken
@@ -62,7 +63,7 @@ func (u *ResetPasswordUseCaseImpl) Execute(ctx context.Context, input authusecas
 		return domainerrors.ErrInvalidToken
 	}
 
-	user, err := u.userRepo.GetByID(ctx, resetToken.UserID)
+	user, err := u.userRepo.GetByID(ctx, resetToken.TenantID, resetToken.UserID)
 	if err != nil || user == nil {
 		return domainerrors.ErrUserNotFound
 	}
@@ -89,7 +90,7 @@ func (u *ResetPasswordUseCaseImpl) Execute(ctx context.Context, input authusecas
 		user.PasswordHash = &hashedPassword
 		user.UpdatedAt = now
 
-		if err := u.userRepo.Update(txCtx, user); err != nil {
+		if err := u.userRepo.Update(txCtx, user.TenantID, user); err != nil {
 			return err
 		}
 

@@ -9,7 +9,7 @@ import (
 	"github.com/skryfon/employee360/backend/internal/domain/entity"
 	domainerrors "github.com/skryfon/employee360/backend/internal/domain/errors"
 	domainservice "github.com/skryfon/employee360/backend/internal/domain/service"
-	authusecase "github.com/skryfon/employee360/backend/internal/usecase/interface/auth"
+	authtypes "github.com/skryfon/employee360/backend/internal/types/auth"
 )
 
 func TestLogoutUseCase_Success(t *testing.T) {
@@ -40,7 +40,7 @@ func TestLogoutUseCase_Success(t *testing.T) {
 
 	uc := NewLogoutUseCase(tokenSvc, hashSvc, refreshTokenRepo)
 
-	err := uc.Execute(context.Background(), authusecase.LogoutInput{
+	err := uc.Execute(context.Background(), authtypes.LogoutRequest{
 		RefreshToken: rawRefreshToken,
 	})
 
@@ -75,7 +75,7 @@ func TestLogoutUseCase_InvalidOrMissingToken(t *testing.T) {
 
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			err := uc.Execute(context.Background(), authusecase.LogoutInput{
+			err := uc.Execute(context.Background(), authtypes.LogoutRequest{
 				RefreshToken: tc.token,
 			})
 			if err != domainerrors.ErrInvalidToken {
@@ -99,7 +99,7 @@ func TestLogoutUseCase_IdempotentOnNonexistentToken(t *testing.T) {
 
 	uc := NewLogoutUseCase(tokenSvc, hashSvc, refreshTokenRepo)
 
-	err := uc.Execute(context.Background(), authusecase.LogoutInput{
+	err := uc.Execute(context.Background(), authtypes.LogoutRequest{
 		RefreshToken: "valid-jwt-but-not-in-db",
 	})
 

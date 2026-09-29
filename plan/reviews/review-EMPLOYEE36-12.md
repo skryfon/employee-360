@@ -1,0 +1,45 @@
+# Review: EMPLOYEE36-12 — B4 — Auth usecases: login, refresh, logout, forgot/reset password
+
+> Branch: ebin/feat/EPIC-B/EMPLOYEE36-12 | Last reviewed: 2026-09-29 12:20 | Iteration: 1 | Verdict: 🔴
+
+## Ticket
+**Identifier:** EMPLOYEE36-12
+**State:** started (backlog/in-progress per Plane state group)
+**Link:** not returned by Plane API — reference via identifier EMPLOYEE36-12 (child of epic "EPIC-B", sequence B4)
+**Cycle:** `plan/cycles/cycle-02-auth-onboarding.md` (Auth Usecases sub-feature)
+
+### Description
+Application business logic in `backend/internal/usecase/{interface,implementation}/auth/`, built on B2's domain layer (EMPLOYEE36-10). `LoginUseCase`, `TokenRefreshUseCase`, `LogoutUseCase`, `ForgotPasswordUseCase` (enumeration-safe, publishes `PasswordResetRequested` via the domain `EventPublisher` inside a `Transactor` transaction instead of emailing directly), `ResetPasswordUseCase`.
+
+### Acceptance Criteria
+- [x] AC-1: `ForgotPasswordUseCase` returns an identical response for an existing vs. non-existing email — no timing or payload leak. Implementation: `backend/internal/usecase/implementation/auth/forgot_password.go:56-72` (every "doesn't exist / inactive / malformed" branch performs the same dummy `HashToken` call and returns `nil`). Test: `forgot_password_test.go` `TestForgotPasswordUseCase_EnumerationSafe` (nonexistent/invalid-format/empty email) + `TestForgotPasswordUseCase_InactiveUser`.
+- [x] AC-2: Raw reset/refresh tokens are never persisted — only their hashes. Implementation: `forgot_password.go:79-91`, `login.go:113-119`, `token_refresh.go:113-119` all call `hashService.HashToken` before storing. Test: `forgot_password_test.go:124-126` and `login_test.go:250-255` assert the stored value is the hash, not the plain token.
+- [x] AC-3: Successful password reset revokes every existing refresh token for that user, not just the current session's. Implementation: `reset_password.go:96-99` (`refreshTokenRepo.RevokeAllForUser`). Test: `reset_password_test.go` `TestResetPasswordUseCase_Success` (asserts two independent sessions `rt1`/`rt2` are both revoked).
+- [ ] **AC-4: Every usecase resolves and scopes by `tenant_id` from context — never trusts a client-supplied tenant id.** UNMET — see 🔴 Critical finding below. `LoginUseCase`/`ForgotPasswordUseCase` resolve the user by a global, unscoped `GetByEmail`/`GetByEmailWithRoles` call with no tenant disambiguation at all, even though `users.email` is only unique per-tenant and the cycle doc mandates domain-based tenant resolution for exactly this step.
+- [x] AC-5: `ForgotPasswordUseCase` never imports `EmailService` or River directly — only the domain `EventPublisher` port. Structural evidence: `forgot_password.go`'s import block (`domain/entity`, `domain/event`, `domain/repository`, `domain/service`, `usecase/implementation/ucshared`) contains no `infrastructure/service` or River import.
+
+## Latest commit reviewed
+`8a28f43` — feat(backend): implement auth usecases and transactor
+
+**Scope note:** `origin/main` is one merge behind this stacked branch; the full `origin/main...HEAD` diff also contains EMPLOYEE36-9/10/11's already-reviewed/merged commits. This review is scoped to EMPLOYEE36-12's own commit (`8a28f43`, diffed against `8816b46`, the last commit before it).
+
+## Findings
+
+### 🔴 Critical
+- [ ] `backend/internal/usecase/implementation/auth/login.go:64` and `forgot_password.go:68` — `LoginUseCase` and `ForgotPasswordUseCase` resolve the target user via `UserRepository.GetByEmail`/`GetByEmailWithRoles(ctx, email)` with **no tenant identifier at all**. But `users.email` is only unique *per tenant* (`CONSTRAINT uq_users_tenant_id_email UNIQUE (tenant_id, email)`, `backend/migrations/000005_create_users.up.sql:19`) — the schema explicitly allows the same email to exist under two different tenants. `plan/cycles/cycle-02-auth-onboarding.md:99-113` documents the cycle's own decision on exactly this problem: tenant resolution for login happens via the email's domain through a `tenant_domains` table, and `TenantDomainRepository.FindTenantByDomain`'s doc comment (`backend/internal/domain/repository/tenant_domain_repository.go:12`) literally says "used during login to resolve tenant_id". Neither usecase takes a `TenantDomainRepository` dependency or calls it — tenant_id is only ever read back from whatever row the ambiguous global email lookup happens to return. **Why it matters:** with two tenants sharing a colliding email, `ForgotPasswordUseCase` can silently issue a password-reset token (and event) for the *wrong* tenant's account, and `LoginUseCase`'s outcome becomes dependent on GORM's arbitrary row order rather than the tenant the caller intended — a direct violation of `CLAUDE.md` Invariant 1 ("All repository queries and mutations must scope queries by `tenant_id` extracted from context") and this ticket's own AC-4. No test exercises two tenants with the same email, so this gap is completely uncovered. **Fix:** resolve `tenant_id` first — parse the email's domain and call `TenantDomainRepository.FindTenantByDomain` (as the cycle doc specifies) — then look up the user scoped to that tenant (requires adding a tenant-scoped lookup, e.g. `UserRepository.GetByTenantAndEmail(ctx, tenantID, email)`, since the current interface has no such method). This is the hard-gate blocker for this review.
+
+### 🟡 Major
+- [ ] `backend/internal/usecase/implementation/auth/forgot_password.go:110-124` — the entire `WithinTransaction` call's error is discarded (`_ = u.transactor.WithinTransaction(...)`). If `InvalidateAllForUser`, `Create`, or `Publish` fails (e.g. a DB or outbox error), `Execute` still returns `nil` and **nothing is logged anywhere** — the enumeration-safety requirement (always return success to the caller) is right, but silently swallowing the underlying error means a real production failure in the reset flow is invisible to operators; the user requesting a reset believes it worked and never gets an email, with no signal in logs/metrics to debug it. Fix: log the error at the usecase boundary (or emit a metric) before discarding it, while still returning `nil` to the caller.
+- [ ] `backend/internal/usecase/implementation/auth/login.go:70-72` — `if !user.IsActive { return nil, domainerrors.ErrUserInactive }` runs *before* `ComparePassword` is ever called, using a distinct error from `ErrInvalidCredentials`. This lets an attacker submit *any* password for a known email and learn "this account exists and is currently inactive" (e.g. mid-invitation) without needing the correct password — a user-enumeration side channel the rest of this usecase otherwise takes care to avoid (dummy `ComparePassword` calls on every other rejection path). Fix: verify the password first, and only surface `ErrUserInactive` once credentials are confirmed correct (or fold it into `ErrInvalidCredentials` entirely).
+- [ ] Missing tenant-isolation test for the AC-4 scenario — per the review checklist, a new usecase touching a tenant-scoped repository needs a test proving cross-tenant isolation (two tenants, colliding data, must never cross). None of `login_test.go`/`forgot_password_test.go`'s mocks even model two tenants sharing an email, so the gap in the Critical finding above has zero test coverage in either direction.
+
+### 🟢 Minor
+- [ ] `backend/internal/usecase/implementation/auth/token_refresh.go:63` (`_ = u.refreshTokenRepo.RevokeFamily(ctx, storedToken.Family)` on reuse detection) and `login.go:133` (`_ = u.userRepo.Update(ctx, user)` for `LastLoginAt`) — both silently discard errors with no logging, same invisible-failure pattern as the Major finding above. Lower risk since these are best-effort side effects, not the primary security control, but worth revisiting once a logger port is available in the usecase layer.
+
+## Verdict
+- **Score:** N/A — hard gate triggered
+- **Flag:** 🔴 Block
+- **Notes:** AC-4 ("every usecase resolves and scopes by tenant_id from context") is unmet: `LoginUseCase` and `ForgotPasswordUseCase` resolve users by a globally-ambiguous email lookup despite the schema only guaranteeing per-tenant email uniqueness, and despite the cycle's own architecture doc already specifying the domain-based tenant-resolution mechanism (`TenantDomainRepository.FindTenantByDomain`) that these usecases should be using but don't. Per the hard-gate rule, an unmet AC blocks merge regardless of the otherwise-solid work here: the token-based flows (`Logout`, `TokenRefresh`, `ResetPassword`) correctly derive tenant scope from the unambiguous token-hash lookup, test coverage for AC-1/AC-2/AC-3 is genuinely scenario-specific (not just happy-path), layering is clean (no Gin/GORM/River leakage into the usecase package), and `ForgotPasswordUseCase` correctly depends only on the domain `EventPublisher` port. Fixing the tenant-resolution gap (and adding the two Major-severity fixes around silent error swallowing and the inactive-user enumeration leak) should be enough to bring this to Merge on re-review.
+
+## Re-review Log
+_(empty — first review)_

@@ -22,8 +22,18 @@ type User struct {
 	CreatedAt       time.Time  `json:"created_at"`
 	UpdatedAt       time.Time  `json:"updated_at"`
 
-	// Associations (populated when loaded)
-	Roles []Role `json:"roles,omitempty"`
+	// Associations (populated when loaded).
+	//
+	// gorm:"-" is required, not cosmetic: without it GORM's default schema
+	// parser tries to guess a many2many association for this field and
+	// fails at Create/Update time ("invalid field found ... define a valid
+	// foreign key for relations or implement the Valuer/Scanner interface"),
+	// since there is no matching Role.Users/UserID field for it to infer a
+	// relationship from. Roles is populated manually by the persistence
+	// layer via an explicit join query instead (see
+	// internal/infrastructure/persistence/user_repository.go's loadRoles),
+	// so GORM must never treat it as a column or association on its own.
+	Roles []Role `json:"roles,omitempty" gorm:"-"`
 }
 
 // FullName returns the concatenated first and last name.

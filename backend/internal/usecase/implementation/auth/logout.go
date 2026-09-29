@@ -7,6 +7,7 @@ import (
 	domainerrors "github.com/skryfon/employee360/backend/internal/domain/errors"
 	"github.com/skryfon/employee360/backend/internal/domain/repository"
 	"github.com/skryfon/employee360/backend/internal/domain/service"
+	authtypes "github.com/skryfon/employee360/backend/internal/types/auth"
 	authusecase "github.com/skryfon/employee360/backend/internal/usecase/interface/auth"
 )
 
@@ -33,7 +34,7 @@ func NewLogoutUseCase(
 }
 
 // Execute revokes the provided refresh token session.
-func (u *LogoutUseCaseImpl) Execute(ctx context.Context, input authusecase.LogoutInput) error {
+func (u *LogoutUseCaseImpl) Execute(ctx context.Context, input authtypes.LogoutRequest) error {
 	rawToken := strings.TrimSpace(input.RefreshToken)
 	if rawToken == "" {
 		return domainerrors.ErrInvalidToken

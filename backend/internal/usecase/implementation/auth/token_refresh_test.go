@@ -9,7 +9,7 @@ import (
 	"github.com/skryfon/employee360/backend/internal/domain/entity"
 	domainerrors "github.com/skryfon/employee360/backend/internal/domain/errors"
 	domainservice "github.com/skryfon/employee360/backend/internal/domain/service"
-	authusecase "github.com/skryfon/employee360/backend/internal/usecase/interface/auth"
+	authtypes "github.com/skryfon/employee360/backend/internal/types/auth"
 )
 
 func TestTokenRefreshUseCase_Success(t *testing.T) {
@@ -58,7 +58,7 @@ func TestTokenRefreshUseCase_Success(t *testing.T) {
 
 	uc := NewTokenRefreshUseCase(userRepo, tokenSvc, hashSvc, refreshTokenRepo)
 
-	output, err := uc.Execute(context.Background(), authusecase.TokenRefreshInput{
+	output, err := uc.Execute(context.Background(), authtypes.TokenRefreshRequest{
 		RefreshToken: rawRefreshToken,
 		IPAddress:    "127.0.0.1",
 		UserAgent:    "TestBrowser/1.0",
@@ -125,7 +125,7 @@ func TestTokenRefreshUseCase_TokenReuseDetected(t *testing.T) {
 
 	uc := NewTokenRefreshUseCase(userRepo, tokenSvc, hashSvc, refreshTokenRepo)
 
-	_, err := uc.Execute(context.Background(), authusecase.TokenRefreshInput{
+	_, err := uc.Execute(context.Background(), authtypes.TokenRefreshRequest{
 		RefreshToken: rawRefreshToken,
 	})
 
@@ -171,7 +171,7 @@ func TestTokenRefreshUseCase_ExpiredToken(t *testing.T) {
 
 	uc := NewTokenRefreshUseCase(userRepo, tokenSvc, hashSvc, refreshTokenRepo)
 
-	_, err := uc.Execute(context.Background(), authusecase.TokenRefreshInput{
+	_, err := uc.Execute(context.Background(), authtypes.TokenRefreshRequest{
 		RefreshToken: rawRefreshToken,
 	})
 
@@ -190,7 +190,7 @@ func TestTokenRefreshUseCase_InvalidToken(t *testing.T) {
 
 	uc := NewTokenRefreshUseCase(userRepo, tokenSvc, hashSvc, refreshTokenRepo)
 
-	_, err := uc.Execute(context.Background(), authusecase.TokenRefreshInput{
+	_, err := uc.Execute(context.Background(), authtypes.TokenRefreshRequest{
 		RefreshToken: "invalid-token",
 	})
 

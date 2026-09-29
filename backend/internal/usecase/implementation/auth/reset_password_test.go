@@ -8,8 +8,8 @@ import (
 	"github.com/google/uuid"
 	"github.com/skryfon/employee360/backend/internal/domain/entity"
 	domainerrors "github.com/skryfon/employee360/backend/internal/domain/errors"
+	authtypes "github.com/skryfon/employee360/backend/internal/types/auth"
 	"github.com/skryfon/employee360/backend/internal/usecase/implementation/ucshared"
-	authusecase "github.com/skryfon/employee360/backend/internal/usecase/interface/auth"
 )
 
 func TestResetPasswordUseCase_Success(t *testing.T) {
@@ -52,7 +52,7 @@ func TestResetPasswordUseCase_Success(t *testing.T) {
 
 	uc := NewResetPasswordUseCase(userRepo, resetRepo, refreshRepo, hashSvc, transactor)
 
-	err := uc.Execute(context.Background(), authusecase.ResetPasswordInput{
+	err := uc.Execute(context.Background(), authtypes.ResetPasswordRequest{
 		Token:       plainToken,
 		NewPassword: "BrandNewSecurePassword123!",
 	})
@@ -70,7 +70,7 @@ func TestResetPasswordUseCase_Success(t *testing.T) {
 	}
 
 	// Verify user's password was updated with hash
-	updatedUser, _ := userRepo.GetByID(context.Background(), userID)
+	updatedUser, _ := userRepo.GetByID(context.Background(), tenantID, userID)
 	if updatedUser.PasswordHash == nil || *updatedUser.PasswordHash != "hashed_BrandNewSecurePassword123!" {
 		t.Errorf("expected updated password hash, got %v", updatedUser.PasswordHash)
 	}
@@ -131,7 +131,7 @@ func TestResetPasswordUseCase_InvalidOrExpiredToken(t *testing.T) {
 
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			err := uc.Execute(context.Background(), authusecase.ResetPasswordInput{
+			err := uc.Execute(context.Background(), authtypes.ResetPasswordRequest{
 				Token:       tc.token,
 				NewPassword: tc.newPassword,
 			})
@@ -172,7 +172,7 @@ func TestResetPasswordUseCase_InactiveUser(t *testing.T) {
 
 	uc := NewResetPasswordUseCase(userRepo, resetRepo, refreshRepo, hashSvc, transactor)
 
-	err := uc.Execute(context.Background(), authusecase.ResetPasswordInput{
+	err := uc.Execute(context.Background(), authtypes.ResetPasswordRequest{
 		Token:       plainToken,
 		NewPassword: "BrandNewSecurePassword123!",
 	})

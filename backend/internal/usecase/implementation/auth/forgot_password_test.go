@@ -9,8 +9,8 @@ import (
 	"github.com/skryfon/employee360/backend/internal/domain/entity"
 	domainerrors "github.com/skryfon/employee360/backend/internal/domain/errors"
 	"github.com/skryfon/employee360/backend/internal/domain/event"
+	authtypes "github.com/skryfon/employee360/backend/internal/types/auth"
 	"github.com/skryfon/employee360/backend/internal/usecase/implementation/ucshared"
-	authusecase "github.com/skryfon/employee360/backend/internal/usecase/interface/auth"
 )
 
 // MockPasswordResetRepository implements repository.PasswordResetRepository.
@@ -76,6 +76,31 @@ func (m *mockEventPublisher) Publish(ctx context.Context, events ...event.Event)
 	return nil
 }
 
+// mockLogger implements service.Logger, recording calls for assertions.
+type mockLogger struct {
+	errorCalls []struct {
+		msg string
+		err error
+	}
+}
+
+func (m *mockLogger) Error(ctx context.Context, msg string, err error) {
+	m.errorCalls = append(m.errorCalls, struct {
+		msg string
+		err error
+	}{msg: msg, err: err})
+}
+
+// failingTransactor is a ucshared.Transactor that always fails before running fn,
+// used to simulate a persistence failure inside the forgot-password flow.
+type failingTransactor struct {
+	err error
+}
+
+func (f *failingTransactor) WithinTransaction(ctx context.Context, fn func(ctx context.Context) error) error {
+	return f.err
+}
+
 func TestForgotPasswordUseCase_ExistingUser(t *testing.T) {
 	tenantID := uuid.New()
 	userID := uuid.New()
@@ -85,6 +110,7 @@ func TestForgotPasswordUseCase_ExistingUser(t *testing.T) {
 	hashSvc := &mockHashService{}
 	eventPub := &mockEventPublisher{}
 	transactor := ucshared.NewNopTransactor()
+	logger := &mockLogger{}
 
 	user := &entity.User{
 		ID:       userID,
@@ -94,9 +120,9 @@ func TestForgotPasswordUseCase_ExistingUser(t *testing.T) {
 	}
 	_ = userRepo.Create(context.Background(), user)
 
-	uc := NewForgotPasswordUseCase(userRepo, resetRepo, hashSvc, eventPub, transactor)
+	uc := NewForgotPasswordUseCase(userRepo, resetRepo, hashSvc, eventPub, transactor, logger)
 
-	err := uc.Execute(context.Background(), authusecase.ForgotPasswordInput{
+	err := uc.Execute(context.Background(), tenantID, authtypes.ForgotPasswordRequest{
 		Email: "alice@example.com",
 	})
 
@@ -154,13 +180,15 @@ func TestForgotPasswordUseCase_ExistingUser(t *testing.T) {
 }
 
 func TestForgotPasswordUseCase_EnumerationSafe(t *testing.T) {
+	tenantID := uuid.New()
 	userRepo := newMockUserRepository()
 	resetRepo := newMockPasswordResetRepository()
 	hashSvc := &mockHashService{}
 	eventPub := &mockEventPublisher{}
 	transactor := ucshared.NewNopTransactor()
+	logger := &mockLogger{}
 
-	uc := NewForgotPasswordUseCase(userRepo, resetRepo, hashSvc, eventPub, transactor)
+	uc := NewForgotPasswordUseCase(userRepo, resetRepo, hashSvc, eventPub, transactor, logger)
 
 	tests := []struct {
 		name  string
@@ -174,7 +202,7 @@ func TestForgotPasswordUseCase_EnumerationSafe(t *testing.T) {
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
 			eventPub.publishedEvents = nil
-			err := uc.Execute(context.Background(), authusecase.ForgotPasswordInput{
+			err := uc.Execute(context.Background(), tenantID, authtypes.ForgotPasswordRequest{
 				Email: tc.email,
 			})
 
@@ -198,6 +226,7 @@ func TestForgotPasswordUseCase_InactiveUser(t *testing.T) {
 	hashSvc := &mockHashService{}
 	eventPub := &mockEventPublisher{}
 	transactor := ucshared.NewNopTransactor()
+	logger := &mockLogger{}
 
 	user := &entity.User{
 		ID:       userID,
@@ -207,9 +236,9 @@ func TestForgotPasswordUseCase_InactiveUser(t *testing.T) {
 	}
 	_ = userRepo.Create(context.Background(), user)
 
-	uc := NewForgotPasswordUseCase(userRepo, resetRepo, hashSvc, eventPub, transactor)
+	uc := NewForgotPasswordUseCase(userRepo, resetRepo, hashSvc, eventPub, transactor, logger)
 
-	err := uc.Execute(context.Background(), authusecase.ForgotPasswordInput{
+	err := uc.Execute(context.Background(), tenantID, authtypes.ForgotPasswordRequest{
 		Email: "inactive@example.com",
 	})
 
@@ -218,5 +247,131 @@ func TestForgotPasswordUseCase_InactiveUser(t *testing.T) {
 	}
 	if len(eventPub.publishedEvents) != 0 {
 		t.Errorf("expected 0 published events for inactive user, got %d", len(eventPub.publishedEvents))
+	}
+}
+
+// TestForgotPasswordUseCase_TenantIsolation proves that two tenants with a
+// user sharing the same email address are never conflated: a forgot-password
+// request scoped to tenantA must only ever resolve/affect tenantA's user.
+func TestForgotPasswordUseCase_TenantIsolation(t *testing.T) {
+	tenantA := uuid.New()
+	tenantB := uuid.New()
+	userA := uuid.New()
+	userB := uuid.New()
+	const sharedEmail = "shared@example.com"
+
+	userRepo := newMockUserRepository()
+	resetRepo := newMockPasswordResetRepository()
+	hashSvc := &mockHashService{}
+	eventPub := &mockEventPublisher{}
+	transactor := ucshared.NewNopTransactor()
+	logger := &mockLogger{}
+
+	_ = userRepo.Create(context.Background(), &entity.User{
+		ID:       userA,
+		TenantID: tenantA,
+		Email:    sharedEmail,
+		IsActive: true,
+	})
+	_ = userRepo.Create(context.Background(), &entity.User{
+		ID:       userB,
+		TenantID: tenantB,
+		Email:    sharedEmail,
+		IsActive: true,
+	})
+
+	uc := NewForgotPasswordUseCase(userRepo, resetRepo, hashSvc, eventPub, transactor, logger)
+
+	err := uc.Execute(context.Background(), tenantA, authtypes.ForgotPasswordRequest{
+		Email: sharedEmail,
+	})
+	if err != nil {
+		t.Fatalf("expected nil error (enumeration-safe), got: %v", err)
+	}
+
+	if len(eventPub.publishedEvents) != 1 {
+		t.Fatalf("expected exactly 1 event published, got %d", len(eventPub.publishedEvents))
+	}
+
+	evt := eventPub.publishedEvents[0]
+	if evt.TenantID != tenantA {
+		t.Errorf("expected event tenant ID %s (tenantA), got %s", tenantA, evt.TenantID)
+	}
+
+	payload, ok := evt.Payload.(event.PasswordResetRequestedPayload)
+	if !ok {
+		t.Fatalf("expected PasswordResetRequestedPayload type in event payload")
+	}
+	if payload.UserID != userA {
+		t.Errorf("expected reset issued for tenantA's user %s, got %s (tenantB's user is %s)", userA, payload.UserID, userB)
+	}
+	if payload.TenantID != tenantA {
+		t.Errorf("expected payload tenant ID %s (tenantA), got %s", tenantA, payload.TenantID)
+	}
+
+	var storedToken *entity.PasswordResetToken
+	for _, tk := range resetRepo.tokensByID {
+		storedToken = tk
+	}
+	if storedToken == nil {
+		t.Fatalf("expected a password reset token to be stored")
+	}
+	if storedToken.UserID != userA {
+		t.Errorf("expected stored token to belong to tenantA's user %s, got %s", userA, storedToken.UserID)
+	}
+	if storedToken.TenantID != tenantA {
+		t.Errorf("expected stored token tenant ID %s (tenantA), got %s", tenantA, storedToken.TenantID)
+	}
+
+	// tenantB's user must be completely untouched by tenantA's request.
+	if len(resetRepo.invalidatedUserIDs) != 1 || resetRepo.invalidatedUserIDs[0] != userA {
+		t.Errorf("expected only tenantA's user %s to be invalidated, got %v", userA, resetRepo.invalidatedUserIDs)
+	}
+	for _, id := range resetRepo.invalidatedUserIDs {
+		if id == userB {
+			t.Errorf("tenantB's user %s must never be affected by a tenantA-scoped request", userB)
+		}
+	}
+}
+
+// TestForgotPasswordUseCase_TransactionFailureIsLoggedNotSwallowed proves that
+// when the transactor fails, Execute still returns nil (enumeration-safety is
+// preserved) but the failure is recorded via the Logger port rather than
+// being silently discarded.
+func TestForgotPasswordUseCase_TransactionFailureIsLoggedNotSwallowed(t *testing.T) {
+	tenantID := uuid.New()
+	userID := uuid.New()
+
+	userRepo := newMockUserRepository()
+	resetRepo := newMockPasswordResetRepository()
+	hashSvc := &mockHashService{}
+	eventPub := &mockEventPublisher{}
+	txErr := domainerrors.ErrNotFound // reused only as a sentinel error for this test
+	transactor := &failingTransactor{err: txErr}
+	logger := &mockLogger{}
+
+	user := &entity.User{
+		ID:       userID,
+		TenantID: tenantID,
+		Email:    "alice@example.com",
+		IsActive: true,
+	}
+	_ = userRepo.Create(context.Background(), user)
+
+	uc := NewForgotPasswordUseCase(userRepo, resetRepo, hashSvc, eventPub, transactor, logger)
+
+	err := uc.Execute(context.Background(), tenantID, authtypes.ForgotPasswordRequest{
+		Email: "alice@example.com",
+	})
+
+	if err != nil {
+		t.Fatalf("expected nil error even when the transaction fails (enumeration-safe), got: %v", err)
+	}
+
+	if len(logger.errorCalls) != 1 {
+		t.Fatalf("expected the transaction failure to be logged exactly once, got %d calls", len(logger.errorCalls))
+	}
+	if logger.errorCalls[0].err != txErr {
+		t.Errorf("expected logged error to be the transactor's error, got %v", logger.errorCalls[0].err)
 	}
 }

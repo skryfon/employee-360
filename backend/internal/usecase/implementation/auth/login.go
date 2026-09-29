@@ -10,6 +10,7 @@ import (
 	domainerrors "github.com/skryfon/employee360/backend/internal/domain/errors"
 	"github.com/skryfon/employee360/backend/internal/domain/repository"
 	"github.com/skryfon/employee360/backend/internal/domain/service"
+	authtypes "github.com/skryfon/employee360/backend/internal/types/auth"
 	authusecase "github.com/skryfon/employee360/backend/internal/usecase/interface/auth"
 )
 
@@ -46,9 +47,12 @@ func NewLoginUseCase(
 }
 
 // Execute authenticates a user by email and password and returns a token pair.
-func (u *LoginUseCaseImpl) Execute(ctx context.Context, input authusecase.LoginInput) (*authusecase.LoginOutput, error) {
-	email := strings.TrimSpace(strings.ToLower(input.Email))
-	password := input.Password
+// tenantID must already be resolved by the caller (the handler); ipAddress
+// and userAgent are server-derived HTTP request metadata recorded on the
+// issued refresh token for audit purposes.
+func (u *LoginUseCaseImpl) Execute(ctx context.Context, tenantID uuid.UUID, req authtypes.LoginRequest, ipAddress, userAgent string) (*authtypes.LoginResponse, error) {
+	email := strings.TrimSpace(strings.ToLower(req.Email))
+	password := req.Password
 
 	if email == "" || password == "" {
 		_ = u.hashService.ComparePassword(dummyBcryptHash, "dummy")
@@ -61,14 +65,10 @@ func (u *LoginUseCaseImpl) Execute(ctx context.Context, input authusecase.LoginI
 		return nil, domainerrors.ErrInvalidCredentials
 	}
 
-	user, err := u.userRepo.GetByEmailWithRoles(ctx, email)
+	user, err := u.userRepo.GetByTenantAndEmailWithRoles(ctx, tenantID, email)
 	if err != nil || user == nil {
 		_ = u.hashService.ComparePassword(dummyBcryptHash, password)
 		return nil, domainerrors.ErrInvalidCredentials
-	}
-
-	if !user.IsActive {
-		return nil, domainerrors.ErrUserInactive
 	}
 
 	if user.PasswordHash == nil || *user.PasswordHash == "" {
@@ -78,6 +78,13 @@ func (u *LoginUseCaseImpl) Execute(ctx context.Context, input authusecase.LoginI
 
 	if err := u.hashService.ComparePassword(*user.PasswordHash, password); err != nil {
 		return nil, domainerrors.ErrInvalidCredentials
+	}
+
+	// IsActive is checked only after the password has been verified, so an
+	// invalid password always yields ErrInvalidCredentials regardless of
+	// account status — never leaking account existence/state to an attacker.
+	if !user.IsActive {
+		return nil, domainerrors.ErrUserInactive
 	}
 
 	roleNames := make([]string, 0, len(user.Roles))
@@ -119,8 +126,8 @@ func (u *LoginUseCaseImpl) Execute(ctx context.Context, input authusecase.LoginI
 		TokenHash: tokenHash,
 		Family:    family,
 		ExpiresAt: expiry,
-		IPAddress: input.IPAddress,
-		UserAgent: input.UserAgent,
+		IPAddress: ipAddress,
+		UserAgent: userAgent,
 		CreatedAt: now,
 		UpdatedAt: now,
 	}
@@ -130,9 +137,9 @@ func (u *LoginUseCaseImpl) Execute(ctx context.Context, input authusecase.LoginI
 	}
 
 	user.LastLoginAt = &now
-	_ = u.userRepo.Update(ctx, user)
+	_ = u.userRepo.Update(ctx, user.TenantID, user)
 
-	return &authusecase.LoginOutput{
+	return &authtypes.LoginResponse{
 		AccessToken:  tokenPair.AccessToken,
 		RefreshToken: tokenPair.RefreshToken,
 		ExpiresAt:    tokenPair.ExpiresAt,

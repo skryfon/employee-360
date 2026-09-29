@@ -10,6 +10,7 @@ import (
 	domainerrors "github.com/skryfon/employee360/backend/internal/domain/errors"
 	"github.com/skryfon/employee360/backend/internal/domain/repository"
 	"github.com/skryfon/employee360/backend/internal/domain/service"
+	authtypes "github.com/skryfon/employee360/backend/internal/types/auth"
 	authusecase "github.com/skryfon/employee360/backend/internal/usecase/interface/auth"
 )
 
@@ -41,7 +42,7 @@ func NewTokenRefreshUseCase(
 }
 
 // Execute rotates an existing refresh token and returns a new token pair.
-func (u *TokenRefreshUseCaseImpl) Execute(ctx context.Context, input authusecase.TokenRefreshInput) (*authusecase.TokenRefreshOutput, error) {
+func (u *TokenRefreshUseCaseImpl) Execute(ctx context.Context, input authtypes.TokenRefreshRequest) (*authtypes.TokenRefreshResponse, error) {
 	rawToken := strings.TrimSpace(input.RefreshToken)
 	if rawToken == "" {
 		return nil, domainerrors.ErrInvalidToken
@@ -73,7 +74,7 @@ func (u *TokenRefreshUseCaseImpl) Execute(ctx context.Context, input authusecase
 		return nil, err
 	}
 
-	user, err := u.userRepo.GetByIDWithRoles(ctx, storedToken.UserID)
+	user, err := u.userRepo.GetByIDWithRoles(ctx, storedToken.TenantID, storedToken.UserID)
 	if err != nil || user == nil {
 		return nil, domainerrors.ErrUserNotFound
 	}
@@ -129,7 +130,7 @@ func (u *TokenRefreshUseCaseImpl) Execute(ctx context.Context, input authusecase
 		return nil, err
 	}
 
-	return &authusecase.TokenRefreshOutput{
+	return &authtypes.TokenRefreshResponse{
 		AccessToken:  tokenPair.AccessToken,
 		RefreshToken: tokenPair.RefreshToken,
 		ExpiresAt:    tokenPair.ExpiresAt,
