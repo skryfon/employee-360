@@ -135,20 +135,6 @@ func (m *mockTenantDomainRepository) FindTenantByDomain(ctx context.Context, dom
 	return t, nil
 }
 
-func (m *mockTenantDomainRepository) Create(ctx context.Context, td *entity.TenantDomain) error {
-	return nil
-}
-func (m *mockTenantDomainRepository) GetByID(ctx context.Context, id uuid.UUID) (*entity.TenantDomain, error) {
-	return nil, domainerrors.ErrNotFound
-}
-func (m *mockTenantDomainRepository) GetByDomain(ctx context.Context, domain string) (*entity.TenantDomain, error) {
-	return nil, domainerrors.ErrNotFound
-}
-func (m *mockTenantDomainRepository) ListByTenantID(ctx context.Context, tenantID uuid.UUID) ([]*entity.TenantDomain, error) {
-	return nil, nil
-}
-func (m *mockTenantDomainRepository) Delete(ctx context.Context, id uuid.UUID) error { return nil }
-
 // MockRefreshTokenRepository implements repository.RefreshTokenRepository.
 type mockRefreshTokenRepository struct {
 	tokensByHash    map[string]*entity.RefreshToken
