@@ -33,3 +33,10 @@ func TestOptionsValidate_EmailShape(t *testing.T) {
 		assert.ErrorIs(t, o.Validate(), ErrSuperAdminEmailInvalid, email)
 	}
 }
+
+func TestOptionsValidate_RejectsPasswordPlaceholder(t *testing.T) {
+	for _, pw := range []string{PasswordPlaceholder, "  " + PasswordPlaceholder + " "} {
+		o := Options{SuperAdminEmail: "root@example.com", SuperAdminPassword: pw}
+		assert.ErrorIs(t, o.Validate(), ErrSuperAdminPasswordPlaceholder, pw)
+	}
+}

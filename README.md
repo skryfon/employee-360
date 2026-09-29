@@ -73,7 +73,7 @@ you can run today.
 make dev            # start the dev server
 make migrate        # apply DB migrations
 make migrate-down   # reverse the last migration
-make bootstrap       # seed system tenant, roles, and platform Super Admin
+make bootstrap-admin # seed system tenant, roles, and platform Super Admin
 make test            # run tests
 ```
 

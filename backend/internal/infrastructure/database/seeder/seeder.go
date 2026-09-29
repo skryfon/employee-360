@@ -20,6 +20,10 @@ import (
 // lookup and insert duplicates (tenants has no unique key on name).
 const bootstrapLockKey int64 = 0x45333630 // "E360"
 
+// PasswordPlaceholder is the literal value shipped in .env.example; it is
+// rejected so it can never become a real credential.
+const PasswordPlaceholder = "<CHANGE_ME>"
+
 // Default names used when the corresponding option is left empty.
 const (
 	DefaultSystemTenantName = "System"
@@ -31,9 +35,10 @@ const (
 // when the bootstrap credentials are not configured. There are deliberately
 // no defaults: credentials must come from configuration/environment.
 var (
-	ErrSuperAdminEmailRequired    = errors.New("bootstrap: super admin email is not set (BOOTSTRAP_SUPER_ADMIN_EMAIL)")
-	ErrSuperAdminPasswordRequired = errors.New("bootstrap: super admin password is not set (BOOTSTRAP_SUPER_ADMIN_PASSWORD)")
-	ErrSuperAdminEmailInvalid     = errors.New("bootstrap: super admin email must contain exactly one '@' with a non-empty local part and domain")
+	ErrSuperAdminEmailRequired       = errors.New("bootstrap: super admin email is not set (BOOTSTRAP_SUPER_ADMIN_EMAIL)")
+	ErrSuperAdminPasswordRequired    = errors.New("bootstrap: super admin password is not set (BOOTSTRAP_SUPER_ADMIN_PASSWORD)")
+	ErrSuperAdminPasswordPlaceholder = errors.New("bootstrap: super admin password is still the .env.example placeholder; set a real password")
+	ErrSuperAdminEmailInvalid        = errors.New("bootstrap: super admin email must contain exactly one '@' with a non-empty local part and domain")
 )
 
 // Options configures a bootstrap run.
@@ -69,6 +74,9 @@ func (o *Options) Validate() error {
 	}
 	if o.SuperAdminPassword == "" {
 		return ErrSuperAdminPasswordRequired
+	}
+	if strings.TrimSpace(o.SuperAdminPassword) == PasswordPlaceholder {
+		return ErrSuperAdminPasswordPlaceholder
 	}
 	return nil
 }
@@ -118,21 +126,22 @@ func (s *Seeder) Run(ctx context.Context, opts Options) (*Result, error) {
 		return nil, fmt.Errorf("bootstrap: hash super admin password: %w", err)
 	}
 
+	// Login resolves the tenant from the email domain, so the super admin's
+	// domain must map to the system tenant.
+	domain, _ := emailDomain(opts.SuperAdminEmail) // validated above
+
 	res := &Result{}
 	err = s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
 		if err := tx.Exec("SELECT pg_advisory_xact_lock(?)", bootstrapLockKey).Error; err != nil {
 			return fmt.Errorf("acquire bootstrap lock: %w", err)
 		}
 
-		tenant, created, err := s.ensureTenant(tx, opts.SystemTenantName)
+		tenant, created, err := s.ensureTenant(tx, opts.SystemTenantName, domain)
 		if err != nil {
 			return err
 		}
 		res.TenantID, res.TenantCreated = tenant.ID, created
 
-		// Login resolves the tenant from the email domain, so the super
-		// admin's domain must map to the system tenant.
-		domain, _ := emailDomain(opts.SuperAdminEmail) // validated above
 		domainCreated, err := s.ensureTenantDomain(tx, tenant.ID, domain)
 		if err != nil {
 			return err
@@ -170,9 +179,20 @@ func (s *Seeder) Run(ctx context.Context, opts Options) (*Result, error) {
 	return res, nil
 }
 
-func (s *Seeder) ensureTenant(tx *gorm.DB, name string) (*entity.Tenant, bool, error) {
+// ensureTenant finds the system tenant. tenants.name is not unique, so among
+// tenants with the configured name it prefers the one that owns the super
+// admin's email domain in tenant_domains (what login resolves through), then
+// the oldest; if none exists it creates one.
+func (s *Seeder) ensureTenant(tx *gorm.DB, name, domain string) (*entity.Tenant, bool, error) {
 	var t entity.Tenant
-	err := tx.Where("name = ?", name).Order("created_at ASC").First(&t).Error
+	// Prefer the same-named tenant that owns the domain. Session gives a clean
+	// statement rather than one carrying state from earlier calls on tx.
+	err := tx.Session(&gorm.Session{}).
+		Where("name = ? AND EXISTS (SELECT 1 FROM tenant_domains d WHERE d.tenant_id = tenants.id AND d.domain = ?)", name, domain).
+		Order("created_at ASC").First(&t).Error
+	if errors.Is(err, gorm.ErrRecordNotFound) {
+		err = tx.Session(&gorm.Session{}).Where("name = ?", name).Order("created_at ASC").First(&t).Error
+	}
 	if err == nil {
 		return &t, false, nil
 	}

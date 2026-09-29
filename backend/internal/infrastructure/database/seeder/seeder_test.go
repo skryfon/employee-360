@@ -9,6 +9,7 @@ import (
 	"path/filepath"
 	"runtime"
 	"testing"
+	"time"
 
 	"github.com/golang-migrate/migrate/v4"
 	_ "github.com/golang-migrate/migrate/v4/database/postgres"
@@ -167,4 +168,24 @@ func TestRun_ExistingBootstrapWithoutDomainGetsBackfilled(t *testing.T) {
 	got, err := persistence.NewGormTenantDomainRepository(db).FindTenantByDomain(context.Background(), domain)
 	require.NoError(t, err)
 	assert.Equal(t, first.TenantID, got.ID)
+}
+
+func TestRun_PrefersDuplicateNamedTenantOwningDomain(t *testing.T) {
+	db := setupTestDB(t)
+	name := "seeder-test-" + uuid.NewString()
+	domain := "seeder-" + uuid.NewString() + ".example.com"
+	older := entity.Tenant{ID: uuid.New(), Name: name, IsActive: true, CreatedAt: time.Now().Add(-time.Hour)}
+	owner := entity.Tenant{ID: uuid.New(), Name: name, IsActive: true, CreatedAt: time.Now()}
+	require.NoError(t, db.Create(&older).Error)
+	require.NoError(t, db.Create(&owner).Error)
+	t.Cleanup(func() { db.Where("name = ?", name).Delete(&entity.Tenant{}) })
+	require.NoError(t, db.Exec("INSERT INTO tenant_domains (id, tenant_id, domain) VALUES (?, ?, ?)",
+		uuid.New(), owner.ID, domain).Error)
+
+	res, err := New(db, service.NewHashService(bcrypt.MinCost)).Run(context.Background(),
+		Options{SystemTenantName: name, SuperAdminEmail: "root@" + domain, SuperAdminPassword: "pw"})
+	require.NoError(t, err)
+	assert.False(t, res.TenantCreated)
+	assert.Equal(t, owner.ID, res.TenantID)
+	assert.EqualValues(t, 2, count(t, db, &entity.Tenant{}, "name = ?", name))
 }

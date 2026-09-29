@@ -134,7 +134,7 @@ These are the Makefile targets at the repo root (there is no `backend/Makefile` 
 make dev          # run the API server
 make migrate      # apply migrations
 make migrate-down # reverse migrations
-make bootstrap    # seed system tenant, roles, super admin
+make bootstrap-admin # seed system tenant, roles, super admin
 make test         # go test ./...
 make lint         # golangci-lint (if configured)
 ```
