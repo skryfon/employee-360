@@ -9,8 +9,24 @@ import (
 	domainservice "github.com/skryfon/employee360/backend/internal/domain/service"
 )
 
+func newTestJWTService(t *testing.T, secret string, accessExpiry, refreshExpiry time.Duration) domainservice.TokenService {
+	t.Helper()
+	svc, err := NewJWTService(secret, accessExpiry, refreshExpiry)
+	if err != nil {
+		t.Fatalf("unexpected error constructing jwt service: %v", err)
+	}
+	return svc
+}
+
+func TestNewJWTService_EmptySecret(t *testing.T) {
+	_, err := NewJWTService("", 15*time.Minute, 7*24*time.Hour)
+	if err == nil {
+		t.Fatalf("expected error constructing jwt service with empty secret, got nil")
+	}
+}
+
 func TestJWTService_AccessTokenFlow(t *testing.T) {
-	jwtSvc := NewJWTService("test-secret-key-32-bytes-long!", 15*time.Minute, 7*24*time.Hour)
+	jwtSvc := newTestJWTService(t, "test-secret-key-32-bytes-long!", 15*time.Minute, 7*24*time.Hour)
 
 	userID := uuid.New()
 	tenantID := uuid.New()
@@ -54,7 +70,7 @@ func TestJWTService_AccessTokenFlow(t *testing.T) {
 }
 
 func TestJWTService_RefreshTokenFlow(t *testing.T) {
-	jwtSvc := NewJWTService("test-secret-key-32-bytes-long!", 15*time.Minute, 7*24*time.Hour)
+	jwtSvc := newTestJWTService(t, "test-secret-key-32-bytes-long!", 15*time.Minute, 7*24*time.Hour)
 
 	userID := uuid.New()
 	tenantID := uuid.New()
@@ -99,10 +115,13 @@ func TestJWTService_RefreshTokenFlow(t *testing.T) {
 	if parsedClaims.Family != family {
 		t.Errorf("expected Family %s, got %s", family, parsedClaims.Family)
 	}
+	if len(parsedClaims.Roles) != 1 || parsedClaims.Roles[0] != "employee" {
+		t.Errorf("expected roles [employee], got %v", parsedClaims.Roles)
+	}
 }
 
 func TestJWTService_GenerateTokenPair(t *testing.T) {
-	jwtSvc := NewJWTService("test-secret-key-32-bytes-long!", 15*time.Minute, 7*24*time.Hour)
+	jwtSvc := newTestJWTService(t, "test-secret-key-32-bytes-long!", 15*time.Minute, 7*24*time.Hour)
 
 	userID := uuid.New()
 	tenantID := uuid.New()
@@ -141,10 +160,18 @@ func TestJWTService_GenerateTokenPair(t *testing.T) {
 	if validatedAccess.Email != "pair@example.com" {
 		t.Errorf("expected email pair@example.com, got %s", validatedAccess.Email)
 	}
+
+	validatedRefresh, err := jwtSvc.ValidateRefreshToken(pair.RefreshToken)
+	if err != nil {
+		t.Fatalf("failed to validate refresh token from pair: %v", err)
+	}
+	if len(validatedRefresh.Roles) != 1 || validatedRefresh.Roles[0] != "super_admin" {
+		t.Errorf("expected roles [super_admin], got %v", validatedRefresh.Roles)
+	}
 }
 
 func TestJWTService_ExpiredToken(t *testing.T) {
-	jwtSvc := NewJWTService("test-secret-key-32-bytes-long!", -1*time.Minute, -1*time.Minute)
+	jwtSvc := newTestJWTService(t, "test-secret-key-32-bytes-long!", -1*time.Minute, -1*time.Minute)
 
 	tokenStr, _, err := jwtSvc.GenerateAccessToken(domainservice.AccessTokenClaims{
 		UserID:   uuid.New(),
@@ -162,8 +189,8 @@ func TestJWTService_ExpiredToken(t *testing.T) {
 }
 
 func TestJWTService_InvalidSignature(t *testing.T) {
-	jwtSvc1 := NewJWTService("secret-1-32-bytes-long-padding!", 15*time.Minute, 7*24*time.Hour)
-	jwtSvc2 := NewJWTService("secret-2-32-bytes-long-padding!", 15*time.Minute, 7*24*time.Hour)
+	jwtSvc1 := newTestJWTService(t, "secret-1-32-bytes-long-padding!", 15*time.Minute, 7*24*time.Hour)
+	jwtSvc2 := newTestJWTService(t, "secret-2-32-bytes-long-padding!", 15*time.Minute, 7*24*time.Hour)
 
 	tokenStr, _, err := jwtSvc1.GenerateAccessToken(domainservice.AccessTokenClaims{
 		UserID:   uuid.New(),
@@ -177,5 +204,36 @@ func TestJWTService_InvalidSignature(t *testing.T) {
 	_, err = jwtSvc2.ValidateAccessToken(tokenStr)
 	if err != domainerrors.ErrInvalidToken {
 		t.Errorf("expected ErrInvalidToken on signature mismatch, got %v", err)
+	}
+}
+
+func TestJWTService_WrongTokenTypeRejected(t *testing.T) {
+	jwtSvc := newTestJWTService(t, "test-secret-key-32-bytes-long!", 15*time.Minute, 7*24*time.Hour)
+
+	refreshTokenStr, _, err := jwtSvc.GenerateRefreshToken(domainservice.RefreshTokenClaims{
+		UserID:   uuid.New(),
+		TenantID: uuid.New(),
+		TokenID:  uuid.New(),
+		Family:   uuid.New(),
+	})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if _, err := jwtSvc.ValidateAccessToken(refreshTokenStr); err != domainerrors.ErrInvalidToken {
+		t.Errorf("expected ErrInvalidToken when validating a refresh token as an access token, got %v", err)
+	}
+
+	accessTokenStr, _, err := jwtSvc.GenerateAccessToken(domainservice.AccessTokenClaims{
+		UserID:   uuid.New(),
+		TenantID: uuid.New(),
+		Email:    "test@example.com",
+	})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if _, err := jwtSvc.ValidateRefreshToken(accessTokenStr); err != domainerrors.ErrInvalidToken {
+		t.Errorf("expected ErrInvalidToken when validating an access token as a refresh token, got %v", err)
 	}
 }

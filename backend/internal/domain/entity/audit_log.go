@@ -12,11 +12,12 @@ type AuditLog struct {
 	TenantID    uuid.UUID  `json:"tenant_id"`
 	ActorUserID *uuid.UUID `json:"actor_user_id,omitempty"`
 	Action      string     `json:"action"`
-	EntityName  string     `json:"entity_name"`
-	EntityID    string     `json:"entity_id"`
-	OldValues   string     `json:"old_values,omitempty"`
-	NewValues   string     `json:"new_values,omitempty"`
-	IPAddress   string     `json:"ip_address,omitempty"`
-	UserAgent   string     `json:"user_agent,omitempty"`
-	CreatedAt   time.Time  `json:"created_at"`
+	EntityType  string     `json:"entity_type"`
+	EntityID    uuid.UUID  `json:"entity_id"`
+	// Metadata holds a JSON-encoded blob of additional context for the action
+	// (e.g. changed fields, request metadata). It is persisted as-is into the
+	// audit_logs.metadata jsonb column.
+	Metadata  string    `json:"metadata,omitempty"`
+	CreatedAt time.Time `json:"created_at"`
+	UpdatedAt time.Time `json:"updated_at"`
 }

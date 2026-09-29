@@ -1,14 +1,11 @@
 package service
 
 import (
-	"crypto/hmac"
-	"crypto/sha256"
-	"encoding/base64"
-	"encoding/json"
+	"errors"
 	"fmt"
-	"strings"
 	"time"
 
+	"github.com/golang-jwt/jwt/v5"
 	"github.com/google/uuid"
 	domainerrors "github.com/skryfon/employee360/backend/internal/domain/errors"
 	domainservice "github.com/skryfon/employee360/backend/internal/domain/service"
@@ -20,32 +17,25 @@ const (
 	defaultIssuer    = "employee360"
 )
 
-type jwtHeader struct {
-	Alg string `json:"alg"`
-	Typ string `json:"typ"`
-}
-
-type accessPayload struct {
+// accessTokenClaims is the JWT claim set embedded in a signed access token.
+type accessTokenClaims struct {
 	UserID    string   `json:"user_id"`
 	TenantID  string   `json:"tenant_id"`
 	Email     string   `json:"email"`
 	Roles     []string `json:"roles"`
 	TokenType string   `json:"token_type"`
-	IssuedAt  int64    `json:"iat"`
-	ExpiresAt int64    `json:"exp"`
-	Issuer    string   `json:"iss,omitempty"`
+	jwt.RegisteredClaims
 }
 
-type refreshPayload struct {
+// refreshTokenClaims is the JWT claim set embedded in a signed refresh token.
+type refreshTokenClaims struct {
 	UserID    string   `json:"user_id"`
 	TenantID  string   `json:"tenant_id"`
 	TokenID   string   `json:"token_id"`
 	Family    string   `json:"family"`
 	Roles     []string `json:"roles,omitempty"`
 	TokenType string   `json:"token_type"`
-	IssuedAt  int64    `json:"iat"`
-	ExpiresAt int64    `json:"exp"`
-	Issuer    string   `json:"iss,omitempty"`
+	jwt.RegisteredClaims
 }
 
 type jwtService struct {
@@ -55,14 +45,21 @@ type jwtService struct {
 	issuer        string
 }
 
-// NewJWTService creates a new JWT-based TokenService implementation.
-func NewJWTService(secret string, accessExpiry, refreshExpiry time.Duration) domainservice.TokenService {
+// NewJWTService creates a new JWT-based TokenService implementation backed by
+// github.com/golang-jwt/jwt/v5. It returns an error if secret is empty, since
+// an empty/misconfigured signing secret would otherwise silently produce
+// weak, predictable signatures instead of failing fast at construction.
+func NewJWTService(secret string, accessExpiry, refreshExpiry time.Duration) (domainservice.TokenService, error) {
+	if secret == "" {
+		return nil, errors.New("jwt: secret must not be empty")
+	}
+
 	return &jwtService{
 		secret:        []byte(secret),
 		accessExpiry:  accessExpiry,
 		refreshExpiry: refreshExpiry,
 		issuer:        defaultIssuer,
-	}
+	}, nil
 }
 
 // GenerateAccessToken generates a signed access JWT for a user.
@@ -70,18 +67,20 @@ func (s *jwtService) GenerateAccessToken(claims domainservice.AccessTokenClaims)
 	now := time.Now()
 	expiresAt := now.Add(s.accessExpiry)
 
-	payload := accessPayload{
+	c := accessTokenClaims{
 		UserID:    claims.UserID.String(),
 		TenantID:  claims.TenantID.String(),
 		Email:     claims.Email,
 		Roles:     claims.Roles,
 		TokenType: tokenTypeAccess,
-		IssuedAt:  now.Unix(),
-		ExpiresAt: expiresAt.Unix(),
-		Issuer:    s.issuer,
+		RegisteredClaims: jwt.RegisteredClaims{
+			Issuer:    s.issuer,
+			IssuedAt:  jwt.NewNumericDate(now),
+			ExpiresAt: jwt.NewNumericDate(expiresAt),
+		},
 	}
 
-	tokenStr, err := s.signToken(payload)
+	tokenStr, err := jwt.NewWithClaims(jwt.SigningMethodHS256, c).SignedString(s.secret)
 	if err != nil {
 		return "", time.Time{}, err
 	}
@@ -94,19 +93,21 @@ func (s *jwtService) GenerateRefreshToken(claims domainservice.RefreshTokenClaim
 	now := time.Now()
 	expiresAt := now.Add(s.refreshExpiry)
 
-	payload := refreshPayload{
+	c := refreshTokenClaims{
 		UserID:    claims.UserID.String(),
 		TenantID:  claims.TenantID.String(),
 		TokenID:   claims.TokenID.String(),
 		Family:    claims.Family.String(),
 		Roles:     claims.Roles,
 		TokenType: tokenTypeRefresh,
-		IssuedAt:  now.Unix(),
-		ExpiresAt: expiresAt.Unix(),
-		Issuer:    s.issuer,
+		RegisteredClaims: jwt.RegisteredClaims{
+			Issuer:    s.issuer,
+			IssuedAt:  jwt.NewNumericDate(now),
+			ExpiresAt: jwt.NewNumericDate(expiresAt),
+		},
 	}
 
-	tokenStr, err := s.signToken(payload)
+	tokenStr, err := jwt.NewWithClaims(jwt.SigningMethodHS256, c).SignedString(s.secret)
 	if err != nil {
 		return "", time.Time{}, err
 	}
@@ -136,21 +137,25 @@ func (s *jwtService) GenerateTokenPair(accessClaims domainservice.AccessTokenCla
 
 // ValidateAccessToken parses and validates a signed access JWT string.
 func (s *jwtService) ValidateAccessToken(tokenString string) (*domainservice.AccessTokenClaims, error) {
-	var payload accessPayload
-	if err := s.verifyToken(tokenString, &payload); err != nil {
-		return nil, err
+	claims := &accessTokenClaims{}
+	token, err := jwt.ParseWithClaims(tokenString, claims, s.keyFunc, jwt.WithValidMethods([]string{jwt.SigningMethodHS256.Name}))
+	if err != nil {
+		return nil, mapJWTError(err)
 	}
-
-	if payload.TokenType != tokenTypeAccess {
+	if !token.Valid {
 		return nil, domainerrors.ErrInvalidToken
 	}
 
-	userID, err := uuid.Parse(payload.UserID)
+	if claims.TokenType != tokenTypeAccess {
+		return nil, domainerrors.ErrInvalidToken
+	}
+
+	userID, err := uuid.Parse(claims.UserID)
 	if err != nil {
 		return nil, domainerrors.ErrInvalidToken
 	}
 
-	tenantID, err := uuid.Parse(payload.TenantID)
+	tenantID, err := uuid.Parse(claims.TenantID)
 	if err != nil {
 		return nil, domainerrors.ErrInvalidToken
 	}
@@ -158,38 +163,42 @@ func (s *jwtService) ValidateAccessToken(tokenString string) (*domainservice.Acc
 	return &domainservice.AccessTokenClaims{
 		UserID:   userID,
 		TenantID: tenantID,
-		Email:    payload.Email,
-		Roles:    payload.Roles,
+		Email:    claims.Email,
+		Roles:    claims.Roles,
 	}, nil
 }
 
 // ValidateRefreshToken parses and validates a signed refresh JWT string.
 func (s *jwtService) ValidateRefreshToken(tokenString string) (*domainservice.RefreshTokenClaims, error) {
-	var payload refreshPayload
-	if err := s.verifyToken(tokenString, &payload); err != nil {
-		return nil, err
+	claims := &refreshTokenClaims{}
+	token, err := jwt.ParseWithClaims(tokenString, claims, s.keyFunc, jwt.WithValidMethods([]string{jwt.SigningMethodHS256.Name}))
+	if err != nil {
+		return nil, mapJWTError(err)
 	}
-
-	if payload.TokenType != tokenTypeRefresh {
+	if !token.Valid {
 		return nil, domainerrors.ErrInvalidToken
 	}
 
-	userID, err := uuid.Parse(payload.UserID)
+	if claims.TokenType != tokenTypeRefresh {
+		return nil, domainerrors.ErrInvalidToken
+	}
+
+	userID, err := uuid.Parse(claims.UserID)
 	if err != nil {
 		return nil, domainerrors.ErrInvalidToken
 	}
 
-	tenantID, err := uuid.Parse(payload.TenantID)
+	tenantID, err := uuid.Parse(claims.TenantID)
 	if err != nil {
 		return nil, domainerrors.ErrInvalidToken
 	}
 
-	tokenID, err := uuid.Parse(payload.TokenID)
+	tokenID, err := uuid.Parse(claims.TokenID)
 	if err != nil {
 		return nil, domainerrors.ErrInvalidToken
 	}
 
-	family, err := uuid.Parse(payload.Family)
+	family, err := uuid.Parse(claims.Family)
 	if err != nil {
 		return nil, domainerrors.ErrInvalidToken
 	}
@@ -199,77 +208,20 @@ func (s *jwtService) ValidateRefreshToken(tokenString string) (*domainservice.Re
 		TenantID: tenantID,
 		TokenID:  tokenID,
 		Family:   family,
-		Roles:    payload.Roles,
+		Roles:    claims.Roles,
 	}, nil
 }
 
-func (s *jwtService) signToken(payload interface{}) (string, error) {
-	header := jwtHeader{
-		Alg: "HS256",
-		Typ: "JWT",
-	}
-
-	headerBytes, err := json.Marshal(header)
-	if err != nil {
-		return "", err
-	}
-
-	payloadBytes, err := json.Marshal(payload)
-	if err != nil {
-		return "", err
-	}
-
-	headerB64 := base64.RawURLEncoding.EncodeToString(headerBytes)
-	payloadB64 := base64.RawURLEncoding.EncodeToString(payloadBytes)
-	signingInput := headerB64 + "." + payloadB64
-
-	sig := s.computeHMAC(signingInput)
-	sigB64 := base64.RawURLEncoding.EncodeToString(sig)
-
-	return signingInput + "." + sigB64, nil
+// keyFunc supplies the HMAC signing secret to jwt.ParseWithClaims.
+func (s *jwtService) keyFunc(_ *jwt.Token) (interface{}, error) {
+	return s.secret, nil
 }
 
-func (s *jwtService) verifyToken(tokenString string, targetPayload interface{}) error {
-	parts := strings.Split(tokenString, ".")
-	if len(parts) != 3 {
-		return domainerrors.ErrInvalidToken
+// mapJWTError translates golang-jwt parse/validation errors into this
+// project's domain sentinel errors.
+func mapJWTError(err error) error {
+	if errors.Is(err, jwt.ErrTokenExpired) {
+		return domainerrors.ErrTokenExpired
 	}
-
-	signingInput := parts[0] + "." + parts[1]
-	expectedSig := s.computeHMAC(signingInput)
-
-	actualSig, err := base64.RawURLEncoding.DecodeString(parts[2])
-	if err != nil {
-		return domainerrors.ErrInvalidToken
-	}
-
-	if !hmac.Equal(expectedSig, actualSig) {
-		return domainerrors.ErrInvalidToken
-	}
-
-	payloadBytes, err := base64.RawURLEncoding.DecodeString(parts[1])
-	if err != nil {
-		return domainerrors.ErrInvalidToken
-	}
-
-	if err := json.Unmarshal(payloadBytes, targetPayload); err != nil {
-		return domainerrors.ErrInvalidToken
-	}
-
-	var expCheck struct {
-		ExpiresAt int64 `json:"exp"`
-	}
-	if err := json.Unmarshal(payloadBytes, &expCheck); err == nil {
-		if expCheck.ExpiresAt > 0 && time.Now().Unix() > expCheck.ExpiresAt {
-			return domainerrors.ErrTokenExpired
-		}
-	}
-
-	return nil
-}
-
-func (s *jwtService) computeHMAC(message string) []byte {
-	mac := hmac.New(sha256.New, s.secret)
-	mac.Write([]byte(message))
-	return mac.Sum(nil)
+	return domainerrors.ErrInvalidToken
 }
