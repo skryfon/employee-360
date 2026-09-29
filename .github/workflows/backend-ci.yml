@@ -165,3 +165,10 @@ jobs:
         run: |
           timeout 10s go run ./cmd/migrate up
           timeout 10s go run ./cmd/migrate status
+
+      - name: smoke-test migrate down (full revert)
+        working-directory: backend
+        run: |
+          count=$(ls migrations/*.up.sql | wc -l)
+          timeout 10s go run ./cmd/migrate down "$count"
+          timeout 10s go run ./cmd/migrate status
