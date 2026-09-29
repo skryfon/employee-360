@@ -28,8 +28,9 @@ work; it is the authoritative current scope**, not the tech-stack description be
   `plan/cycles/cycle-01-project-setup.md`
 - **Cycle 2 (active)** — Auth, Email Service & Onboarding Invitations: real
   auth/tenant middleware (replacing Cycle 1's stubs), admin email+password login,
-  employee passwordless (OTP) login, forgot/reset password, a transactional SMTP
-  email service, and admin-driven user onboarding invitations. Full stack,
+  employee passwordless (OTP) login, forgot/reset password, an asynchronous
+  event-driven transactional email service (River-backed outbox), and admin-driven
+  user onboarding invitations. Full stack,
   migrations through handlers **and the frontend that consumes them** (admin login,
   employee OTP login, forgot/reset password, admin invitation-management UI,
   invitation-accept page). →
@@ -119,7 +120,7 @@ cycles — it is not a green light to build all of it now.
   `backend/cmd/bootstrap/main.go`.
 - **Tenant Admin (`admin`)**: Manages organization holidays, departments,
   positions, users, and roles for their tenant.
-- **Employee (`employee`)**: Passwordless email login to view holiday calendar
+- **Employee (`employee`)**: Email + password login to view holiday calendar
   and company directory.
 
 ---

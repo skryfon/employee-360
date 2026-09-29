@@ -11,7 +11,8 @@ The backend is structured into clear concentric layers where the inner domain la
 ```
        +-------------------------------------------------------+
        |                  Infrastructure Layer                 |
-       |  (PostgreSQL, GORM, JWT Provider, Viper, Mailer, CLI) |
+       |  (PostgreSQL, GORM, JWT Provider, Viper, Mailer,       |
+       |   River job queue / event dispatcher, CLI)             |
        |   +-----------------------------------------------+   |
        |   |                 Delivery Layer                |   |
        |   |      (HTTP Handlers, Gin Router, Middleware)  |   |
@@ -38,8 +39,10 @@ backend/
 │   │   └── main.go               # Server initialization, dependency wiring, startup
 │   ├── migrate/                  # Database migration CLI runner
 │   │   └── main.go               # Runs up/down SQL migrations
-│   └── bootstrap/                # Database seeder / Initial setup CLI
-│       └── main.go               # Seeds system tenant, core roles, and platform Super Admin
+│   ├── bootstrap/                # Database seeder / Initial setup CLI
+│   │   └── main.go               # Seeds system tenant, core roles, and platform Super Admin
+│   └── worker/                   # Async job-processing entrypoint
+│       └── main.go               # Boots the River client (registers EmailWorker), Start(ctx) with graceful shutdown
 ├── internal/
 │   ├── delivery/                 # Presentation / Delivery Layer
 │   │   └── http/
@@ -94,14 +97,15 @@ backend/
 │   │   │   ├── password_reset_repository.go
 │   │   │   ├── refresh_token_repository.go
 │   │   │   └── user_invitation_repository.go
-│   │   ├── service/              # Domain service interfaces (Token service, Hasher, Email)
+│   │   ├── service/              # Domain service interfaces (Token service, Hasher, Email, Event publisher)
 │   │   │   ├── token_service.go
 │   │   │   ├── hash_service.go
-│   │   │   └── email_service.go  # EmailService interface, EmailMessage/EmailTemplateName
+│   │   │   ├── email_service.go  # EmailService interface, EmailMessage/EmailTemplateName
+│   │   │   └── event_publisher.go # EventPublisher interface: Publish(ctx, events ...event.Event) error — no GORM/River types
 │   │   ├── errors/               # Domain-specific sentinel errors
 │   │   │   └── errors.go
 │   │   └── event/                # Domain events
-│   │       └── events.go
+│   │       └── events.go         # Event{ID, TenantID, EventType, AggregateType, AggregateID, Payload, OccurredAt} + EventType constants + per-event payload structs
 │   ├── usecase/                  # Application Business Rules
 │   │   ├── interface/             # Usecase ports — one file per feature, one interface per operation
 │   │   │   ├── auth/
@@ -170,8 +174,8 @@ backend/
 │   │       ├── audit/             # Audit trail logging operations
 │   │       │   ├── log_action.go
 │   │       │   └── get_audit_logs.go
-│   │       └── ucshared/          # Shared usecase-layer helpers (e.g. Transactor)
-│   │           └── transactor.go
+│   │       └── ucshared/          # Shared usecase-layer helpers
+│   │           └── transactor.go  # Transactor.WithinTransaction(ctx, fn) error — wraps a GORM tx, propagates it via ctx so repositories and EventPublisher share it without leaking *gorm.DB/*sql.Tx into the usecase layer
 │   ├── infrastructure/           # Frameworks, Drivers & Adapters
 │   │   ├── database/             # PostgreSQL connection pool, GORM instance & seeder
 │   │   │   ├── postgres.go
@@ -195,9 +199,14 @@ backend/
 │   │   ├── service/              # External service implementations
 │   │   │   ├── jwt_service.go    # JWT generation & validation
 │   │   │   ├── bcrypt_service.go # Password hashing & comparison
-│   │   │   ├── mail_service.go   # SMTP EmailService implementation (OTP / password reset / invitation)
+│   │   │   ├── mail_service.go   # SMTP EmailService implementation — called only from infrastructure/job/, never from a usecase
 │   │   │   └── mail/
 │   │   │       └── templates/    # Subject + text + HTML template per EmailTemplateName
+│   │   ├── eventing/              # EventPublisher implementation + event->job mapping
+│   │   │   ├── dispatcher.go      # Maps EventType -> River job args (SendEmailArgs)
+│   │   │   └── river_publisher.go # EventPublisher impl: extracts *sql.Tx from ctx, dispatches, riverClient.InsertTx (same transaction as the caller's business write)
+│   │   ├── job/                   # River workers
+│   │   │   └── email_worker.go    # river.Worker[SendEmailArgs] — calls EmailService.Send; river.JobCancel on permanent validation errors
 │   │   ├── container/            # Dependency Injection container
 │   │   │   └── container.go      # Initializes and wires all layers
 │   │   └── server/               # HTTP server lifecycle & graceful shutdown
@@ -234,10 +243,12 @@ backend/
 │   ├── 000010_create_refresh_tokens.down.sql
 │   ├── 000011_create_user_invitations.up.sql
 │   ├── 000011_create_user_invitations.down.sql
-│   ├── 000012_create_holiday_categories.up.sql
-│   ├── 000012_create_holiday_categories.down.sql
-│   ├── 000013_create_holidays.up.sql
-│   └── 000013_create_holidays.down.sql
+│   ├── 000012_create_river_schema.up.sql       # River's own tables (river_job, river_leader, river_queue, river_client*, river_migration) — generated via `river migrate-get`, not hand-written
+│   ├── 000012_create_river_schema.down.sql
+│   ├── 000013_create_holiday_categories.up.sql
+│   ├── 000013_create_holiday_categories.down.sql
+│   ├── 000014_create_holidays.up.sql
+│   └── 000014_create_holidays.down.sql
 ├── config/                       # Configuration definition & loading (Viper)
 │   ├── config.go
 │   └── config.yaml.example
@@ -295,9 +306,10 @@ PostgreSQL Database
    - Never accesses repositories or databases directly; delegates all logic to use cases.
 
 4. **Infrastructure Layer (`internal/infrastructure`)**:
-   - Implements interfaces defined in the domain layer (GORM database repositories, JWT token generation, email providers).
+   - Implements interfaces defined in the domain layer (GORM database repositories, JWT token generation, email providers, the `EventPublisher` port).
    - Contains the seeder (`infrastructure/database/seeder/`) for bootstrapping the platform Super Admin and default system roles.
    - Responsible for technical details like connection pooling, transaction management, and server lifecycle.
+   - Owns async side-effect delivery: `eventing/` turns a published domain `Event` into a River job **inside the same DB transaction** as the usecase's business write (River's own job table is the outbox — no separate outbox table needed on a single-Postgres setup); `job/` holds the River workers (running in the separate `cmd/worker` process) that actually perform the side effect (e.g. sending mail via `mail_service.go`).
 
 ### 3.3 Multi-Tenancy & Platform Governance Strategy
 
