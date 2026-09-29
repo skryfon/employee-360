@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"bytes"
 	"context"
+	"crypto/tls"
 	"io"
 	"mime"
 	"mime/multipart"
@@ -490,6 +491,295 @@ func TestSMTPMailService_Send_ValidationErrors(t *testing.T) {
 	})
 	if err == nil || !strings.Contains(err.Error(), "not found") {
 		t.Errorf("expected error for non-existent template, got: %v", err)
+	}
+}
+
+func TestSMTPMailService_Send_RejectsCRLFInjection_To(t *testing.T) {
+	server := startMockSMTPServer(t, false, "", "")
+	defer server.close()
+
+	cfg := config.SMTPConfig{
+		Host:   server.addr,
+		Port:   server.port,
+		From:   "no-reply@example.com",
+		UseTLS: false,
+	}
+
+	mailService := infraservice.NewSMTPMailService(cfg)
+
+	msg := domainservice.EmailMessage{
+		To:           "victim@example.com>\r\nBcc: attacker@evil.com\r\nX-Injected: <victim@example.com",
+		TemplateName: domainservice.EmailTemplatePasswordReset,
+		TemplateData: map[string]interface{}{
+			"ResetURL": "https://example.com/reset",
+		},
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	err := mailService.Send(ctx, msg)
+	if err == nil {
+		t.Fatal("expected Send() to reject a To value containing CRLF, got nil error")
+	}
+	if !strings.Contains(err.Error(), "To") {
+		t.Errorf("expected error to reference the To header, got: %v", err)
+	}
+
+	if msgs := server.getReceivedMessages(); len(msgs) != 0 {
+		t.Errorf("expected no message to be transmitted when To header injection is attempted, got %d", len(msgs))
+	}
+}
+
+func TestSMTPMailService_Send_RejectsCRLFInjection_Subject(t *testing.T) {
+	server := startMockSMTPServer(t, false, "", "")
+	defer server.close()
+
+	cfg := config.SMTPConfig{
+		Host:   server.addr,
+		Port:   server.port,
+		From:   "no-reply@example.com",
+		UseTLS: false,
+	}
+
+	mailService := infraservice.NewSMTPMailService(cfg)
+
+	msg := domainservice.EmailMessage{
+		To:           "victim@example.com",
+		Subject:      "Password reset\r\nBcc: attacker@evil.com",
+		TemplateName: domainservice.EmailTemplatePasswordReset,
+		TemplateData: map[string]interface{}{
+			"ResetURL": "https://example.com/reset",
+		},
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	err := mailService.Send(ctx, msg)
+	if err == nil {
+		t.Fatal("expected Send() to reject a literal Subject value containing CRLF, got nil error")
+	}
+	if !strings.Contains(err.Error(), "Subject") {
+		t.Errorf("expected error to reference the Subject header, got: %v", err)
+	}
+
+	if msgs := server.getReceivedMessages(); len(msgs) != 0 {
+		t.Errorf("expected no message to be transmitted when Subject header injection is attempted, got %d", len(msgs))
+	}
+}
+
+func TestSMTPMailService_Send_RejectsCRLFInjection_TemplateRenderedSubject(t *testing.T) {
+	server := startMockSMTPServer(t, false, "", "")
+	defer server.close()
+
+	cfg := config.SMTPConfig{
+		Host:   server.addr,
+		Port:   server.port,
+		From:   "no-reply@example.com",
+		UseTLS: false,
+	}
+
+	mailService := infraservice.NewSMTPMailService(cfg)
+
+	// The custom subject itself has no literal CRLF, but the template data value it
+	// interpolates does (e.g. a tenant name an admin entered) — this must be caught
+	// by buildMIMEMessage's header validation just as effectively as a literal CRLF
+	// in msg.Subject, otherwise header injection can be smuggled in via any templated
+	// field once B4/C1 usecases start feeding user-controlled data into TemplateData.
+	msg := domainservice.EmailMessage{
+		To:           "victim@example.com",
+		Subject:      "Password reset for {{.TenantName}}",
+		TemplateName: domainservice.EmailTemplatePasswordReset,
+		TemplateData: map[string]interface{}{
+			"ResetURL":   "https://example.com/reset",
+			"TenantName": "Acme\r\nBcc: attacker@evil.com",
+		},
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	err := mailService.Send(ctx, msg)
+	if err == nil {
+		t.Fatal("expected Send() to reject a template-rendered Subject containing CRLF, got nil error")
+	}
+	if !strings.Contains(err.Error(), "Subject") {
+		t.Errorf("expected error to reference the Subject header, got: %v", err)
+	}
+
+	if msgs := server.getReceivedMessages(); len(msgs) != 0 {
+		t.Errorf("expected no message to be transmitted when templated Subject injection is attempted, got %d", len(msgs))
+	}
+}
+
+func TestSMTPMailService_Send_CustomSubjectTemplate_ParseError(t *testing.T) {
+	server := startMockSMTPServer(t, false, "", "")
+	defer server.close()
+
+	cfg := config.SMTPConfig{
+		Host:   server.addr,
+		Port:   server.port,
+		From:   "no-reply@example.com",
+		UseTLS: false,
+	}
+
+	mailService := infraservice.NewSMTPMailService(cfg)
+
+	msg := domainservice.EmailMessage{
+		To:           "user@example.com",
+		Subject:      "Malformed subject {{.TenantName", // unterminated action
+		TemplateName: domainservice.EmailTemplatePasswordReset,
+		TemplateData: map[string]interface{}{
+			"ResetURL":   "https://example.com/reset",
+			"TenantName": "Acme Corp",
+		},
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	err := mailService.Send(ctx, msg)
+	if err == nil {
+		t.Fatal("expected Send() to return an error for a malformed custom subject template, got nil")
+	}
+
+	if msgs := server.getReceivedMessages(); len(msgs) != 0 {
+		t.Errorf("expected no message to be transmitted when subject template fails to parse, got %d", len(msgs))
+	}
+}
+
+func TestSMTPMailService_SendViaSMTP_ImplicitTLSPort_UsesTLSDialer(t *testing.T) {
+	server := startMockSMTPServer(t, false, "", "")
+	defer server.close()
+
+	var (
+		mu             sync.Mutex
+		plainDialCalls int
+		tlsDialCalls   int
+	)
+
+	// Neither hook performs a real TLS handshake — they redirect the connection to
+	// the plaintext mock server regardless of the requested address, so this test
+	// exercises only sendViaSMTP's dialer-selection branch (isImplicitTLS), not
+	// actual TLS handshake mechanics.
+	plainDialer := func(ctx context.Context, network, addr string) (net.Conn, error) {
+		mu.Lock()
+		plainDialCalls++
+		mu.Unlock()
+		d := &net.Dialer{}
+		return d.DialContext(ctx, network, net.JoinHostPort(server.addr, strconv.Itoa(server.port)))
+	}
+	tlsDialer := func(ctx context.Context, network, addr string, tlsConfig *tls.Config) (net.Conn, error) {
+		mu.Lock()
+		tlsDialCalls++
+		mu.Unlock()
+		d := &net.Dialer{}
+		return d.DialContext(ctx, network, net.JoinHostPort(server.addr, strconv.Itoa(server.port)))
+	}
+
+	cfg := config.SMTPConfig{
+		Host:   "127.0.0.1",
+		Port:   465, // implicit TLS (SMTPS) port
+		From:   "no-reply@example.com",
+		UseTLS: true,
+	}
+
+	mailService := infraservice.NewSMTPMailService(cfg, infraservice.WithCustomDialer(plainDialer, tlsDialer))
+
+	msg := domainservice.EmailMessage{
+		To:           "user@example.com",
+		TemplateName: domainservice.EmailTemplatePasswordReset,
+		TemplateData: map[string]interface{}{
+			"ResetURL": "https://example.com/reset",
+		},
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	if err := mailService.Send(ctx, msg); err != nil {
+		t.Fatalf("expected Send() to succeed, got: %v", err)
+	}
+
+	mu.Lock()
+	defer mu.Unlock()
+	if tlsDialCalls != 1 {
+		t.Errorf("expected the TLS dialer to be used exactly once for port 465, got %d calls", tlsDialCalls)
+	}
+	if plainDialCalls != 0 {
+		t.Errorf("expected the plain dialer NOT to be used for implicit-TLS port 465, got %d calls", plainDialCalls)
+	}
+}
+
+func TestSMTPMailService_SendViaSMTP_STARTTLSRequested_FailsClosedWhenUnsupported(t *testing.T) {
+	// The mock server never advertises the STARTTLS extension (see handleConn's EHLO
+	// branch), which is exactly the scenario this test targets: an operator sets
+	// SMTP_USE_TLS=true against a STARTTLS-style port (587) but the server doesn't
+	// support it. sendViaSMTP must fail closed instead of silently sending in
+	// plaintext.
+	server := startMockSMTPServer(t, false, "", "")
+	defer server.close()
+
+	var (
+		mu             sync.Mutex
+		plainDialCalls int
+		tlsDialCalls   int
+	)
+
+	plainDialer := func(ctx context.Context, network, addr string) (net.Conn, error) {
+		mu.Lock()
+		plainDialCalls++
+		mu.Unlock()
+		d := &net.Dialer{}
+		return d.DialContext(ctx, network, net.JoinHostPort(server.addr, strconv.Itoa(server.port)))
+	}
+	tlsDialer := func(ctx context.Context, network, addr string, tlsConfig *tls.Config) (net.Conn, error) {
+		mu.Lock()
+		tlsDialCalls++
+		mu.Unlock()
+		return nil, io.ErrUnexpectedEOF
+	}
+
+	cfg := config.SMTPConfig{
+		Host:   "127.0.0.1",
+		Port:   587, // STARTTLS-style submission port
+		From:   "no-reply@example.com",
+		UseTLS: true, // operator explicitly requested TLS
+	}
+
+	mailService := infraservice.NewSMTPMailService(cfg, infraservice.WithCustomDialer(plainDialer, tlsDialer))
+
+	msg := domainservice.EmailMessage{
+		To:           "user@example.com",
+		TemplateName: domainservice.EmailTemplatePasswordReset,
+		TemplateData: map[string]interface{}{
+			"ResetURL": "https://example.com/reset",
+		},
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	err := mailService.Send(ctx, msg)
+	if err == nil {
+		t.Fatal("expected Send() to fail closed when STARTTLS is requested but unsupported by the server, got nil error")
+	}
+	if !strings.Contains(err.Error(), "STARTTLS") {
+		t.Errorf("expected error to mention STARTTLS, got: %v", err)
+	}
+
+	if msgs := server.getReceivedMessages(); len(msgs) != 0 {
+		t.Errorf("expected no message to be transmitted in plaintext, got %d", len(msgs))
+	}
+
+	mu.Lock()
+	defer mu.Unlock()
+	if plainDialCalls != 1 {
+		t.Errorf("expected the plain dialer to be used exactly once to initiate the STARTTLS-style connection on port 587, got %d calls", plainDialCalls)
+	}
+	if tlsDialCalls != 0 {
+		t.Errorf("expected the TLS dialer NOT to be used for the initial connection on a STARTTLS-style port, got %d calls", tlsDialCalls)
 	}
 }
 

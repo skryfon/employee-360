@@ -105,12 +105,14 @@ func (s *SMTPMailService) Send(ctx context.Context, msg domainservice.EmailMessa
 		// If subject was provided, support optional template execution within subject string
 		if strings.Contains(subject, "{{") {
 			tmpl, err := texttemplate.New("subject").Parse(subject)
-			if err == nil {
-				var buf bytes.Buffer
-				if err := tmpl.Execute(&buf, data); err == nil {
-					subject = strings.TrimSpace(buf.String())
-				}
+			if err != nil {
+				return fmt.Errorf("failed to parse custom email subject template: %w", err)
 			}
+			var buf bytes.Buffer
+			if err := tmpl.Execute(&buf, data); err != nil {
+				return fmt.Errorf("failed to execute custom email subject template: %w", err)
+			}
+			subject = strings.TrimSpace(buf.String())
 		}
 	}
 
@@ -222,8 +224,30 @@ func (s *SMTPMailService) renderHTMLTemplate(templateName domainservice.EmailTem
 	return buf.String(), nil
 }
 
+// validateNoCRLF rejects header values containing embedded CR/LF (or other control
+// characters) to prevent email header injection (CWE-93). net/smtp only validates
+// SMTP *command* lines (MAIL FROM/RCPT TO) against embedded CRLF — it does not
+// sanitize the raw DATA payload headers built by buildMIMEMessage, so any value
+// that ends up in a header (From, To, Subject) must be checked here first.
+func validateNoCRLF(fieldName, value string) error {
+	if strings.ContainsAny(value, "\r\n") {
+		return fmt.Errorf("invalid %s header value: contains carriage return or line feed characters", fieldName)
+	}
+	return nil
+}
+
 // buildMIMEMessage constructs a multipart/alternative RFC 2822 email message with text and HTML parts.
 func (s *SMTPMailService) buildMIMEMessage(from, to, subject, textBody, htmlBody string) ([]byte, error) {
+	if err := validateNoCRLF("From", from); err != nil {
+		return nil, err
+	}
+	if err := validateNoCRLF("To", to); err != nil {
+		return nil, err
+	}
+	if err := validateNoCRLF("Subject", subject); err != nil {
+		return nil, err
+	}
+
 	var buf bytes.Buffer
 
 	// Top-level headers
@@ -276,6 +300,25 @@ func (s *SMTPMailService) buildMIMEMessage(from, to, subject, textBody, htmlBody
 	return buf.Bytes(), nil
 }
 
+// starttlsPorts are the conventional SMTP submission/relay ports that speak plaintext
+// initially and then upgrade via STARTTLS: 587 (the modern submission port), 25
+// (classic SMTP relay, which may or may not offer STARTTLS), and 2525 (a common
+// alternate submission port used by some PaaS/relay providers). Port 465 is the
+// IANA-registered implicit-TLS (SMTPS) port and is handled separately below.
+var starttlsPorts = map[int]bool{
+	587:  true,
+	25:   true,
+	2525: true,
+}
+
+// plaintextDevPorts are additional non-standard ports used by local dev SMTP relays
+// that speak plaintext-only with no STARTTLS support (e.g. Mailpit's default port
+// 1025). They are excluded from the implicit-TLS heuristic below so that a
+// UseTLS=false dev config is never misclassified as requiring an SMTPS handshake.
+var plaintextDevPorts = map[int]bool{
+	1025: true, // Mailpit default
+}
+
 // sendViaSMTP establishes an SMTP connection, handles TLS / STARTTLS, authenticates, and sends the raw message.
 func (s *SMTPMailService) sendViaSMTP(ctx context.Context, from string, to []string, msg []byte) error {
 	addr := fmt.Sprintf("%s:%d", s.cfg.Host, s.cfg.Port)
@@ -285,7 +328,7 @@ func (s *SMTPMailService) sendViaSMTP(ctx context.Context, from string, to []str
 	var err error
 
 	// Determine if implicit TLS (SMTPS, usually port 465) or plain/STARTTLS is used
-	isImplicitTLS := s.cfg.Port == 465 || (s.cfg.UseTLS && s.cfg.Port != 587 && s.cfg.Port != 25 && s.cfg.Port != 1025 && s.cfg.Port != 2525)
+	isImplicitTLS := s.cfg.Port == 465 || (s.cfg.UseTLS && !starttlsPorts[s.cfg.Port] && !plaintextDevPorts[s.cfg.Port])
 
 	tlsConfig := &tls.Config{
 		ServerName: host,
@@ -322,10 +365,18 @@ func (s *SMTPMailService) sendViaSMTP(ctx context.Context, from string, to []str
 
 	// Handle STARTTLS for port 587 or explicit TLS request on non-implicit ports
 	if !isImplicitTLS {
-		if hasStartTLS, _ := client.Extension("STARTTLS"); hasStartTLS && (s.cfg.UseTLS || s.cfg.Port == 587 || s.cfg.Port == 25 || s.cfg.Port == 2525) {
+		hasStartTLS, _ := client.Extension("STARTTLS")
+		switch {
+		case hasStartTLS && (s.cfg.UseTLS || starttlsPorts[s.cfg.Port]):
 			if err := client.StartTLS(tlsConfig); err != nil {
 				return fmt.Errorf("failed to initiate STARTTLS: %w", err)
 			}
+		case s.cfg.UseTLS:
+			// The operator explicitly requested TLS (SMTP_USE_TLS=true) but the server
+			// does not advertise STARTTLS support on this non-implicit-TLS port. Fail
+			// closed rather than silently transmitting the message (including
+			// password-reset URLs/tokens) in plaintext.
+			return fmt.Errorf("SMTP server at %s does not support STARTTLS but TLS was explicitly requested (SMTP_USE_TLS=true); refusing to send in plaintext", addr)
 		}
 	}
 
@@ -384,7 +435,12 @@ func normalizeTemplateData(data map[string]interface{}) map[string]interface{} {
 		result[k] = v
 	}
 
-	// Ensure common aliases are mapped seamlessly
+	// Ensure common aliases are mapped seamlessly.
+	// NOTE: this table is hand-maintained — adding a new template variable that needs
+	// to be accessible under both snake_case (Go map key convention used by callers)
+	// and CamelCase (Go template field convention used inside .html/.txt/.subject
+	// files) requires adding a corresponding snake_case -> CamelCase entry here, or
+	// the variable will only be available under whichever casing the caller supplied.
 	mappings := map[string]string{
 		"reset_url":   "ResetURL",
 		"invite_url":  "InviteURL",
