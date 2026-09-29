@@ -11,7 +11,8 @@ The backend is structured into clear concentric layers where the inner domain la
 ```
        +-------------------------------------------------------+
        |                  Infrastructure Layer                 |
-       |  (PostgreSQL, GORM, JWT Provider, Viper, Mailer, CLI) |
+       |  (PostgreSQL, GORM, JWT Provider, Viper, Mailer,       |
+       |   River job queue / event dispatcher, CLI)             |
        |   +-----------------------------------------------+   |
        |   |                 Delivery Layer                |   |
        |   |      (HTTP Handlers, Gin Router, Middleware)  |   |
@@ -38,13 +39,16 @@ backend/
 │   │   └── main.go               # Server initialization, dependency wiring, startup
 │   ├── migrate/                  # Database migration CLI runner
 │   │   └── main.go               # Runs up/down SQL migrations
-│   └── bootstrap/                # Database seeder / Initial setup CLI
-│       └── main.go               # Seeds system tenant, core roles, and platform Super Admin
+│   ├── bootstrap/                # Database seeder / Initial setup CLI
+│   │   └── main.go               # Seeds system tenant, core roles, and platform Super Admin
+│   └── worker/                   # Async job-processing entrypoint
+│       └── main.go               # Boots the River client (registers EmailWorker), Start(ctx) with graceful shutdown
 ├── internal/
 │   ├── delivery/                 # Presentation / Delivery Layer
 │   │   └── http/
 │   │       ├── handlers/         # Gin request handlers (input parsing & response writing)
 │   │       │   ├── auth_handler.go
+│   │       │   ├── invitation_handler.go
 │   │       │   ├── user_handler.go
 │   │       │   ├── role_handler.go
 │   │       │   ├── department_handler.go
@@ -67,6 +71,7 @@ backend/
 │   ├── domain/                   # Enterprise Core (No external dependencies)
 │   │   ├── entity/               # Core domain models
 │   │   │   ├── tenant.go
+│   │   │   ├── tenant_domain.go
 │   │   │   ├── user.go
 │   │   │   ├── role.go
 │   │   │   ├── user_role.go
@@ -74,9 +79,13 @@ backend/
 │   │   │   ├── position.go
 │   │   │   ├── holiday.go
 │   │   │   ├── holiday_category.go
-│   │   │   └── audit_log.go
+│   │   │   ├── audit_log.go
+│   │   │   ├── password_reset_token.go
+│   │   │   ├── refresh_token.go
+│   │   │   └── user_invitation.go
 │   │   ├── repository/           # Repository interfaces (Ports)
 │   │   │   ├── tenant_repository.go
+│   │   │   ├── tenant_domain_repository.go
 │   │   │   ├── user_repository.go
 │   │   │   ├── role_repository.go
 │   │   │   ├── user_role_repository.go
@@ -84,18 +93,25 @@ backend/
 │   │   │   ├── position_repository.go
 │   │   │   ├── holiday_repository.go
 │   │   │   ├── category_repository.go
-│   │   │   └── audit_repository.go
-│   │   ├── service/              # Domain service interfaces (Token service, Hasher)
+│   │   │   ├── audit_repository.go
+│   │   │   ├── password_reset_repository.go
+│   │   │   ├── refresh_token_repository.go
+│   │   │   └── user_invitation_repository.go
+│   │   ├── service/              # Domain service interfaces (Token service, Hasher, Email, Event publisher)
 │   │   │   ├── token_service.go
-│   │   │   └── hash_service.go
+│   │   │   ├── hash_service.go
+│   │   │   ├── email_service.go  # EmailService interface, EmailMessage/EmailTemplateName
+│   │   │   └── event_publisher.go # EventPublisher interface: Publish(ctx, events ...event.Event) error — no GORM/River types
 │   │   ├── errors/               # Domain-specific sentinel errors
 │   │   │   └── errors.go
 │   │   └── event/                # Domain events
-│   │       └── events.go
+│   │       └── events.go         # Event{ID, TenantID, EventType, AggregateType, AggregateID, Payload, OccurredAt} + EventType constants + per-event payload structs
 │   ├── usecase/                  # Application Business Rules
 │   │   ├── interface/             # Usecase ports — one file per feature, one interface per operation
 │   │   │   ├── auth/
-│   │   │   │   └── auth.go        # LoginUseCase, VerifyEmailUseCase, TokenRefreshUseCase
+│   │   │   │   └── auth.go        # LoginUseCase, RequestOTPUseCase, VerifyOTPUseCase, TokenRefreshUseCase, LogoutUseCase, ForgotPasswordUseCase, ResetPasswordUseCase
+│   │   │   ├── invitation/
+│   │   │   │   └── invitation.go  # InviteUserUseCase, AcceptInvitationUseCase, ResendInvitationUseCase, RevokeInvitationUseCase, ListInvitationsUseCase
 │   │   │   ├── user/
 │   │   │   │   └── user.go        # CreateUserUseCase, UpdateUserUseCase, GetUserUseCase, ListUsersUseCase
 │   │   │   ├── rbac/
@@ -115,8 +131,18 @@ backend/
 │   │   └── implementation/        # Usecase adapters — one file per operation, implements the matching interface
 │   │       ├── auth/              # Admin login, Employee passwordless verification
 │   │       │   ├── login.go
-│   │       │   ├── verify_email.go
-│   │       │   └── token_refresh.go
+│   │       │   ├── request_otp.go
+│   │       │   ├── verify_otp.go
+│   │       │   ├── token_refresh.go
+│   │       │   ├── logout.go
+│   │       │   ├── forgot_password.go
+│   │       │   └── reset_password.go
+│   │       ├── invitation/        # Admin-driven onboarding invitations
+│   │       │   ├── invite_user.go
+│   │       │   ├── accept_invitation.go
+│   │       │   ├── resend_invitation.go
+│   │       │   ├── revoke_invitation.go
+│   │       │   └── list_invitations.go
 │   │       ├── user/              # User management operations
 │   │       │   ├── create_user.go
 │   │       │   ├── update_user.go
@@ -148,8 +174,8 @@ backend/
 │   │       ├── audit/             # Audit trail logging operations
 │   │       │   ├── log_action.go
 │   │       │   └── get_audit_logs.go
-│   │       └── ucshared/          # Shared usecase-layer helpers (e.g. Transactor)
-│   │           └── transactor.go
+│   │       └── ucshared/          # Shared usecase-layer helpers
+│   │           └── transactor.go  # Transactor.WithinTransaction(ctx, fn) error — wraps a GORM tx, propagates it via ctx so repositories and EventPublisher share it without leaking *gorm.DB/*sql.Tx into the usecase layer
 │   ├── infrastructure/           # Frameworks, Drivers & Adapters
 │   │   ├── database/             # PostgreSQL connection pool, GORM instance & seeder
 │   │   │   ├── postgres.go
@@ -158,6 +184,7 @@ backend/
 │   │   │       └── seeder_test.go
 │   │   ├── persistence/          # GORM repository implementations (Adapters)
 │   │   │   ├── tenant_repo.go
+│   │   │   ├── tenant_domain_repo.go
 │   │   │   ├── user_repo.go
 │   │   │   ├── role_repo.go
 │   │   │   ├── user_role_repo.go
@@ -165,11 +192,21 @@ backend/
 │   │   │   ├── position_repo.go
 │   │   │   ├── holiday_repo.go
 │   │   │   ├── category_repo.go
-│   │   │   └── audit_repo.go
+│   │   │   ├── audit_repo.go
+│   │   │   ├── password_reset_repo.go
+│   │   │   ├── refresh_token_repo.go
+│   │   │   └── user_invitation_repo.go
 │   │   ├── service/              # External service implementations
 │   │   │   ├── jwt_service.go    # JWT generation & validation
 │   │   │   ├── bcrypt_service.go # Password hashing & comparison
-│   │   │   └── mail_service.go   # Email delivery (OTP / Magic Link)
+│   │   │   ├── mail_service.go   # SMTP EmailService implementation — called only from infrastructure/job/, never from a usecase
+│   │   │   └── mail/
+│   │   │       └── templates/    # Subject + text + HTML template per EmailTemplateName
+│   │   ├── eventing/              # EventPublisher implementation + event->job mapping
+│   │   │   ├── dispatcher.go      # Maps EventType -> River job args (SendEmailArgs)
+│   │   │   └── river_publisher.go # EventPublisher impl: extracts *sql.Tx from ctx, dispatches, riverClient.InsertTx (same transaction as the caller's business write)
+│   │   ├── job/                   # River workers
+│   │   │   └── email_worker.go    # river.Worker[SendEmailArgs] — calls EmailService.Send; river.JobCancel on permanent validation errors
 │   │   ├── container/            # Dependency Injection container
 │   │   │   └── container.go      # Initializes and wires all layers
 │   │   └── server/               # HTTP server lifecycle & graceful shutdown
@@ -186,22 +223,32 @@ backend/
 ├── migrations/                   # Versioned SQL migrations (golang-migrate)
 │   ├── 000001_create_tenants.up.sql
 │   ├── 000001_create_tenants.down.sql
-│   ├── 000002_create_departments.up.sql
-│   ├── 000002_create_departments.down.sql
-│   ├── 000003_create_positions.up.sql
-│   ├── 000003_create_positions.down.sql
-│   ├── 000004_create_users.up.sql
-│   ├── 000004_create_users.down.sql
-│   ├── 000005_create_roles.up.sql
-│   ├── 000005_create_roles.down.sql
-│   ├── 000006_create_user_roles.up.sql
-│   ├── 000006_create_user_roles.down.sql
-│   ├── 000007_create_holiday_categories.up.sql
-│   ├── 000007_create_holiday_categories.down.sql
-│   ├── 000008_create_holidays.up.sql
-│   ├── 000008_create_holidays.down.sql
-│   ├── 000009_create_audit_logs.up.sql
-│   └── 000009_create_audit_logs.down.sql
+│   ├── 000002_create_tenant_domains.up.sql
+│   ├── 000002_create_tenant_domains.down.sql
+│   ├── 000003_create_departments.up.sql
+│   ├── 000003_create_departments.down.sql
+│   ├── 000004_create_positions.up.sql
+│   ├── 000004_create_positions.down.sql
+│   ├── 000005_create_users.up.sql
+│   ├── 000005_create_users.down.sql
+│   ├── 000006_create_roles.up.sql
+│   ├── 000006_create_roles.down.sql
+│   ├── 000007_create_user_roles.up.sql
+│   ├── 000007_create_user_roles.down.sql
+│   ├── 000008_create_audit_logs.up.sql
+│   ├── 000008_create_audit_logs.down.sql
+│   ├── 000009_create_password_reset_tokens.up.sql
+│   ├── 000009_create_password_reset_tokens.down.sql
+│   ├── 000010_create_refresh_tokens.up.sql
+│   ├── 000010_create_refresh_tokens.down.sql
+│   ├── 000011_create_user_invitations.up.sql
+│   ├── 000011_create_user_invitations.down.sql
+│   ├── 000012_create_river_schema.up.sql       # River's own tables (river_job, river_leader, river_queue, river_client*, river_migration) — generated via `river migrate-get`, not hand-written
+│   ├── 000012_create_river_schema.down.sql
+│   ├── 000013_create_holiday_categories.up.sql
+│   ├── 000013_create_holiday_categories.down.sql
+│   ├── 000014_create_holidays.up.sql
+│   └── 000014_create_holidays.down.sql
 ├── config/                       # Configuration definition & loading (Viper)
 │   ├── config.go
 │   └── config.yaml.example
@@ -242,7 +289,7 @@ PostgreSQL Database
 ### 3.2 Layer Rules & Boundaries
 
 1. **Domain Layer (`internal/domain`)**:
-   - Contains pure Go structs representing core business entities (`User`, `Role`, `UserRole`, `Department`, `Position`, `Holiday`, `HolidayCategory`, `AuditLog`, `Tenant`).
+   - Contains pure Go structs representing core business entities (`User`, `Role`, `UserRole`, `Department`, `Position`, `Holiday`, `HolidayCategory`, `AuditLog`, `Tenant`, `TenantDomain`, `PasswordResetToken`, `RefreshToken`, `UserInvitation`).
    - Defines repository and external service interfaces.
    - Defines domain errors.
    - **Zero dependencies** on Gin, GORM, database drivers, or external libraries.
@@ -259,9 +306,10 @@ PostgreSQL Database
    - Never accesses repositories or databases directly; delegates all logic to use cases.
 
 4. **Infrastructure Layer (`internal/infrastructure`)**:
-   - Implements interfaces defined in the domain layer (GORM database repositories, JWT token generation, email providers).
+   - Implements interfaces defined in the domain layer (GORM database repositories, JWT token generation, email providers, the `EventPublisher` port).
    - Contains the seeder (`infrastructure/database/seeder/`) for bootstrapping the platform Super Admin and default system roles.
    - Responsible for technical details like connection pooling, transaction management, and server lifecycle.
+   - Owns async side-effect delivery: `eventing/` turns a published domain `Event` into a River job **inside the same DB transaction** as the usecase's business write (River's own job table is the outbox — no separate outbox table needed on a single-Postgres setup); `job/` holds the River workers (running in the separate `cmd/worker` process) that actually perform the side effect (e.g. sending mail via `mail_service.go`).
 
 ### 3.3 Multi-Tenancy & Platform Governance Strategy
 
