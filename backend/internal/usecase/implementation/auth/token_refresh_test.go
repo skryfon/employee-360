@@ -60,9 +60,7 @@ func TestTokenRefreshUseCase_Success(t *testing.T) {
 
 	output, err := uc.Execute(context.Background(), authtypes.TokenRefreshRequest{
 		RefreshToken: rawRefreshToken,
-		IPAddress:    "127.0.0.1",
-		UserAgent:    "TestBrowser/1.0",
-	})
+	}, "127.0.0.1", "TestBrowser/1.0")
 
 	if err != nil {
 		t.Fatalf("expected successful token refresh, got: %v", err)
@@ -127,7 +125,7 @@ func TestTokenRefreshUseCase_TokenReuseDetected(t *testing.T) {
 
 	_, err := uc.Execute(context.Background(), authtypes.TokenRefreshRequest{
 		RefreshToken: rawRefreshToken,
-	})
+	}, "", "")
 
 	if err != domainerrors.ErrTokenRevoked {
 		t.Errorf("expected ErrTokenRevoked on reuse, got: %v", err)
@@ -173,7 +171,7 @@ func TestTokenRefreshUseCase_ExpiredToken(t *testing.T) {
 
 	_, err := uc.Execute(context.Background(), authtypes.TokenRefreshRequest{
 		RefreshToken: rawRefreshToken,
-	})
+	}, "", "")
 
 	if err != domainerrors.ErrTokenExpired {
 		t.Errorf("expected ErrTokenExpired, got: %v", err)
@@ -192,7 +190,7 @@ func TestTokenRefreshUseCase_InvalidToken(t *testing.T) {
 
 	_, err := uc.Execute(context.Background(), authtypes.TokenRefreshRequest{
 		RefreshToken: "invalid-token",
-	})
+	}, "", "")
 
 	if err != domainerrors.ErrInvalidToken {
 		t.Errorf("expected ErrInvalidToken, got %v", err)
@@ -244,7 +242,7 @@ func TestTokenRefreshUseCase_RevokeFamilyFailureIsLogged(t *testing.T) {
 
 	_, err := uc.Execute(context.Background(), authtypes.TokenRefreshRequest{
 		RefreshToken: rawRefreshToken,
-	})
+	}, "", "")
 
 	if err != domainerrors.ErrTokenRevoked {
 		t.Errorf("expected ErrTokenRevoked on reuse even when RevokeFamily fails, got: %v", err)

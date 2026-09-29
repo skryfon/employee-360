@@ -44,7 +44,7 @@ func (f *fakeLoginUseCase) Execute(ctx context.Context, req authtypes.LoginReque
 
 type fakeTokenRefreshUseCase struct{}
 
-func (f *fakeTokenRefreshUseCase) Execute(ctx context.Context, req authtypes.TokenRefreshRequest) (*authtypes.TokenRefreshResponse, error) {
+func (f *fakeTokenRefreshUseCase) Execute(ctx context.Context, req authtypes.TokenRefreshRequest, ipAddress, userAgent string) (*authtypes.TokenRefreshResponse, error) {
 	return &authtypes.TokenRefreshResponse{
 		AccessToken:  "new-access-token",
 		RefreshToken: "new-refresh-token",
@@ -55,13 +55,13 @@ func (f *fakeTokenRefreshUseCase) Execute(ctx context.Context, req authtypes.Tok
 
 type fakeLogoutUseCase struct{}
 
-func (f *fakeLogoutUseCase) Execute(ctx context.Context, req authtypes.LogoutRequest) error {
+func (f *fakeLogoutUseCase) Execute(ctx context.Context, tenantID, userID uuid.UUID, req authtypes.LogoutRequest) error {
 	return nil
 }
 
 type fakeForgotPasswordUseCase struct{}
 
-func (f *fakeForgotPasswordUseCase) Execute(ctx context.Context, tenantID uuid.UUID, req authtypes.ForgotPasswordRequest) error {
+func (f *fakeForgotPasswordUseCase) Execute(ctx context.Context, req authtypes.ForgotPasswordRequest) error {
 	return nil
 }
 

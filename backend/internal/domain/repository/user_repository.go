@@ -22,7 +22,6 @@ type UserRepository interface {
 	GetByTenantAndEmail(ctx context.Context, tenantID uuid.UUID, email string) (*entity.User, error)
 	GetByIDWithRoles(ctx context.Context, tenantID, id uuid.UUID) (*entity.User, error)
 	GetByTenantAndEmailWithRoles(ctx context.Context, tenantID uuid.UUID, email string) (*entity.User, error)
-	GetByEmailWithRoles(ctx context.Context, email string) (*entity.User, error)
 	Update(ctx context.Context, tenantID uuid.UUID, user *entity.User) error
 	Delete(ctx context.Context, tenantID, id uuid.UUID) error
 	List(ctx context.Context, tenantID uuid.UUID, limit, offset int) ([]*entity.User, int64, error)

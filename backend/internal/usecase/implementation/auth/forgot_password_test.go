@@ -120,9 +120,10 @@ func TestForgotPasswordUseCase_ExistingUser(t *testing.T) {
 	}
 	_ = userRepo.Create(context.Background(), user)
 
-	uc := NewForgotPasswordUseCase(userRepo, resetRepo, hashSvc, eventPub, transactor, logger)
+	tdRepo := newMockTenantDomainRepository().with("example.com", tenantID)
+	uc := NewForgotPasswordUseCase(userRepo, tdRepo, resetRepo, hashSvc, eventPub, transactor, logger)
 
-	err := uc.Execute(context.Background(), tenantID, authtypes.ForgotPasswordRequest{
+	err := uc.Execute(context.Background(), authtypes.ForgotPasswordRequest{
 		Email: "alice@example.com",
 	})
 
@@ -188,7 +189,8 @@ func TestForgotPasswordUseCase_EnumerationSafe(t *testing.T) {
 	transactor := ucshared.NewNopTransactor()
 	logger := &mockLogger{}
 
-	uc := NewForgotPasswordUseCase(userRepo, resetRepo, hashSvc, eventPub, transactor, logger)
+	tdRepo := newMockTenantDomainRepository().with("example.com", tenantID)
+	uc := NewForgotPasswordUseCase(userRepo, tdRepo, resetRepo, hashSvc, eventPub, transactor, logger)
 
 	tests := []struct {
 		name  string
@@ -202,7 +204,7 @@ func TestForgotPasswordUseCase_EnumerationSafe(t *testing.T) {
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
 			eventPub.publishedEvents = nil
-			err := uc.Execute(context.Background(), tenantID, authtypes.ForgotPasswordRequest{
+			err := uc.Execute(context.Background(), authtypes.ForgotPasswordRequest{
 				Email: tc.email,
 			})
 
@@ -236,9 +238,10 @@ func TestForgotPasswordUseCase_InactiveUser(t *testing.T) {
 	}
 	_ = userRepo.Create(context.Background(), user)
 
-	uc := NewForgotPasswordUseCase(userRepo, resetRepo, hashSvc, eventPub, transactor, logger)
+	tdRepo := newMockTenantDomainRepository().with("example.com", tenantID)
+	uc := NewForgotPasswordUseCase(userRepo, tdRepo, resetRepo, hashSvc, eventPub, transactor, logger)
 
-	err := uc.Execute(context.Background(), tenantID, authtypes.ForgotPasswordRequest{
+	err := uc.Execute(context.Background(), authtypes.ForgotPasswordRequest{
 		Email: "inactive@example.com",
 	})
 
@@ -280,9 +283,10 @@ func TestForgotPasswordUseCase_TenantIsolation(t *testing.T) {
 		IsActive: true,
 	})
 
-	uc := NewForgotPasswordUseCase(userRepo, resetRepo, hashSvc, eventPub, transactor, logger)
+	tdRepo := newMockTenantDomainRepository().with("example.com", tenantA)
+	uc := NewForgotPasswordUseCase(userRepo, tdRepo, resetRepo, hashSvc, eventPub, transactor, logger)
 
-	err := uc.Execute(context.Background(), tenantA, authtypes.ForgotPasswordRequest{
+	err := uc.Execute(context.Background(), authtypes.ForgotPasswordRequest{
 		Email: sharedEmail,
 	})
 	if err != nil {
@@ -358,9 +362,10 @@ func TestForgotPasswordUseCase_TransactionFailureIsLoggedNotSwallowed(t *testing
 	}
 	_ = userRepo.Create(context.Background(), user)
 
-	uc := NewForgotPasswordUseCase(userRepo, resetRepo, hashSvc, eventPub, transactor, logger)
+	tdRepo := newMockTenantDomainRepository().with("example.com", tenantID)
+	uc := NewForgotPasswordUseCase(userRepo, tdRepo, resetRepo, hashSvc, eventPub, transactor, logger)
 
-	err := uc.Execute(context.Background(), tenantID, authtypes.ForgotPasswordRequest{
+	err := uc.Execute(context.Background(), authtypes.ForgotPasswordRequest{
 		Email: "alice@example.com",
 	})
 
@@ -373,5 +378,28 @@ func TestForgotPasswordUseCase_TransactionFailureIsLoggedNotSwallowed(t *testing
 	}
 	if logger.errorCalls[0].err != txErr {
 		t.Errorf("expected logged error to be the transactor's error, got %v", logger.errorCalls[0].err)
+	}
+}
+
+// TestForgotPasswordUseCase_UnknownDomain proves an email whose domain maps to
+// no tenant returns nil, publishes nothing and stores nothing.
+func TestForgotPasswordUseCase_UnknownDomain(t *testing.T) {
+	userRepo := newMockUserRepository()
+	resetRepo := newMockPasswordResetRepository()
+	eventPub := &mockEventPublisher{}
+	tdRepo := newMockTenantDomainRepository() // no domains registered
+
+	// Same-email user exists in some tenant, but the domain is unmapped.
+	_ = userRepo.Create(context.Background(), &entity.User{
+		ID: uuid.New(), TenantID: uuid.New(), Email: "alice@unmapped.example", IsActive: true,
+	})
+
+	uc := NewForgotPasswordUseCase(userRepo, tdRepo, resetRepo, &mockHashService{}, eventPub, ucshared.NewNopTransactor(), &mockLogger{})
+
+	if err := uc.Execute(context.Background(), authtypes.ForgotPasswordRequest{Email: "alice@unmapped.example"}); err != nil {
+		t.Fatalf("expected nil error, got %v", err)
+	}
+	if len(eventPub.publishedEvents) != 0 || len(resetRepo.tokensByID) != 0 {
+		t.Errorf("expected no events/tokens for unknown domain")
 	}
 }

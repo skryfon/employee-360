@@ -3,15 +3,13 @@ package http
 
 import (
 	"github.com/gin-gonic/gin"
-	swaggerFiles "github.com/swaggo/files"
-	ginSwagger "github.com/swaggo/gin-swagger"
-	// Blank import registers the generated Swagger spec with gin-swagger.
-	// Regenerate via `make swagger` after changing @-annotations.
 	"github.com/rs/zerolog"
 	"github.com/skryfon/employee360/backend/config"
 	"github.com/skryfon/employee360/backend/internal/delivery/http/middleware"
 	"github.com/skryfon/employee360/backend/internal/infrastructure/container"
 	"github.com/skryfon/employee360/backend/shared"
+	swaggerFiles "github.com/swaggo/files"
+	ginSwagger "github.com/swaggo/gin-swagger"
 )
 
 // SetupRouter builds and returns a fully configured Gin engine with middleware and routes.

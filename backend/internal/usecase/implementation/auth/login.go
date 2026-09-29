@@ -22,6 +22,7 @@ const (
 // LoginUseCaseImpl implements authusecase.LoginUseCase.
 type LoginUseCaseImpl struct {
 	userRepo         repository.UserRepository
+	tenantDomainRepo repository.TenantDomainRepository
 	tokenService     service.TokenService
 	hashService      service.HashService
 	refreshTokenRepo repository.RefreshTokenRepository
@@ -34,6 +35,7 @@ var _ authusecase.LoginUseCase = (*LoginUseCaseImpl)(nil)
 // NewLoginUseCase constructs a new LoginUseCaseImpl.
 func NewLoginUseCase(
 	userRepo repository.UserRepository,
+	tenantDomainRepo repository.TenantDomainRepository,
 	tokenService service.TokenService,
 	hashService service.HashService,
 	refreshTokenRepo repository.RefreshTokenRepository,
@@ -41,6 +43,7 @@ func NewLoginUseCase(
 ) *LoginUseCaseImpl {
 	return &LoginUseCaseImpl{
 		userRepo:         userRepo,
+		tenantDomainRepo: tenantDomainRepo,
 		tokenService:     tokenService,
 		hashService:      hashService,
 		refreshTokenRepo: refreshTokenRepo,
@@ -67,7 +70,16 @@ func (u *LoginUseCaseImpl) Execute(ctx context.Context, req authtypes.LoginReque
 		return nil, domainerrors.ErrInvalidCredentials
 	}
 
-	user, err := u.userRepo.GetByEmailWithRoles(ctx, email)
+	// Resolve the tenant server-side from the email's domain (tenant_domains),
+	// then look the user up scoped to that tenant. The same email may exist in
+	// several tenants, so a cross-tenant lookup by email alone is ambiguous.
+	tenant, err := u.tenantDomainRepo.FindTenantByDomain(ctx, parts[1])
+	if err != nil || tenant == nil {
+		_ = u.hashService.ComparePassword(dummyBcryptHash, password)
+		return nil, domainerrors.ErrInvalidCredentials
+	}
+
+	user, err := u.userRepo.GetByTenantAndEmailWithRoles(ctx, tenant.ID, email)
 	if err != nil || user == nil {
 		_ = u.hashService.ComparePassword(dummyBcryptHash, password)
 		return nil, domainerrors.ErrInvalidCredentials

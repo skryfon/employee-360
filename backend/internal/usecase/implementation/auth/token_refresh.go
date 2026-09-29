@@ -45,7 +45,7 @@ func NewTokenRefreshUseCase(
 }
 
 // Execute rotates an existing refresh token and returns a new token pair.
-func (u *TokenRefreshUseCaseImpl) Execute(ctx context.Context, input authtypes.TokenRefreshRequest) (*authtypes.TokenRefreshResponse, error) {
+func (u *TokenRefreshUseCaseImpl) Execute(ctx context.Context, input authtypes.TokenRefreshRequest, ipAddress, userAgent string) (*authtypes.TokenRefreshResponse, error) {
 	rawToken := strings.TrimSpace(input.RefreshToken)
 	if rawToken == "" {
 		return nil, domainerrors.ErrInvalidToken
@@ -129,8 +129,8 @@ func (u *TokenRefreshUseCaseImpl) Execute(ctx context.Context, input authtypes.T
 		TokenHash: newTokenHash,
 		Family:    storedToken.Family,
 		ExpiresAt: now.Add(u.refreshExpiry),
-		IPAddress: input.IPAddress,
-		UserAgent: input.UserAgent,
+		IPAddress: ipAddress,
+		UserAgent: userAgent,
 		CreatedAt: now,
 		UpdatedAt: now,
 	}

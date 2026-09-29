@@ -40,7 +40,7 @@ func TestLogoutUseCase_Success(t *testing.T) {
 
 	uc := NewLogoutUseCase(tokenSvc, hashSvc, refreshTokenRepo)
 
-	err := uc.Execute(context.Background(), authtypes.LogoutRequest{
+	err := uc.Execute(context.Background(), tenantID, userID, authtypes.LogoutRequest{
 		RefreshToken: rawRefreshToken,
 	})
 
@@ -75,7 +75,7 @@ func TestLogoutUseCase_InvalidOrMissingToken(t *testing.T) {
 
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			err := uc.Execute(context.Background(), authtypes.LogoutRequest{
+			err := uc.Execute(context.Background(), uuid.New(), uuid.New(), authtypes.LogoutRequest{
 				RefreshToken: tc.token,
 			})
 			if err != domainerrors.ErrInvalidToken {
@@ -87,9 +87,10 @@ func TestLogoutUseCase_InvalidOrMissingToken(t *testing.T) {
 
 func TestLogoutUseCase_IdempotentOnNonexistentToken(t *testing.T) {
 	tenantID := uuid.New()
+	userID := uuid.New()
 	tokenSvc := &mockTokenService{
 		validateRefreshClaims: &domainservice.RefreshTokenClaims{
-			UserID:   uuid.New(),
+			UserID:   userID,
 			TenantID: tenantID,
 			TokenID:  uuid.New(),
 		},
@@ -99,11 +100,54 @@ func TestLogoutUseCase_IdempotentOnNonexistentToken(t *testing.T) {
 
 	uc := NewLogoutUseCase(tokenSvc, hashSvc, refreshTokenRepo)
 
-	err := uc.Execute(context.Background(), authtypes.LogoutRequest{
+	err := uc.Execute(context.Background(), tenantID, userID, authtypes.LogoutRequest{
 		RefreshToken: "valid-jwt-but-not-in-db",
 	})
 
 	if err != nil {
 		t.Fatalf("expected nil error on nonexistent token (idempotent logout), got %v", err)
+	}
+}
+
+// TestLogoutUseCase_TokenOwnedByAnotherCaller proves a refresh token that does
+// not belong to the authenticated caller's user/tenant is rejected with
+// ErrInvalidToken and is NOT revoked.
+func TestLogoutUseCase_TokenOwnedByAnotherCaller(t *testing.T) {
+	tenantID := uuid.New()
+	ownerID := uuid.New()
+	tokenID := uuid.New()
+	raw := "owners-refresh-token"
+
+	hashSvc := &mockHashService{}
+	refreshTokenRepo := newMockRefreshTokenRepository()
+	stored := &entity.RefreshToken{
+		ID: tokenID, TenantID: tenantID, UserID: ownerID,
+		TokenHash: hashSvc.HashToken(raw), ExpiresAt: time.Now().Add(time.Hour),
+	}
+	_ = refreshTokenRepo.Create(context.Background(), stored)
+
+	tokenSvc := &mockTokenService{
+		validateRefreshClaims: &domainservice.RefreshTokenClaims{UserID: ownerID, TenantID: tenantID, TokenID: tokenID},
+	}
+	uc := NewLogoutUseCase(tokenSvc, hashSvc, refreshTokenRepo)
+
+	tests := []struct {
+		name     string
+		tenantID uuid.UUID
+		userID   uuid.UUID
+	}{
+		{"different user, same tenant", tenantID, uuid.New()},
+		{"same user id, different tenant", uuid.New(), ownerID},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			err := uc.Execute(context.Background(), tc.tenantID, tc.userID, authtypes.LogoutRequest{RefreshToken: raw})
+			if err != domainerrors.ErrInvalidToken {
+				t.Errorf("expected ErrInvalidToken, got %v", err)
+			}
+			if stored.RevokedAt != nil || len(refreshTokenRepo.revokedTokenIDs) != 0 {
+				t.Errorf("token must not be revoked by a non-owner")
+			}
+		})
 	}
 }

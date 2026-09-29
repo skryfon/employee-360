@@ -4,6 +4,7 @@ import (
 	"context"
 	"strings"
 
+	"github.com/google/uuid"
 	domainerrors "github.com/skryfon/employee360/backend/internal/domain/errors"
 	"github.com/skryfon/employee360/backend/internal/domain/repository"
 	"github.com/skryfon/employee360/backend/internal/domain/service"
@@ -34,13 +35,19 @@ func NewLogoutUseCase(
 }
 
 // Execute revokes the provided refresh token session.
-func (u *LogoutUseCaseImpl) Execute(ctx context.Context, input authtypes.LogoutRequest) error {
+func (u *LogoutUseCaseImpl) Execute(ctx context.Context, tenantID, userID uuid.UUID, input authtypes.LogoutRequest) error {
 	rawToken := strings.TrimSpace(input.RefreshToken)
 	if rawToken == "" {
 		return domainerrors.ErrInvalidToken
 	}
 
-	if _, err := u.tokenService.ValidateRefreshToken(rawToken); err != nil {
+	claims, err := u.tokenService.ValidateRefreshToken(rawToken)
+	if err != nil || claims == nil {
+		return domainerrors.ErrInvalidToken
+	}
+
+	// The presented refresh token must belong to the authenticated caller.
+	if claims.UserID != userID || claims.TenantID != tenantID {
 		return domainerrors.ErrInvalidToken
 	}
 
@@ -50,6 +57,10 @@ func (u *LogoutUseCaseImpl) Execute(ctx context.Context, input authtypes.LogoutR
 	if err != nil || storedToken == nil {
 		// Idempotent: token already doesn't exist or is removed
 		return nil
+	}
+
+	if storedToken.UserID != userID || storedToken.TenantID != tenantID {
+		return domainerrors.ErrInvalidToken
 	}
 
 	if storedToken.RevokedAt == nil {

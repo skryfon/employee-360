@@ -18,22 +18,27 @@ type LoginUseCase interface {
 }
 
 // TokenRefreshUseCase defines the port for rotating refresh tokens.
+//
+// ipAddress and userAgent are server-derived HTTP request metadata (never part
+// of the client payload), recorded on the rotated refresh token for audit.
 type TokenRefreshUseCase interface {
-	Execute(ctx context.Context, req authtypes.TokenRefreshRequest) (*authtypes.TokenRefreshResponse, error)
+	Execute(ctx context.Context, req authtypes.TokenRefreshRequest, ipAddress, userAgent string) (*authtypes.TokenRefreshResponse, error)
 }
 
 // LogoutUseCase defines the port for revoking sessions and refresh tokens.
+//
+// tenantID and userID are the authenticated caller's identity from the verified
+// access token; the presented refresh token must belong to them.
 type LogoutUseCase interface {
-	Execute(ctx context.Context, req authtypes.LogoutRequest) error
+	Execute(ctx context.Context, tenantID, userID uuid.UUID, req authtypes.LogoutRequest) error
 }
 
 // ForgotPasswordUseCase defines the port for requesting a password reset (enumeration-safe).
 //
-// tenantID is passed as an explicit parameter rather than a field on
-// ForgotPasswordRequest, for the same reason as LoginUseCase: it is resolved
-// by the handler, not client-supplied.
+// The tenant is resolved inside the usecase from the email's domain
+// (tenant_domains); it is never client-supplied.
 type ForgotPasswordUseCase interface {
-	Execute(ctx context.Context, tenantID uuid.UUID, req authtypes.ForgotPasswordRequest) error
+	Execute(ctx context.Context, req authtypes.ForgotPasswordRequest) error
 }
 
 // ResetPasswordUseCase defines the port for executing a password reset with a valid token.

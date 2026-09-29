@@ -82,6 +82,7 @@ func NewAuthContainer(
 
 	userRepo := persistence.NewGormUserRepository(db)
 	refreshTokenRepo := persistence.NewGormRefreshTokenRepository(db)
+	tenantDomainRepo := persistence.NewGormTenantDomainRepository(db)
 	passwordResetRepo := persistence.NewGormPasswordResetRepository(db)
 
 	if transactor == nil {
@@ -91,10 +92,10 @@ func NewAuthContainer(
 		eventPublisher = &nopEventPublisher{}
 	}
 
-	loginUC := authusecaseimpl.NewLoginUseCase(userRepo, tokenService, hashService, refreshTokenRepo, loggerAdapter)
+	loginUC := authusecaseimpl.NewLoginUseCase(userRepo, tenantDomainRepo, tokenService, hashService, refreshTokenRepo, loggerAdapter)
 	tokenRefreshUC := authusecaseimpl.NewTokenRefreshUseCase(userRepo, tokenService, hashService, refreshTokenRepo, loggerAdapter)
 	logoutUC := authusecaseimpl.NewLogoutUseCase(tokenService, hashService, refreshTokenRepo)
-	forgotPasswordUC := authusecaseimpl.NewForgotPasswordUseCase(userRepo, passwordResetRepo, hashService, eventPublisher, transactor, loggerAdapter)
+	forgotPasswordUC := authusecaseimpl.NewForgotPasswordUseCase(userRepo, tenantDomainRepo, passwordResetRepo, hashService, eventPublisher, transactor, loggerAdapter)
 	resetPasswordUC := authusecaseimpl.NewResetPasswordUseCase(userRepo, passwordResetRepo, refreshTokenRepo, hashService, transactor)
 
 	handler := handlers.NewAuthHandler(

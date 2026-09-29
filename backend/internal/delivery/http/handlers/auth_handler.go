@@ -10,7 +10,6 @@ import (
 	domainerrors "github.com/skryfon/employee360/backend/internal/domain/errors"
 	authtypes "github.com/skryfon/employee360/backend/internal/types/auth"
 	authusecase "github.com/skryfon/employee360/backend/internal/usecase/interface/auth"
-	"github.com/skryfon/employee360/backend/shared"
 )
 
 // AuthHandler handles HTTP requests for user authentication and password recovery.
@@ -102,19 +101,13 @@ func (h *AuthHandler) Refresh(c *gin.Context) {
 	}
 
 	clientInfo := GetClientInfo(c)
-	if req.IPAddress == "" {
-		req.IPAddress = clientInfo.IPAddress
-	}
-	if req.UserAgent == "" {
-		req.UserAgent = clientInfo.UserAgent
-	}
 
-	res, err := h.tokenRefreshUseCase.Execute(c.Request.Context(), req)
+	res, err := h.tokenRefreshUseCase.Execute(c.Request.Context(), req, clientInfo.IPAddress, clientInfo.UserAgent)
 	if err != nil {
 		if errors.Is(err, domainerrors.ErrInvalidToken) ||
 			errors.Is(err, domainerrors.ErrTokenExpired) ||
 			errors.Is(err, domainerrors.ErrTokenRevoked) {
-			response.Unauthorized(c, err.Error())
+			response.Unauthorized(c, "invalid or expired refresh token")
 			return
 		}
 		if errors.Is(err, domainerrors.ErrUserNotFound) ||
@@ -150,7 +143,18 @@ func (h *AuthHandler) Logout(c *gin.Context) {
 		return
 	}
 
-	if err := h.logoutUseCase.Execute(c.Request.Context(), req); err != nil {
+	tenantID, err := middleware.GetTenantID(c)
+	if err != nil || tenantID == uuid.Nil {
+		response.Unauthorized(c, "unauthorized")
+		return
+	}
+	userID, err := middleware.GetUserID(c)
+	if err != nil || userID == uuid.Nil {
+		response.Unauthorized(c, "unauthorized")
+		return
+	}
+
+	if err := h.logoutUseCase.Execute(c.Request.Context(), tenantID, userID, req); err != nil {
 		if errors.Is(err, domainerrors.ErrInvalidToken) {
 			response.BadRequest(c, "invalid token")
 			return
@@ -181,16 +185,7 @@ func (h *AuthHandler) ForgotPassword(c *gin.Context) {
 		return
 	}
 
-	var tenantID uuid.UUID
-	if tid, err := middleware.GetTenantID(c); err == nil && tid != uuid.Nil {
-		tenantID = tid
-	} else if headerVal := c.GetHeader(shared.TenantIDHeader); headerVal != "" {
-		if parsed, err := uuid.Parse(headerVal); err == nil {
-			tenantID = parsed
-		}
-	}
-
-	if err := h.forgotPasswordUseCase.Execute(c.Request.Context(), tenantID, req); err != nil {
+	if err := h.forgotPasswordUseCase.Execute(c.Request.Context(), req); err != nil {
 		response.Internal(c, "an unexpected error occurred")
 		return
 	}

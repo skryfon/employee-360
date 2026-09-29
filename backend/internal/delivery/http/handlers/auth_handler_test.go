@@ -7,16 +7,17 @@ import (
 	"errors"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 	"time"
 
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
+	"github.com/skryfon/employee360/backend/internal/delivery/http/middleware"
 	"github.com/skryfon/employee360/backend/internal/delivery/http/response"
 	"github.com/skryfon/employee360/backend/internal/domain/entity"
 	domainerrors "github.com/skryfon/employee360/backend/internal/domain/errors"
 	authtypes "github.com/skryfon/employee360/backend/internal/types/auth"
-	"github.com/skryfon/employee360/backend/shared"
 )
 
 type mockLoginUseCase struct {
@@ -31,34 +32,34 @@ func (m *mockLoginUseCase) Execute(ctx context.Context, req authtypes.LoginReque
 }
 
 type mockTokenRefreshUseCase struct {
-	executeFn func(ctx context.Context, req authtypes.TokenRefreshRequest) (*authtypes.TokenRefreshResponse, error)
+	executeFn func(ctx context.Context, req authtypes.TokenRefreshRequest, ipAddress, userAgent string) (*authtypes.TokenRefreshResponse, error)
 }
 
-func (m *mockTokenRefreshUseCase) Execute(ctx context.Context, req authtypes.TokenRefreshRequest) (*authtypes.TokenRefreshResponse, error) {
+func (m *mockTokenRefreshUseCase) Execute(ctx context.Context, req authtypes.TokenRefreshRequest, ipAddress, userAgent string) (*authtypes.TokenRefreshResponse, error) {
 	if m.executeFn != nil {
-		return m.executeFn(ctx, req)
+		return m.executeFn(ctx, req, ipAddress, userAgent)
 	}
 	return nil, nil
 }
 
 type mockLogoutUseCase struct {
-	executeFn func(ctx context.Context, req authtypes.LogoutRequest) error
+	executeFn func(ctx context.Context, tenantID, userID uuid.UUID, req authtypes.LogoutRequest) error
 }
 
-func (m *mockLogoutUseCase) Execute(ctx context.Context, req authtypes.LogoutRequest) error {
+func (m *mockLogoutUseCase) Execute(ctx context.Context, tenantID, userID uuid.UUID, req authtypes.LogoutRequest) error {
 	if m.executeFn != nil {
-		return m.executeFn(ctx, req)
+		return m.executeFn(ctx, tenantID, userID, req)
 	}
 	return nil
 }
 
 type mockForgotPasswordUseCase struct {
-	executeFn func(ctx context.Context, tenantID uuid.UUID, req authtypes.ForgotPasswordRequest) error
+	executeFn func(ctx context.Context, req authtypes.ForgotPasswordRequest) error
 }
 
-func (m *mockForgotPasswordUseCase) Execute(ctx context.Context, tenantID uuid.UUID, req authtypes.ForgotPasswordRequest) error {
+func (m *mockForgotPasswordUseCase) Execute(ctx context.Context, req authtypes.ForgotPasswordRequest) error {
 	if m.executeFn != nil {
-		return m.executeFn(ctx, tenantID, req)
+		return m.executeFn(ctx, req)
 	}
 	return nil
 }
@@ -226,7 +227,7 @@ func TestAuthHandler_Refresh(t *testing.T) {
 		engine, handler, _, refreshUC, _, _, _ := setupAuthHandlerTest()
 		engine.POST("/refresh", handler.Refresh)
 
-		refreshUC.executeFn = func(ctx context.Context, req authtypes.TokenRefreshRequest) (*authtypes.TokenRefreshResponse, error) {
+		refreshUC.executeFn = func(ctx context.Context, req authtypes.TokenRefreshRequest, ipAddress, userAgent string) (*authtypes.TokenRefreshResponse, error) {
 			if req.RefreshToken != "valid-refresh-token" {
 				t.Errorf("unexpected refresh token: %s", req.RefreshToken)
 			}
@@ -264,7 +265,7 @@ func TestAuthHandler_Refresh(t *testing.T) {
 		engine, handler, _, refreshUC, _, _, _ := setupAuthHandlerTest()
 		engine.POST("/refresh", handler.Refresh)
 
-		refreshUC.executeFn = func(ctx context.Context, req authtypes.TokenRefreshRequest) (*authtypes.TokenRefreshResponse, error) {
+		refreshUC.executeFn = func(ctx context.Context, req authtypes.TokenRefreshRequest, ipAddress, userAgent string) (*authtypes.TokenRefreshResponse, error) {
 			return nil, domainerrors.ErrTokenExpired
 		}
 
@@ -286,7 +287,7 @@ func TestAuthHandler_Refresh(t *testing.T) {
 		engine, handler, _, refreshUC, _, _, _ := setupAuthHandlerTest()
 		engine.POST("/refresh", handler.Refresh)
 
-		refreshUC.executeFn = func(ctx context.Context, req authtypes.TokenRefreshRequest) (*authtypes.TokenRefreshResponse, error) {
+		refreshUC.executeFn = func(ctx context.Context, req authtypes.TokenRefreshRequest, ipAddress, userAgent string) (*authtypes.TokenRefreshResponse, error) {
 			return nil, domainerrors.ErrTokenRevoked
 		}
 
@@ -308,7 +309,7 @@ func TestAuthHandler_Refresh(t *testing.T) {
 		engine, handler, _, refreshUC, _, _, _ := setupAuthHandlerTest()
 		engine.POST("/refresh", handler.Refresh)
 
-		refreshUC.executeFn = func(ctx context.Context, req authtypes.TokenRefreshRequest) (*authtypes.TokenRefreshResponse, error) {
+		refreshUC.executeFn = func(ctx context.Context, req authtypes.TokenRefreshRequest, ipAddress, userAgent string) (*authtypes.TokenRefreshResponse, error) {
 			return nil, domainerrors.ErrUserInactive
 		}
 
@@ -327,12 +328,136 @@ func TestAuthHandler_Refresh(t *testing.T) {
 	})
 }
 
+// withCaller registers a stand-in for the auth+tenant middleware that places the
+// authenticated caller's identity on the Gin context.
+func withCaller(tenantID, userID uuid.UUID) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		c.Set(middleware.ContextKeyTenantID, tenantID.String())
+		c.Set(middleware.ContextKeyUserID, userID.String())
+		c.Next()
+	}
+}
+
+func TestAuthHandler_Logout_BindsCallerIdentity(t *testing.T) {
+	t.Run("passes caller tenant and user from context, not body", func(t *testing.T) {
+		engine, handler, _, _, logoutUC, _, _ := setupAuthHandlerTest()
+		tenantID, userID := uuid.New(), uuid.New()
+		engine.POST("/logout", withCaller(tenantID, userID), handler.Logout)
+
+		called := false
+		logoutUC.executeFn = func(ctx context.Context, tid, uid uuid.UUID, req authtypes.LogoutRequest) error {
+			called = true
+			if tid != tenantID || uid != userID {
+				t.Errorf("expected caller %s/%s, got %s/%s", tenantID, userID, tid, uid)
+			}
+			return nil
+		}
+
+		body, _ := json.Marshal(authtypes.LogoutRequest{RefreshToken: "tok"})
+		req := httptest.NewRequest(http.MethodPost, "/logout", bytes.NewReader(body))
+		req.Header.Set("Content-Type", "application/json")
+		rec := httptest.NewRecorder()
+		engine.ServeHTTP(rec, req)
+
+		if rec.Code != http.StatusOK || !called {
+			t.Fatalf("expected 200 and usecase called, got %d called=%v", rec.Code, called)
+		}
+	})
+
+	t.Run("token owned by another user yields 400", func(t *testing.T) {
+		engine, handler, _, _, logoutUC, _, _ := setupAuthHandlerTest()
+		engine.POST("/logout", withCaller(uuid.New(), uuid.New()), handler.Logout)
+		logoutUC.executeFn = func(ctx context.Context, tid, uid uuid.UUID, req authtypes.LogoutRequest) error {
+			return domainerrors.ErrInvalidToken
+		}
+
+		body, _ := json.Marshal(authtypes.LogoutRequest{RefreshToken: "someone-elses"})
+		req := httptest.NewRequest(http.MethodPost, "/logout", bytes.NewReader(body))
+		req.Header.Set("Content-Type", "application/json")
+		rec := httptest.NewRecorder()
+		engine.ServeHTTP(rec, req)
+
+		if rec.Code != http.StatusBadRequest {
+			t.Fatalf("expected 400, got %d", rec.Code)
+		}
+	})
+
+	t.Run("missing caller identity yields 401 and usecase not called", func(t *testing.T) {
+		engine, handler, _, _, logoutUC, _, _ := setupAuthHandlerTest()
+		engine.POST("/logout", handler.Logout)
+		logoutUC.executeFn = func(ctx context.Context, tid, uid uuid.UUID, req authtypes.LogoutRequest) error {
+			t.Error("usecase must not be called without caller identity")
+			return nil
+		}
+
+		body, _ := json.Marshal(authtypes.LogoutRequest{RefreshToken: "tok"})
+		req := httptest.NewRequest(http.MethodPost, "/logout", bytes.NewReader(body))
+		req.Header.Set("Content-Type", "application/json")
+		rec := httptest.NewRecorder()
+		engine.ServeHTTP(rec, req)
+
+		if rec.Code != http.StatusUnauthorized {
+			t.Fatalf("expected 401, got %d", rec.Code)
+		}
+	})
+}
+
+func TestAuthHandler_Refresh_ServerDerivedMetadata(t *testing.T) {
+	engine, handler, _, refreshUC, _, _, _ := setupAuthHandlerTest()
+	engine.POST("/refresh", handler.Refresh)
+
+	var gotIP, gotUA string
+	refreshUC.executeFn = func(ctx context.Context, req authtypes.TokenRefreshRequest, ipAddress, userAgent string) (*authtypes.TokenRefreshResponse, error) {
+		gotIP, gotUA = ipAddress, userAgent
+		return &authtypes.TokenRefreshResponse{}, nil
+	}
+
+	// A client-supplied ip_address/user_agent in the body must be ignored.
+	body := []byte(`{"refresh_token":"t","ip_address":"6.6.6.6","user_agent":"spoofed"}`)
+	req := httptest.NewRequest(http.MethodPost, "/refresh", bytes.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("User-Agent", "real-agent")
+	req.RemoteAddr = "1.2.3.4:5555"
+	rec := httptest.NewRecorder()
+	engine.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d", rec.Code)
+	}
+	if gotIP == "6.6.6.6" || gotUA == "spoofed" {
+		t.Fatalf("client-supplied metadata leaked through: ip=%q ua=%q", gotIP, gotUA)
+	}
+	if gotUA != "real-agent" {
+		t.Errorf("expected server-derived user agent, got %q", gotUA)
+	}
+}
+
+func TestAuthHandler_Refresh_DoesNotLeakErrorText(t *testing.T) {
+	engine, handler, _, refreshUC, _, _, _ := setupAuthHandlerTest()
+	engine.POST("/refresh", handler.Refresh)
+	refreshUC.executeFn = func(ctx context.Context, req authtypes.TokenRefreshRequest, ipAddress, userAgent string) (*authtypes.TokenRefreshResponse, error) {
+		return nil, domainerrors.ErrTokenRevoked
+	}
+	body, _ := json.Marshal(authtypes.TokenRefreshRequest{RefreshToken: "t"})
+	req := httptest.NewRequest(http.MethodPost, "/refresh", bytes.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	rec := httptest.NewRecorder()
+	engine.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusUnauthorized {
+		t.Fatalf("expected 401, got %d", rec.Code)
+	}
+	if strings.Contains(rec.Body.String(), domainerrors.ErrTokenRevoked.Error()) {
+		t.Errorf("response leaks internal error text: %s", rec.Body.String())
+	}
+}
+
 func TestAuthHandler_Logout(t *testing.T) {
 	t.Run("successful logout", func(t *testing.T) {
 		engine, handler, _, _, logoutUC, _, _ := setupAuthHandlerTest()
-		engine.POST("/logout", handler.Logout)
+		engine.POST("/logout", withCaller(uuid.New(), uuid.New()), handler.Logout)
 
-		logoutUC.executeFn = func(ctx context.Context, req authtypes.LogoutRequest) error {
+		logoutUC.executeFn = func(ctx context.Context, tenantID, userID uuid.UUID, req authtypes.LogoutRequest) error {
 			if req.RefreshToken != "active-refresh-token" {
 				t.Errorf("unexpected refresh token: %s", req.RefreshToken)
 			}
@@ -363,9 +488,9 @@ func TestAuthHandler_Logout(t *testing.T) {
 
 	t.Run("invalid token error", func(t *testing.T) {
 		engine, handler, _, _, logoutUC, _, _ := setupAuthHandlerTest()
-		engine.POST("/logout", handler.Logout)
+		engine.POST("/logout", withCaller(uuid.New(), uuid.New()), handler.Logout)
 
-		logoutUC.executeFn = func(ctx context.Context, req authtypes.LogoutRequest) error {
+		logoutUC.executeFn = func(ctx context.Context, tenantID, userID uuid.UUID, req authtypes.LogoutRequest) error {
 			return domainerrors.ErrInvalidToken
 		}
 
@@ -389,11 +514,7 @@ func TestAuthHandler_ForgotPassword(t *testing.T) {
 		engine, handler, _, _, _, forgotUC, _ := setupAuthHandlerTest()
 		engine.POST("/forgot-password", handler.ForgotPassword)
 
-		expectedTenant := uuid.New()
-		forgotUC.executeFn = func(ctx context.Context, tenantID uuid.UUID, req authtypes.ForgotPasswordRequest) error {
-			if tenantID != expectedTenant {
-				t.Errorf("expected tenant %s, got %s", expectedTenant, tenantID)
-			}
+		forgotUC.executeFn = func(ctx context.Context, req authtypes.ForgotPasswordRequest) error {
 			if req.Email != "alice@example.com" {
 				t.Errorf("unexpected email: %s", req.Email)
 			}
@@ -405,7 +526,6 @@ func TestAuthHandler_ForgotPassword(t *testing.T) {
 		})
 		req := httptest.NewRequest(http.MethodPost, "/forgot-password", bytes.NewReader(body))
 		req.Header.Set("Content-Type", "application/json")
-		req.Header.Set(shared.TenantIDHeader, expectedTenant.String())
 		rec := httptest.NewRecorder()
 
 		engine.ServeHTTP(rec, req)

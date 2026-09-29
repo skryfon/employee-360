@@ -24,6 +24,7 @@ const (
 // ForgotPasswordUseCaseImpl implements authusecase.ForgotPasswordUseCase.
 type ForgotPasswordUseCaseImpl struct {
 	userRepo          repository.UserRepository
+	tenantDomainRepo  repository.TenantDomainRepository
 	passwordResetRepo repository.PasswordResetRepository
 	hashService       service.HashService
 	eventPublisher    service.EventPublisher
@@ -37,6 +38,7 @@ var _ authusecase.ForgotPasswordUseCase = (*ForgotPasswordUseCaseImpl)(nil)
 // NewForgotPasswordUseCase constructs a new ForgotPasswordUseCaseImpl.
 func NewForgotPasswordUseCase(
 	userRepo repository.UserRepository,
+	tenantDomainRepo repository.TenantDomainRepository,
 	passwordResetRepo repository.PasswordResetRepository,
 	hashService service.HashService,
 	eventPublisher service.EventPublisher,
@@ -45,6 +47,7 @@ func NewForgotPasswordUseCase(
 ) *ForgotPasswordUseCaseImpl {
 	return &ForgotPasswordUseCaseImpl{
 		userRepo:          userRepo,
+		tenantDomainRepo:  tenantDomainRepo,
 		passwordResetRepo: passwordResetRepo,
 		hashService:       hashService,
 		eventPublisher:    eventPublisher,
@@ -56,7 +59,7 @@ func NewForgotPasswordUseCase(
 
 // Execute initiates an enumeration-safe password reset flow.
 // It always returns nil to prevent user enumeration attacks.
-func (u *ForgotPasswordUseCaseImpl) Execute(ctx context.Context, tenantID uuid.UUID, input authtypes.ForgotPasswordRequest) error {
+func (u *ForgotPasswordUseCaseImpl) Execute(ctx context.Context, input authtypes.ForgotPasswordRequest) error {
 	email := strings.TrimSpace(strings.ToLower(input.Email))
 	if email == "" {
 		_ = u.hashService.HashToken("dummy-timing-mitigation-token")
@@ -69,7 +72,14 @@ func (u *ForgotPasswordUseCaseImpl) Execute(ctx context.Context, tenantID uuid.U
 		return nil
 	}
 
-	user, err := u.userRepo.GetByTenantAndEmail(ctx, tenantID, email)
+	// Resolve the tenant server-side from the email's domain; never from client input.
+	tenant, err := u.tenantDomainRepo.FindTenantByDomain(ctx, parts[1])
+	if err != nil || tenant == nil {
+		_ = u.hashService.HashToken("dummy-timing-mitigation-token")
+		return nil
+	}
+
+	user, err := u.userRepo.GetByTenantAndEmail(ctx, tenant.ID, email)
 	if err != nil || user == nil || !user.IsActive {
 		_ = u.hashService.HashToken("dummy-timing-mitigation-token")
 		return nil
