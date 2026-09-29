@@ -25,6 +25,7 @@ type LoginUseCaseImpl struct {
 	tokenService     service.TokenService
 	hashService      service.HashService
 	refreshTokenRepo repository.RefreshTokenRepository
+	logger           service.Logger
 	refreshExpiry    time.Duration
 }
 
@@ -36,12 +37,14 @@ func NewLoginUseCase(
 	tokenService service.TokenService,
 	hashService service.HashService,
 	refreshTokenRepo repository.RefreshTokenRepository,
+	logger service.Logger,
 ) *LoginUseCaseImpl {
 	return &LoginUseCaseImpl{
 		userRepo:         userRepo,
 		tokenService:     tokenService,
 		hashService:      hashService,
 		refreshTokenRepo: refreshTokenRepo,
+		logger:           logger,
 		refreshExpiry:    defaultRefreshExpiry,
 	}
 }
@@ -137,7 +140,12 @@ func (u *LoginUseCaseImpl) Execute(ctx context.Context, tenantID uuid.UUID, req 
 	}
 
 	user.LastLoginAt = &now
-	_ = u.userRepo.Update(ctx, user.TenantID, user)
+	if err := u.userRepo.Update(ctx, user.TenantID, user); err != nil && u.logger != nil {
+		// LastLoginAt is a best-effort side effect, not the primary security
+		// control, so a failure here must not fail the login -- but it must
+		// not vanish silently either.
+		u.logger.Error(ctx, "login: failed to update user.LastLoginAt", err)
+	}
 
 	return &authtypes.LoginResponse{
 		AccessToken:  tokenPair.AccessToken,

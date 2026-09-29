@@ -56,7 +56,7 @@ func TestTokenRefreshUseCase_Success(t *testing.T) {
 	}
 	_ = refreshTokenRepo.Create(context.Background(), storedRT)
 
-	uc := NewTokenRefreshUseCase(userRepo, tokenSvc, hashSvc, refreshTokenRepo)
+	uc := NewTokenRefreshUseCase(userRepo, tokenSvc, hashSvc, refreshTokenRepo, &mockLogger{})
 
 	output, err := uc.Execute(context.Background(), authtypes.TokenRefreshRequest{
 		RefreshToken: rawRefreshToken,
@@ -123,7 +123,7 @@ func TestTokenRefreshUseCase_TokenReuseDetected(t *testing.T) {
 	}
 	_ = refreshTokenRepo.Create(context.Background(), storedRT)
 
-	uc := NewTokenRefreshUseCase(userRepo, tokenSvc, hashSvc, refreshTokenRepo)
+	uc := NewTokenRefreshUseCase(userRepo, tokenSvc, hashSvc, refreshTokenRepo, &mockLogger{})
 
 	_, err := uc.Execute(context.Background(), authtypes.TokenRefreshRequest{
 		RefreshToken: rawRefreshToken,
@@ -169,7 +169,7 @@ func TestTokenRefreshUseCase_ExpiredToken(t *testing.T) {
 	}
 	_ = refreshTokenRepo.Create(context.Background(), storedRT)
 
-	uc := NewTokenRefreshUseCase(userRepo, tokenSvc, hashSvc, refreshTokenRepo)
+	uc := NewTokenRefreshUseCase(userRepo, tokenSvc, hashSvc, refreshTokenRepo, &mockLogger{})
 
 	_, err := uc.Execute(context.Background(), authtypes.TokenRefreshRequest{
 		RefreshToken: rawRefreshToken,
@@ -188,7 +188,7 @@ func TestTokenRefreshUseCase_InvalidToken(t *testing.T) {
 		validateErr: domainerrors.ErrInvalidToken,
 	}
 
-	uc := NewTokenRefreshUseCase(userRepo, tokenSvc, hashSvc, refreshTokenRepo)
+	uc := NewTokenRefreshUseCase(userRepo, tokenSvc, hashSvc, refreshTokenRepo, &mockLogger{})
 
 	_, err := uc.Execute(context.Background(), authtypes.TokenRefreshRequest{
 		RefreshToken: "invalid-token",
@@ -196,5 +196,64 @@ func TestTokenRefreshUseCase_InvalidToken(t *testing.T) {
 
 	if err != domainerrors.ErrInvalidToken {
 		t.Errorf("expected ErrInvalidToken, got %v", err)
+	}
+}
+
+// TestTokenRefreshUseCase_RevokeFamilyFailureIsLogged proves that when
+// revoking the token family on reuse detection fails, Execute still returns
+// ErrTokenRevoked to the caller (the security outcome is unaffected) but the
+// underlying repository failure is recorded via the Logger port rather than
+// being silently discarded.
+func TestTokenRefreshUseCase_RevokeFamilyFailureIsLogged(t *testing.T) {
+	tenantID := uuid.New()
+	userID := uuid.New()
+	family := uuid.New()
+	tokenID := uuid.New()
+	rawRefreshToken := "reused-refresh-token"
+
+	userRepo := newMockUserRepository()
+	refreshTokenRepo := newMockRefreshTokenRepository()
+	hashSvc := &mockHashService{}
+	tokenSvc := &mockTokenService{
+		validateRefreshClaims: &domainservice.RefreshTokenClaims{
+			UserID:   userID,
+			TenantID: tenantID,
+			TokenID:  tokenID,
+			Family:   family,
+		},
+	}
+	logger := &mockLogger{}
+
+	hashedToken := hashSvc.HashToken(rawRefreshToken)
+	revokedAt := time.Now().Add(-10 * time.Minute)
+	storedRT := &entity.RefreshToken{
+		ID:        tokenID,
+		TenantID:  tenantID,
+		UserID:    userID,
+		TokenHash: hashedToken,
+		Family:    family,
+		ExpiresAt: time.Now().Add(24 * time.Hour),
+		RevokedAt: &revokedAt,
+	}
+	_ = refreshTokenRepo.Create(context.Background(), storedRT)
+
+	revokeErr := domainerrors.ErrNotFound // reused only as a sentinel error for this test
+	refreshTokenRepo.revokeFamilyErr = revokeErr
+
+	uc := NewTokenRefreshUseCase(userRepo, tokenSvc, hashSvc, refreshTokenRepo, logger)
+
+	_, err := uc.Execute(context.Background(), authtypes.TokenRefreshRequest{
+		RefreshToken: rawRefreshToken,
+	})
+
+	if err != domainerrors.ErrTokenRevoked {
+		t.Errorf("expected ErrTokenRevoked on reuse even when RevokeFamily fails, got: %v", err)
+	}
+
+	if len(logger.errorCalls) != 1 {
+		t.Fatalf("expected the RevokeFamily failure to be logged exactly once, got %d calls", len(logger.errorCalls))
+	}
+	if logger.errorCalls[0].err != revokeErr {
+		t.Errorf("expected logged error to be the repository's error, got %v", logger.errorCalls[0].err)
 	}
 }

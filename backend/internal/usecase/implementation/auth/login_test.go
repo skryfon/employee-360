@@ -24,6 +24,7 @@ type mockUserRepository struct {
 	usersByID          map[uuid.UUID]*entity.User
 	usersByTenantEmail map[tenantEmailKey]*entity.User
 	updatedUsers       []*entity.User
+	updateErr          error // when set, Update returns this error instead of succeeding
 }
 
 func newMockUserRepository() *mockUserRepository {
@@ -71,6 +72,9 @@ func (m *mockUserRepository) GetByTenantAndEmailWithRoles(ctx context.Context, t
 // mismatch is rejected (not found) rather than silently applied, mirroring
 // the real GORM adapter's "id = ? AND tenant_id = ?" scoping.
 func (m *mockUserRepository) Update(ctx context.Context, tenantID uuid.UUID, user *entity.User) error {
+	if m.updateErr != nil {
+		return m.updateErr
+	}
 	existing, ok := m.usersByID[user.ID]
 	if !ok || existing.TenantID != tenantID || user.TenantID != tenantID {
 		return domainerrors.ErrUserNotFound
@@ -110,6 +114,7 @@ type mockRefreshTokenRepository struct {
 	revokedTokenIDs []uuid.UUID
 	revokedFamilies []uuid.UUID
 	revokedUserIDs  []uuid.UUID
+	revokeFamilyErr error // when set, RevokeFamily returns this error instead of succeeding
 }
 
 func newMockRefreshTokenRepository() *mockRefreshTokenRepository {
@@ -143,6 +148,9 @@ func (m *mockRefreshTokenRepository) Revoke(ctx context.Context, id uuid.UUID) e
 }
 
 func (m *mockRefreshTokenRepository) RevokeFamily(ctx context.Context, family uuid.UUID) error {
+	if m.revokeFamilyErr != nil {
+		return m.revokeFamilyErr
+	}
 	m.revokedFamilies = append(m.revokedFamilies, family)
 	now := time.Now().UTC()
 	for _, t := range m.tokensByID {
@@ -253,7 +261,7 @@ func TestLoginUseCase_Success(t *testing.T) {
 	}
 	_ = userRepo.Create(context.Background(), user)
 
-	uc := NewLoginUseCase(userRepo, tokenSvc, hashSvc, refreshTokenRepo)
+	uc := NewLoginUseCase(userRepo, tokenSvc, hashSvc, refreshTokenRepo, &mockLogger{})
 
 	output, err := uc.Execute(context.Background(), tenantID, authtypes.LoginRequest{
 		Email:    "alice@example.com",
@@ -310,7 +318,7 @@ func TestLoginUseCase_InvalidCredentials(t *testing.T) {
 	}
 	_ = userRepo.Create(context.Background(), user)
 
-	uc := NewLoginUseCase(userRepo, tokenSvc, hashSvc, refreshTokenRepo)
+	uc := NewLoginUseCase(userRepo, tokenSvc, hashSvc, refreshTokenRepo, &mockLogger{})
 
 	tests := []struct {
 		name     string
@@ -355,7 +363,7 @@ func TestLoginUseCase_InactiveUser(t *testing.T) {
 	}
 	_ = userRepo.Create(context.Background(), user)
 
-	uc := NewLoginUseCase(userRepo, tokenSvc, hashSvc, refreshTokenRepo)
+	uc := NewLoginUseCase(userRepo, tokenSvc, hashSvc, refreshTokenRepo, &mockLogger{})
 
 	_, err := uc.Execute(context.Background(), tenantID, authtypes.LoginRequest{
 		Email:    "inactive@example.com",
@@ -390,7 +398,7 @@ func TestLoginUseCase_InactiveUser_WrongPassword(t *testing.T) {
 	}
 	_ = userRepo.Create(context.Background(), user)
 
-	uc := NewLoginUseCase(userRepo, tokenSvc, hashSvc, refreshTokenRepo)
+	uc := NewLoginUseCase(userRepo, tokenSvc, hashSvc, refreshTokenRepo, &mockLogger{})
 
 	_, err := uc.Execute(context.Background(), tenantID, authtypes.LoginRequest{
 		Email:    "inactive@example.com",
@@ -436,7 +444,7 @@ func TestLoginUseCase_TenantIsolation(t *testing.T) {
 		IsActive:     true,
 	})
 
-	uc := NewLoginUseCase(userRepo, tokenSvc, hashSvc, refreshTokenRepo)
+	uc := NewLoginUseCase(userRepo, tokenSvc, hashSvc, refreshTokenRepo, &mockLogger{})
 
 	// tenantA's correct password against tenantA succeeds and resolves userA.
 	output, err := uc.Execute(context.Background(), tenantA, authtypes.LoginRequest{
@@ -478,5 +486,52 @@ func TestLoginUseCase_TenantIsolation(t *testing.T) {
 	}
 	if output.User.ID != userB {
 		t.Errorf("expected tenantB login to resolve user %s, got %s", userB, output.User.ID)
+	}
+}
+
+// TestLoginUseCase_LastLoginUpdateFailureIsLogged proves that when persisting
+// LastLoginAt fails, Execute still returns a successful login (it's a
+// best-effort side effect, not the primary security control) but the failure
+// is recorded via the Logger port rather than being silently discarded.
+func TestLoginUseCase_LastLoginUpdateFailureIsLogged(t *testing.T) {
+	tenantID := uuid.New()
+	pwHash := "hashed_Secret123!"
+
+	userRepo := newMockUserRepository()
+	refreshTokenRepo := newMockRefreshTokenRepository()
+	hashSvc := &mockHashService{}
+	tokenSvc := &mockTokenService{}
+	logger := &mockLogger{}
+
+	updateErr := domainerrors.ErrUserNotFound // reused only as a sentinel error for this test
+	user := &entity.User{
+		ID:           uuid.New(),
+		TenantID:     tenantID,
+		Email:        "alice@example.com",
+		PasswordHash: &pwHash,
+		IsActive:     true,
+	}
+	_ = userRepo.Create(context.Background(), user)
+	userRepo.updateErr = updateErr
+
+	uc := NewLoginUseCase(userRepo, tokenSvc, hashSvc, refreshTokenRepo, logger)
+
+	output, err := uc.Execute(context.Background(), tenantID, authtypes.LoginRequest{
+		Email:    "alice@example.com",
+		Password: "Secret123!",
+	}, "", "")
+
+	if err != nil {
+		t.Fatalf("expected login to succeed even when LastLoginAt update fails, got: %v", err)
+	}
+	if output == nil {
+		t.Fatalf("expected a non-nil login output")
+	}
+
+	if len(logger.errorCalls) != 1 {
+		t.Fatalf("expected the update failure to be logged exactly once, got %d calls", len(logger.errorCalls))
+	}
+	if logger.errorCalls[0].err != updateErr {
+		t.Errorf("expected logged error to be the repository's error, got %v", logger.errorCalls[0].err)
 	}
 }

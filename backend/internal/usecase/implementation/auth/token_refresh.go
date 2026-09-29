@@ -20,6 +20,7 @@ type TokenRefreshUseCaseImpl struct {
 	tokenService     service.TokenService
 	hashService      service.HashService
 	refreshTokenRepo repository.RefreshTokenRepository
+	logger           service.Logger
 	refreshExpiry    time.Duration
 }
 
@@ -31,12 +32,14 @@ func NewTokenRefreshUseCase(
 	tokenService service.TokenService,
 	hashService service.HashService,
 	refreshTokenRepo repository.RefreshTokenRepository,
+	logger service.Logger,
 ) *TokenRefreshUseCaseImpl {
 	return &TokenRefreshUseCaseImpl{
 		userRepo:         userRepo,
 		tokenService:     tokenService,
 		hashService:      hashService,
 		refreshTokenRepo: refreshTokenRepo,
+		logger:           logger,
 		refreshExpiry:    defaultRefreshExpiry,
 	}
 }
@@ -61,7 +64,13 @@ func (u *TokenRefreshUseCaseImpl) Execute(ctx context.Context, input authtypes.T
 
 	// Token reuse detection: if a revoked token is presented, revoke all tokens in the family
 	if storedToken.RevokedAt != nil {
-		_ = u.refreshTokenRepo.RevokeFamily(ctx, storedToken.Family)
+		if err := u.refreshTokenRepo.RevokeFamily(ctx, storedToken.Family); err != nil && u.logger != nil {
+			// Reuse detection has already flagged this family as compromised;
+			// ErrTokenRevoked is returned to the caller regardless, but a
+			// failure to actually revoke the rest of the family must not
+			// vanish silently -- it leaves those tokens live.
+			u.logger.Error(ctx, "token_refresh: failed to revoke token family on reuse detection", err)
+		}
 		return nil, domainerrors.ErrTokenRevoked
 	}
 
