@@ -9,14 +9,12 @@ import (
 
 // LoginUseCase defines the port for user login across all roles.
 //
-// tenantID, ipAddress and userAgent are passed as explicit parameters rather
-// than fields on LoginRequest: tenantID is resolved by the handler (not
-// client-supplied, per CLAUDE.md Invariant 1), and ipAddress/userAgent are
-// server-derived HTTP request metadata used only for refresh-token audit
-// fields -- none of them are part of what the client actually submits to log
-// in (see authtypes.LoginRequest).
+// ipAddress and userAgent are passed as explicit parameters rather than fields
+// on LoginRequest: they are server-derived HTTP request metadata used only for
+// refresh-token audit fields -- neither is part of what the client actually
+// submits to log in (see authtypes.LoginRequest).
 type LoginUseCase interface {
-	Execute(ctx context.Context, tenantID uuid.UUID, req authtypes.LoginRequest, ipAddress, userAgent string) (*authtypes.LoginResponse, error)
+	Execute(ctx context.Context, req authtypes.LoginRequest, ipAddress, userAgent string) (*authtypes.LoginResponse, error)
 }
 
 // TokenRefreshUseCase defines the port for rotating refresh tokens.

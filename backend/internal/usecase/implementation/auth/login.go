@@ -50,10 +50,9 @@ func NewLoginUseCase(
 }
 
 // Execute authenticates a user by email and password and returns a token pair.
-// tenantID must already be resolved by the caller (the handler); ipAddress
-// and userAgent are server-derived HTTP request metadata recorded on the
+// ipAddress and userAgent are server-derived HTTP request metadata recorded on the
 // issued refresh token for audit purposes.
-func (u *LoginUseCaseImpl) Execute(ctx context.Context, tenantID uuid.UUID, req authtypes.LoginRequest, ipAddress, userAgent string) (*authtypes.LoginResponse, error) {
+func (u *LoginUseCaseImpl) Execute(ctx context.Context, req authtypes.LoginRequest, ipAddress, userAgent string) (*authtypes.LoginResponse, error) {
 	email := strings.TrimSpace(strings.ToLower(req.Email))
 	password := req.Password
 
@@ -68,7 +67,7 @@ func (u *LoginUseCaseImpl) Execute(ctx context.Context, tenantID uuid.UUID, req 
 		return nil, domainerrors.ErrInvalidCredentials
 	}
 
-	user, err := u.userRepo.GetByTenantAndEmailWithRoles(ctx, tenantID, email)
+	user, err := u.userRepo.GetByEmailWithRoles(ctx, email)
 	if err != nil || user == nil {
 		_ = u.hashService.ComparePassword(dummyBcryptHash, password)
 		return nil, domainerrors.ErrInvalidCredentials

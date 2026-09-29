@@ -3,49 +3,63 @@ package http
 
 import (
 	"github.com/gin-gonic/gin"
-	"github.com/rs/zerolog"
 	swaggerFiles "github.com/swaggo/files"
 	ginSwagger "github.com/swaggo/gin-swagger"
 	// Blank import registers the generated Swagger spec with gin-swagger.
 	// Regenerate via `make swagger` after changing @-annotations.
-	_ "github.com/skryfon/employee360/backend/docs"
-	"github.com/skryfon/employee360/backend/internal/delivery/http/handlers"
+	"github.com/rs/zerolog"
+	"github.com/skryfon/employee360/backend/config"
 	"github.com/skryfon/employee360/backend/internal/delivery/http/middleware"
+	"github.com/skryfon/employee360/backend/internal/infrastructure/container"
 	"github.com/skryfon/employee360/backend/shared"
 )
 
-// Handlers groups all HTTP handlers required by the router.
-type Handlers struct {
-	Health *handlers.HealthHandler
-}
-
-// NewRouter builds and returns a fully configured Gin engine with middleware and routes.
-func NewRouter(log zerolog.Logger, allowedOrigins []string, h Handlers) *gin.Engine {
+// SetupRouter builds and returns a fully configured Gin engine with middleware and routes.
+func SetupRouter(cfg *config.Config, log zerolog.Logger, ctr *container.AppContainer) *gin.Engine {
 	engine := gin.New()
 
 	// Base middleware chain: request_id -> logger -> cors -> recovery.
 	engine.Use(
 		middleware.RequestID(),
 		middleware.Logger(log),
-		middleware.CORS(allowedOrigins),
+		middleware.CORS(cfg.CORS.AllowedOrigins),
 		middleware.Recovery(log),
 	)
 
-	registerRoutes(engine, h)
+	registerRoutes(engine, ctr)
 
 	return engine
 }
 
 // registerRoutes attaches all route groups to the engine.
-func registerRoutes(engine *gin.Engine, h Handlers) {
+func registerRoutes(engine *gin.Engine, c *container.Container) {
 	// Unversioned operational health checks for load balancers / Kubernetes / monitoring.
-	engine.GET("/health", h.Health.Health)
-	engine.GET("/healthz", h.Health.Health)
+	if c.Health != nil && c.Health.Handler != nil {
+		engine.GET("/health", c.Health.Handler.Health)
+		engine.GET("/healthz", c.Health.Handler.Health)
+	}
 
 	v1 := engine.Group(shared.APIVersionPrefix)
 	{
 		// Versioned health check for client SDKs / smoke tests.
-		v1.GET("/health", h.Health.Health)
+		if c.Health != nil && c.Health.Handler != nil {
+			v1.GET("/health", c.Health.Handler.Health)
+		}
+
+		if c.Auth != nil && c.Auth.Handler != nil {
+			authGroup := v1.Group("/auth")
+			{
+				authGroup.POST("/login", c.Auth.Handler.Login)
+				authGroup.POST("/refresh", c.Auth.Handler.Refresh)
+				authGroup.POST("/forgot-password", c.Auth.Handler.ForgotPassword)
+				authGroup.POST("/reset-password", c.Auth.Handler.ResetPassword)
+
+				authProtected := authGroup.Group("", middleware.Auth(c.Auth.TokenService), middleware.Tenant())
+				{
+					authProtected.POST("/logout", c.Auth.Handler.Logout)
+				}
+			}
+		}
 	}
 
 	// Swagger UI: interactive API docs, always available (no environment gating).

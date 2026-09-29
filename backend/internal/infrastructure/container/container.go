@@ -2,42 +2,43 @@
 package container
 
 import (
-	"github.com/gin-gonic/gin"
 	"github.com/rs/zerolog"
 	"github.com/skryfon/employee360/backend/config"
-	deliveryhttp "github.com/skryfon/employee360/backend/internal/delivery/http"
-	"github.com/skryfon/employee360/backend/internal/delivery/http/handlers"
-	"github.com/skryfon/employee360/backend/internal/infrastructure/database"
-	usecaseimpl "github.com/skryfon/employee360/backend/internal/usecase/implementation"
 	"gorm.io/gorm"
 )
 
-// Container holds wired dependencies and handlers for the application.
-type Container struct {
+// AppContainer holds wired configuration, infrastructure, and domain sub-containers.
+type AppContainer struct {
 	Config *config.Config
-	Logger zerolog.Logger
+	Log    zerolog.Logger
 	DB     *gorm.DB
 
-	Handlers deliveryhttp.Handlers
+	Health *HealthContainer
+	Auth   *AuthContainer
 }
 
-// New wires the full dependency graph for the application.
-func New(cfg *config.Config, db *gorm.DB, log zerolog.Logger) (*Container, error) {
-	dbPinger := database.NewGormDatabasePinger(db)
-	healthUseCase := usecaseimpl.NewHealthUseCase(dbPinger)
-	healthHandler := handlers.NewHealthHandler(healthUseCase)
+// NewAppContainer wires the full dependency graph for the application.
+func NewAppContainer(cfg *config.Config, db *gorm.DB, log zerolog.Logger) (*AppContainer, error) {
+	healthContainer := NewHealthContainer(db)
 
-	return &Container{
+	authContainer, err := NewAuthContainer(cfg, db, log, nil, nil)
+	if err != nil {
+		return nil, err
+	}
+
+	return &AppContainer{
 		Config: cfg,
-		Logger: log,
+		Log:    log,
 		DB:     db,
-		Handlers: deliveryhttp.Handlers{
-			Health: healthHandler,
-		},
+		Health: healthContainer,
+		Auth:   authContainer,
 	}, nil
 }
 
-// Router constructs and returns the configured Gin engine.
-func (c *Container) Router() *gin.Engine {
-	return deliveryhttp.NewRouter(c.Logger, c.Config.CORS.AllowedOrigins, c.Handlers)
+// Container is an alias for AppContainer.
+type Container = AppContainer
+
+// New is an alias for NewAppContainer.
+func New(cfg *config.Config, db *gorm.DB, log zerolog.Logger) (*AppContainer, error) {
+	return NewAppContainer(cfg, db, log)
 }

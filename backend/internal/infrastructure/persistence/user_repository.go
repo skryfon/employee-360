@@ -89,6 +89,24 @@ func (r *gormUserRepository) GetByTenantAndEmailWithRoles(c context.Context, ten
 	return user, nil
 }
 
+// GetByEmailWithRoles looks up a user across tenants by email and loads their assigned roles.
+// Used during login where tenant_id is resolved directly from the user record.
+func (r *gormUserRepository) GetByEmailWithRoles(c context.Context, email string) (*entity.User, error) {
+	var user entity.User
+	if err := r.db.WithContext(c).
+		Where("email = ?", email).
+		First(&user).Error; err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, domainerrors.ErrUserNotFound
+		}
+		return nil, err
+	}
+	if err := r.loadRoles(c, &user); err != nil {
+		return nil, err
+	}
+	return &user, nil
+}
+
 // loadRoles populates user.Roles via the user_roles join table.
 //
 // This is a manual join rather than a GORM many2many association because

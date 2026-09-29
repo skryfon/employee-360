@@ -7,9 +7,8 @@ import (
 )
 
 // LoginRequest carries exactly what a client submits to authenticate: email
-// and password. Everything else the usecase needs (tenant_id resolved by the
-// handler, client IP/User-Agent for refresh-token audit metadata) is
-// server-derived, not client-supplied, so it is threaded into
+// and password. Client IP/User-Agent for refresh-token audit metadata are
+// server-derived, not client-supplied, so they are threaded into
 // LoginUseCase.Execute as separate explicit parameters rather than living on
 // this request body.
 type LoginRequest struct {

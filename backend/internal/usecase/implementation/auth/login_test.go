@@ -2,6 +2,7 @@ package auth
 
 import (
 	"context"
+	"strings"
 	"testing"
 	"time"
 
@@ -23,6 +24,7 @@ type tenantEmailKey struct {
 type mockUserRepository struct {
 	usersByID          map[uuid.UUID]*entity.User
 	usersByTenantEmail map[tenantEmailKey]*entity.User
+	usersByEmail       map[string]*entity.User
 	updatedUsers       []*entity.User
 	updateErr          error // when set, Update returns this error instead of succeeding
 }
@@ -31,12 +33,14 @@ func newMockUserRepository() *mockUserRepository {
 	return &mockUserRepository{
 		usersByID:          make(map[uuid.UUID]*entity.User),
 		usersByTenantEmail: make(map[tenantEmailKey]*entity.User),
+		usersByEmail:       make(map[string]*entity.User),
 	}
 }
 
 func (m *mockUserRepository) Create(ctx context.Context, user *entity.User) error {
 	m.usersByID[user.ID] = user
-	m.usersByTenantEmail[tenantEmailKey{tenantID: user.TenantID, email: user.Email}] = user
+	m.usersByTenantEmail[tenantEmailKey{tenantID: user.TenantID, email: strings.ToLower(user.Email)}] = user
+	m.usersByEmail[strings.ToLower(user.Email)] = user
 	return nil
 }
 
@@ -68,6 +72,14 @@ func (m *mockUserRepository) GetByTenantAndEmailWithRoles(ctx context.Context, t
 	return m.GetByTenantAndEmail(ctx, tenantID, email)
 }
 
+func (m *mockUserRepository) GetByEmailWithRoles(ctx context.Context, email string) (*entity.User, error) {
+	u, ok := m.usersByEmail[email]
+	if !ok {
+		return nil, domainerrors.ErrUserNotFound
+	}
+	return u, nil
+}
+
 // Update enforces the tenantID param against the user's own TenantID -- a
 // mismatch is rejected (not found) rather than silently applied, mirroring
 // the real GORM adapter's "id = ? AND tenant_id = ?" scoping.
@@ -82,6 +94,7 @@ func (m *mockUserRepository) Update(ctx context.Context, tenantID uuid.UUID, use
 	m.updatedUsers = append(m.updatedUsers, user)
 	m.usersByID[user.ID] = user
 	m.usersByTenantEmail[tenantEmailKey{tenantID: user.TenantID, email: user.Email}] = user
+	m.usersByEmail[user.Email] = user
 	return nil
 }
 
@@ -94,6 +107,7 @@ func (m *mockUserRepository) Delete(ctx context.Context, tenantID, id uuid.UUID)
 		return domainerrors.ErrUserNotFound
 	}
 	delete(m.usersByID, id)
+	delete(m.usersByEmail, u.Email)
 	return nil
 }
 
@@ -263,7 +277,7 @@ func TestLoginUseCase_Success(t *testing.T) {
 
 	uc := NewLoginUseCase(userRepo, tokenSvc, hashSvc, refreshTokenRepo, &mockLogger{})
 
-	output, err := uc.Execute(context.Background(), tenantID, authtypes.LoginRequest{
+	output, err := uc.Execute(context.Background(), authtypes.LoginRequest{
 		Email:    "alice@example.com",
 		Password: "Secret123!",
 	}, "127.0.0.1", "TestBrowser/1.0")
@@ -334,7 +348,7 @@ func TestLoginUseCase_InvalidCredentials(t *testing.T) {
 
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			_, err := uc.Execute(context.Background(), tenantID, authtypes.LoginRequest{
+			_, err := uc.Execute(context.Background(), authtypes.LoginRequest{
 				Email:    tc.email,
 				Password: tc.password,
 			}, "", "")
@@ -365,7 +379,7 @@ func TestLoginUseCase_InactiveUser(t *testing.T) {
 
 	uc := NewLoginUseCase(userRepo, tokenSvc, hashSvc, refreshTokenRepo, &mockLogger{})
 
-	_, err := uc.Execute(context.Background(), tenantID, authtypes.LoginRequest{
+	_, err := uc.Execute(context.Background(), authtypes.LoginRequest{
 		Email:    "inactive@example.com",
 		Password: "Secret123!",
 	}, "", "")
@@ -400,7 +414,7 @@ func TestLoginUseCase_InactiveUser_WrongPassword(t *testing.T) {
 
 	uc := NewLoginUseCase(userRepo, tokenSvc, hashSvc, refreshTokenRepo, &mockLogger{})
 
-	_, err := uc.Execute(context.Background(), tenantID, authtypes.LoginRequest{
+	_, err := uc.Execute(context.Background(), authtypes.LoginRequest{
 		Email:    "inactive@example.com",
 		Password: "WrongPassword!",
 	}, "", "")
@@ -410,17 +424,13 @@ func TestLoginUseCase_InactiveUser_WrongPassword(t *testing.T) {
 	}
 }
 
-// TestLoginUseCase_TenantIsolation proves that two tenants with a user
-// sharing the same email address are never conflated: logging in with
-// tenantA's ID and tenantA's password must succeed against tenantA's user
-// only, and tenantA's correct password must not authenticate tenantB's row
-// (and vice versa).
-func TestLoginUseCase_TenantIsolation(t *testing.T) {
+// TestLoginUseCase_ResolvesUserTenant proves that logging in with email and password
+// resolves the user's specific tenant ID and includes it in the issued token claims.
+func TestLoginUseCase_ResolvesUserTenant(t *testing.T) {
 	tenantA := uuid.New()
 	tenantB := uuid.New()
 	userA := uuid.New()
 	userB := uuid.New()
-	const sharedEmail = "shared@example.com"
 	pwHashA := "hashed_PasswordForA!"
 	pwHashB := "hashed_PasswordForB!"
 
@@ -432,60 +442,40 @@ func TestLoginUseCase_TenantIsolation(t *testing.T) {
 	_ = userRepo.Create(context.Background(), &entity.User{
 		ID:           userA,
 		TenantID:     tenantA,
-		Email:        sharedEmail,
+		Email:        "userA@example.com",
 		PasswordHash: &pwHashA,
 		IsActive:     true,
 	})
 	_ = userRepo.Create(context.Background(), &entity.User{
 		ID:           userB,
 		TenantID:     tenantB,
-		Email:        sharedEmail,
+		Email:        "userB@example.com",
 		PasswordHash: &pwHashB,
 		IsActive:     true,
 	})
 
 	uc := NewLoginUseCase(userRepo, tokenSvc, hashSvc, refreshTokenRepo, &mockLogger{})
 
-	// tenantA's correct password against tenantA succeeds and resolves userA.
-	output, err := uc.Execute(context.Background(), tenantA, authtypes.LoginRequest{
-		Email:    sharedEmail,
+	outputA, err := uc.Execute(context.Background(), authtypes.LoginRequest{
+		Email:    "userA@example.com",
 		Password: "PasswordForA!",
 	}, "", "")
 	if err != nil {
-		t.Fatalf("expected tenantA login to succeed, got error: %v", err)
+		t.Fatalf("expected userA login to succeed, got error: %v", err)
 	}
-	if output.User.ID != userA {
-		t.Errorf("expected tenantA login to resolve user %s, got %s", userA, output.User.ID)
-	}
-
-	// tenantA's correct password must NOT authenticate against tenantB's row.
-	_, err = uc.Execute(context.Background(), tenantB, authtypes.LoginRequest{
-		Email:    sharedEmail,
-		Password: "PasswordForA!",
-	}, "", "")
-	if err != domainerrors.ErrInvalidCredentials {
-		t.Errorf("expected tenantA's password to be rejected for tenantB, got %v", err)
+	if outputA.User.ID != userA || outputA.User.TenantID != tenantA {
+		t.Errorf("expected userA %s with tenant %s, got %s / %s", userA, tenantA, outputA.User.ID, outputA.User.TenantID)
 	}
 
-	// tenantB's correct password must NOT authenticate against tenantA's row.
-	_, err = uc.Execute(context.Background(), tenantA, authtypes.LoginRequest{
-		Email:    sharedEmail,
-		Password: "PasswordForB!",
-	}, "", "")
-	if err != domainerrors.ErrInvalidCredentials {
-		t.Errorf("expected tenantB's password to be rejected for tenantA, got %v", err)
-	}
-
-	// tenantB's correct password against tenantB succeeds and resolves userB.
-	output, err = uc.Execute(context.Background(), tenantB, authtypes.LoginRequest{
-		Email:    sharedEmail,
+	outputB, err := uc.Execute(context.Background(), authtypes.LoginRequest{
+		Email:    "userB@example.com",
 		Password: "PasswordForB!",
 	}, "", "")
 	if err != nil {
-		t.Fatalf("expected tenantB login to succeed, got error: %v", err)
+		t.Fatalf("expected userB login to succeed, got error: %v", err)
 	}
-	if output.User.ID != userB {
-		t.Errorf("expected tenantB login to resolve user %s, got %s", userB, output.User.ID)
+	if outputB.User.ID != userB || outputB.User.TenantID != tenantB {
+		t.Errorf("expected userB %s with tenant %s, got %s / %s", userB, tenantB, outputB.User.ID, outputB.User.TenantID)
 	}
 }
 
@@ -516,7 +506,7 @@ func TestLoginUseCase_LastLoginUpdateFailureIsLogged(t *testing.T) {
 
 	uc := NewLoginUseCase(userRepo, tokenSvc, hashSvc, refreshTokenRepo, logger)
 
-	output, err := uc.Execute(context.Background(), tenantID, authtypes.LoginRequest{
+	output, err := uc.Execute(context.Background(), authtypes.LoginRequest{
 		Email:    "alice@example.com",
 		Password: "Secret123!",
 	}, "", "")

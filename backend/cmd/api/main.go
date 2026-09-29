@@ -8,6 +8,7 @@ import (
 	"syscall"
 
 	"github.com/skryfon/employee360/backend/config"
+	deliveryhttp "github.com/skryfon/employee360/backend/internal/delivery/http"
 	"github.com/skryfon/employee360/backend/internal/infrastructure/container"
 	"github.com/skryfon/employee360/backend/internal/infrastructure/database"
 	"github.com/skryfon/employee360/backend/internal/infrastructure/server"
@@ -50,7 +51,7 @@ func main() {
 		os.Exit(1)
 	}
 
-	srv := server.New(cfg.Server, c.Router())
+	srv := server.New(cfg.Server, deliveryhttp.SetupRouter(cfg, log, c))
 
 	// Run the server in the background so the main goroutine is free to
 	// wait for either a shutdown signal or a server startup failure.

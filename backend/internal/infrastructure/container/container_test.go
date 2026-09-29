@@ -23,34 +23,10 @@ func TestNew_ConstructsWithoutTouchingDB(t *testing.T) {
 	if c == nil {
 		t.Fatal("expected a non-nil Container")
 	}
-	if c.Handlers.Health == nil {
-		t.Fatal("expected Handlers.Health to be wired")
+	if c.Health == nil || c.Health.Handler == nil {
+		t.Fatal("expected Health sub-container and its handler to be wired")
 	}
-}
-
-// TestContainer_Router_RegistersHealthRoute verifies the /api/v1/health
-// route is registered on the engine returned by Router(), without ever
-// invoking the route (which would dereference the nil DB via the pinger).
-func TestContainer_Router_RegistersHealthRoute(t *testing.T) {
-	cfg := &config.Config{
-		CORS: config.CORSConfig{AllowedOrigins: []string{"*"}},
-	}
-
-	c, err := New(cfg, nil, zerolog.Nop())
-	if err != nil {
-		t.Fatalf("expected New() to succeed, got: %v", err)
-	}
-
-	engine := c.Router()
-
-	found := false
-	for _, route := range engine.Routes() {
-		if route.Method == "GET" && route.Path == "/api/v1/health" {
-			found = true
-			break
-		}
-	}
-	if !found {
-		t.Errorf("expected GET /api/v1/health to be registered, got routes: %+v", engine.Routes())
+	if c.Auth == nil || c.Auth.Handler == nil {
+		t.Fatal("expected Auth sub-container and its handler to be wired")
 	}
 }
