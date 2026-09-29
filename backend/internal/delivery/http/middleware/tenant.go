@@ -64,11 +64,6 @@ func Tenant() gin.HandlerFunc {
 	}
 }
 
-// RequireTenant is an alias for Tenant.
-func RequireTenant() gin.HandlerFunc {
-	return Tenant()
-}
-
 // GetTenantID extracts and parses the tenant UUID from the request context or Gin context.
 // Returns an error if tenant_id is missing or not a valid UUID.
 func GetTenantID(c *gin.Context) (uuid.UUID, error) {

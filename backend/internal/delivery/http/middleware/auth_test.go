@@ -356,6 +356,41 @@ func TestRequireRole_UnauthenticatedAccess(t *testing.T) {
 	}
 }
 
+func TestRequireRole_AuthenticatedNoRoles(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	engine := gin.New()
+	engine.GET("/authenticated-no-roles", func(c *gin.Context) {
+		// Simulate Auth having run for a user with zero assigned roles: a valid
+		// identity is present in context, but the roles slice is empty.
+		c.Set(ContextKeyUserID, uuid.New().String())
+		c.Set(ContextKeyRoles, []string{})
+
+		reqCtx := ctx.WithUserID(c.Request.Context(), uuid.New().String())
+		reqCtx = ctx.WithRoles(reqCtx, []string{})
+		c.Request = c.Request.WithContext(reqCtx)
+
+		c.Next()
+	}, RequireRole(entity.RoleAdmin), func(c *gin.Context) {
+		c.JSON(http.StatusOK, gin.H{"status": "ok"})
+	})
+
+	req := httptest.NewRequest(http.MethodGet, "/authenticated-no-roles", nil)
+	rec := httptest.NewRecorder()
+	engine.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusForbidden {
+		t.Errorf("expected 403 Forbidden for authenticated user with zero roles, got %d", rec.Code)
+	}
+
+	var resp response.Envelope
+	if err := json.Unmarshal(rec.Body.Bytes(), &resp); err != nil {
+		t.Fatalf("failed to decode response: %v", err)
+	}
+	if resp.Error == nil || resp.Error.Message != "insufficient permissions" {
+		t.Errorf("expected 'insufficient permissions' message, got %v", resp.Error)
+	}
+}
+
 func TestRoleHelpers(t *testing.T) {
 	roles := []string{entity.RoleAdmin, entity.RoleEmployee}
 

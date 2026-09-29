@@ -82,28 +82,20 @@ func Auth(tokenService domainservice.TokenService) gin.HandlerFunc {
 	}
 }
 
-// RequireAuth is an alias for Auth.
-func RequireAuth(tokenService domainservice.TokenService) gin.HandlerFunc {
-	return Auth(tokenService)
-}
-
 // RequireRole creates a middleware that checks if the authenticated user possesses
 // at least one of the allowed roles. If not, it aborts the request with 403 Forbidden.
-// If no user/roles are present in the context, it aborts with 401 Unauthorized.
+// If no authenticated identity is present in the context at all, it aborts with
+// 401 Unauthorized instead — an authenticated user with zero matching (or zero
+// assigned) roles is a 403, not a 401.
 func RequireRole(allowedRoles ...string) gin.HandlerFunc {
 	return func(c *gin.Context) {
-		roles := GetRoles(c)
-		if len(roles) == 0 {
-			if ctxRoles, ok := ctx.RolesFromContext(c.Request.Context()); ok {
-				roles = ctxRoles
-			}
-		}
-
-		if len(roles) == 0 {
+		if _, err := GetUserID(c); err != nil {
 			response.Unauthorized(c, "authentication required")
 			c.Abort()
 			return
 		}
+
+		roles := GetRoles(c)
 
 		if HasAnyRole(roles, allowedRoles...) {
 			c.Next()
