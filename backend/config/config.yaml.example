@@ -33,3 +33,12 @@ app:
 cors:
   allowed_origins:
     - "*"
+
+smtp:
+  host: "smtp.resend.com"
+  port: 465
+  username: "resend"
+  password: "<RESEND_API_KEY>"
+  from: "Employee360 <no-reply@example.com>"
+  use_tls: true
+

@@ -67,6 +67,18 @@ func TestConfig_Defaults(t *testing.T) {
 	if len(cfg.CORS.AllowedOrigins) != 1 || cfg.CORS.AllowedOrigins[0] != "*" {
 		t.Errorf("expected CORS.AllowedOrigins ['*'], got %v", cfg.CORS.AllowedOrigins)
 	}
+	if cfg.SMTP.Host != "localhost" {
+		t.Errorf("expected SMTP.Host 'localhost', got %q", cfg.SMTP.Host)
+	}
+	if cfg.SMTP.Port != 1025 {
+		t.Errorf("expected SMTP.Port 1025, got %d", cfg.SMTP.Port)
+	}
+	if cfg.SMTP.From != "no-reply@employee360.local" {
+		t.Errorf("expected SMTP.From 'no-reply@employee360.local', got %q", cfg.SMTP.From)
+	}
+	if cfg.SMTP.UseTLS != false {
+		t.Errorf("expected SMTP.UseTLS false, got %v", cfg.SMTP.UseTLS)
+	}
 }
 
 func TestConfig_EnvOverrides(t *testing.T) {
@@ -227,5 +239,38 @@ database:
 	}
 	if cfg.Database.DBName != "yamldb" {
 		t.Errorf("expected Database.DBName 'yamldb', got %q", cfg.Database.DBName)
+	}
+}
+
+func TestConfig_SMTP(t *testing.T) {
+	t.Setenv("SMTP_HOST", "smtp.resend.com")
+	t.Setenv("SMTP_PORT", "465")
+	t.Setenv("SMTP_USERNAME", "resend")
+	t.Setenv("SMTP_PASSWORD", "re_123456789")
+	t.Setenv("SMTP_FROM", "Employee360 <no-reply@example.com>")
+	t.Setenv("SMTP_USE_TLS", "true")
+
+	cfg, err := Load()
+	if err != nil {
+		t.Fatalf("expected Load() to succeed with SMTP env vars, got: %v", err)
+	}
+
+	if cfg.SMTP.Host != "smtp.resend.com" {
+		t.Errorf("expected SMTP.Host 'smtp.resend.com', got %q", cfg.SMTP.Host)
+	}
+	if cfg.SMTP.Port != 465 {
+		t.Errorf("expected SMTP.Port 465, got %d", cfg.SMTP.Port)
+	}
+	if cfg.SMTP.Username != "resend" {
+		t.Errorf("expected SMTP.Username 'resend', got %q", cfg.SMTP.Username)
+	}
+	if cfg.SMTP.Password != "re_123456789" {
+		t.Errorf("expected SMTP.Password 're_123456789', got %q", cfg.SMTP.Password)
+	}
+	if cfg.SMTP.From != "Employee360 <no-reply@example.com>" {
+		t.Errorf("expected SMTP.From 'Employee360 <no-reply@example.com>', got %q", cfg.SMTP.From)
+	}
+	if !cfg.SMTP.UseTLS {
+		t.Errorf("expected SMTP.UseTLS true, got %v", cfg.SMTP.UseTLS)
 	}
 }

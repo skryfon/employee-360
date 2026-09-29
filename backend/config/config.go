@@ -21,6 +21,7 @@ type Config struct {
 	JWT      JWTConfig      `mapstructure:"jwt"`
 	App      AppConfig      `mapstructure:"app"`
 	CORS     CORSConfig     `mapstructure:"cors"`
+	SMTP     SMTPConfig     `mapstructure:"smtp"`
 }
 
 // ServerConfig contains HTTP server configuration parameters.
@@ -88,6 +89,16 @@ type CORSConfig struct {
 	// AllowedOrigins is the CORS allowlist. A single "*" entry allows any
 	// origin but disables credentialed requests (see middleware.CORS).
 	AllowedOrigins []string `mapstructure:"allowed_origins"`
+}
+
+// SMTPConfig contains SMTP client configuration for transactional emails.
+type SMTPConfig struct {
+	Host     string `mapstructure:"host"`
+	Port     int    `mapstructure:"port"`
+	Username string `mapstructure:"username"`
+	Password string `mapstructure:"password"`
+	From     string `mapstructure:"from"`
+	UseTLS   bool   `mapstructure:"use_tls"`
 }
 
 // Validate verifies that the configuration meets environment and security requirements.
@@ -191,6 +202,14 @@ func setDefaults(v *viper.Viper) {
 
 	// CORS defaults
 	v.SetDefault("cors.allowed_origins", []string{"*"})
+
+	// SMTP defaults
+	v.SetDefault("smtp.host", "localhost")
+	v.SetDefault("smtp.port", 1025)
+	v.SetDefault("smtp.username", "")
+	v.SetDefault("smtp.password", "")
+	v.SetDefault("smtp.from", "no-reply@employee360.local")
+	v.SetDefault("smtp.use_tls", false)
 }
 
 func loadDotEnv(searchPaths ...string) {
@@ -259,4 +278,11 @@ func bindEnvAliases(v *viper.Viper) {
 
 	_ = v.BindEnv("app.environment", "APP_ENV", "ENVIRONMENT", "ENV")
 	_ = v.BindEnv("app.log_level", "LOG_LEVEL", "APP_LOG_LEVEL")
+
+	_ = v.BindEnv("smtp.host", "SMTP_HOST")
+	_ = v.BindEnv("smtp.port", "SMTP_PORT")
+	_ = v.BindEnv("smtp.username", "SMTP_USERNAME", "SMTP_USER")
+	_ = v.BindEnv("smtp.password", "SMTP_PASSWORD", "SMTP_PASS")
+	_ = v.BindEnv("smtp.from", "SMTP_FROM", "SMTP_FROM_EMAIL", "EMAIL_FROM")
+	_ = v.BindEnv("smtp.use_tls", "SMTP_USE_TLS", "SMTP_TLS")
 }
