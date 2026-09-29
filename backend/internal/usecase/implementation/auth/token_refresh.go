@@ -1,0 +1,138 @@
+package auth
+
+import (
+	"context"
+	"strings"
+	"time"
+
+	"github.com/google/uuid"
+	"github.com/skryfon/employee360/backend/internal/domain/entity"
+	domainerrors "github.com/skryfon/employee360/backend/internal/domain/errors"
+	"github.com/skryfon/employee360/backend/internal/domain/repository"
+	"github.com/skryfon/employee360/backend/internal/domain/service"
+	authusecase "github.com/skryfon/employee360/backend/internal/usecase/interface/auth"
+)
+
+// TokenRefreshUseCaseImpl implements authusecase.TokenRefreshUseCase.
+type TokenRefreshUseCaseImpl struct {
+	userRepo         repository.UserRepository
+	tokenService     service.TokenService
+	hashService      service.HashService
+	refreshTokenRepo repository.RefreshTokenRepository
+	refreshExpiry    time.Duration
+}
+
+var _ authusecase.TokenRefreshUseCase = (*TokenRefreshUseCaseImpl)(nil)
+
+// NewTokenRefreshUseCase constructs a new TokenRefreshUseCaseImpl.
+func NewTokenRefreshUseCase(
+	userRepo repository.UserRepository,
+	tokenService service.TokenService,
+	hashService service.HashService,
+	refreshTokenRepo repository.RefreshTokenRepository,
+) *TokenRefreshUseCaseImpl {
+	return &TokenRefreshUseCaseImpl{
+		userRepo:         userRepo,
+		tokenService:     tokenService,
+		hashService:      hashService,
+		refreshTokenRepo: refreshTokenRepo,
+		refreshExpiry:    defaultRefreshExpiry,
+	}
+}
+
+// Execute rotates an existing refresh token and returns a new token pair.
+func (u *TokenRefreshUseCaseImpl) Execute(ctx context.Context, input authusecase.TokenRefreshInput) (*authusecase.TokenRefreshOutput, error) {
+	rawToken := strings.TrimSpace(input.RefreshToken)
+	if rawToken == "" {
+		return nil, domainerrors.ErrInvalidToken
+	}
+
+	if _, err := u.tokenService.ValidateRefreshToken(rawToken); err != nil {
+		return nil, domainerrors.ErrInvalidToken
+	}
+
+	tokenHash := u.hashService.HashToken(rawToken)
+
+	storedToken, err := u.refreshTokenRepo.GetByTokenHash(ctx, tokenHash)
+	if err != nil || storedToken == nil {
+		return nil, domainerrors.ErrInvalidToken
+	}
+
+	// Token reuse detection: if a revoked token is presented, revoke all tokens in the family
+	if storedToken.RevokedAt != nil {
+		_ = u.refreshTokenRepo.RevokeFamily(ctx, storedToken.Family)
+		return nil, domainerrors.ErrTokenRevoked
+	}
+
+	if time.Now().After(storedToken.ExpiresAt) {
+		return nil, domainerrors.ErrTokenExpired
+	}
+
+	// Revoke the old token upon rotation
+	if err := u.refreshTokenRepo.Revoke(ctx, storedToken.ID); err != nil {
+		return nil, err
+	}
+
+	user, err := u.userRepo.GetByIDWithRoles(ctx, storedToken.UserID)
+	if err != nil || user == nil {
+		return nil, domainerrors.ErrUserNotFound
+	}
+
+	if !user.IsActive {
+		return nil, domainerrors.ErrUserInactive
+	}
+
+	roleNames := make([]string, 0, len(user.Roles))
+	for _, r := range user.Roles {
+		roleNames = append(roleNames, r.Name)
+	}
+
+	newRefreshTokenID := uuid.New()
+
+	accessClaims := service.AccessTokenClaims{
+		UserID:   user.ID,
+		TenantID: user.TenantID,
+		Roles:    roleNames,
+		Email:    user.Email,
+	}
+
+	refreshClaims := service.RefreshTokenClaims{
+		UserID:   user.ID,
+		TenantID: user.TenantID,
+		TokenID:  newRefreshTokenID,
+		Family:   storedToken.Family,
+		Roles:    roleNames,
+	}
+
+	tokenPair, err := u.tokenService.GenerateTokenPair(accessClaims, refreshClaims)
+	if err != nil {
+		return nil, err
+	}
+
+	now := time.Now().UTC()
+	newTokenHash := u.hashService.HashToken(tokenPair.RefreshToken)
+
+	newRT := &entity.RefreshToken{
+		ID:        newRefreshTokenID,
+		TenantID:  user.TenantID,
+		UserID:    user.ID,
+		TokenHash: newTokenHash,
+		Family:    storedToken.Family,
+		ExpiresAt: now.Add(u.refreshExpiry),
+		IPAddress: input.IPAddress,
+		UserAgent: input.UserAgent,
+		CreatedAt: now,
+		UpdatedAt: now,
+	}
+
+	if err := u.refreshTokenRepo.Create(ctx, newRT); err != nil {
+		return nil, err
+	}
+
+	return &authusecase.TokenRefreshOutput{
+		AccessToken:  tokenPair.AccessToken,
+		RefreshToken: tokenPair.RefreshToken,
+		ExpiresAt:    tokenPair.ExpiresAt,
+		TokenType:    tokenPair.TokenType,
+	}, nil
+}

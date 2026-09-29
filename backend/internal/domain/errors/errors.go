@@ -19,6 +19,7 @@ var (
 	ErrUserInactive       = errors.New("user account is inactive")
 	ErrEmailAlreadyExists = errors.New("email already registered in tenant")
 	ErrInvalidCredentials = errors.New("invalid email or password")
+	ErrInvalidPassword    = errors.New("password must be at least 8 characters")
 
 	// Role errors
 	ErrRoleNotFound     = errors.New("role not found")
