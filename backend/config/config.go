@@ -22,6 +22,16 @@ type Config struct {
 	App      AppConfig      `mapstructure:"app"`
 	CORS     CORSConfig     `mapstructure:"cors"`
 	SMTP     SMTPConfig     `mapstructure:"smtp"`
+	// Bootstrap holds inputs for cmd/bootstrap only; the API does not use it.
+	Bootstrap BootstrapConfig `mapstructure:"bootstrap"`
+}
+
+// BootstrapConfig holds the platform Super Admin seed inputs. There are no
+// defaults for email/password: they must be supplied via env/config.
+type BootstrapConfig struct {
+	SystemTenantName   string `mapstructure:"system_tenant_name"`
+	SuperAdminEmail    string `mapstructure:"super_admin_email"`
+	SuperAdminPassword string `mapstructure:"super_admin_password"`
 }
 
 // ServerConfig contains HTTP server configuration parameters.
@@ -203,6 +213,11 @@ func setDefaults(v *viper.Viper) {
 	// CORS defaults
 	v.SetDefault("cors.allowed_origins", []string{"*"})
 
+	// Bootstrap defaults (credentials intentionally have none)
+	v.SetDefault("bootstrap.system_tenant_name", "System")
+	v.SetDefault("bootstrap.super_admin_email", "")
+	v.SetDefault("bootstrap.super_admin_password", "")
+
 	// SMTP defaults
 	v.SetDefault("smtp.host", "localhost")
 	v.SetDefault("smtp.port", 1025)
@@ -278,6 +293,10 @@ func bindEnvAliases(v *viper.Viper) {
 
 	_ = v.BindEnv("app.environment", "APP_ENV", "ENVIRONMENT", "ENV")
 	_ = v.BindEnv("app.log_level", "LOG_LEVEL", "APP_LOG_LEVEL")
+
+	_ = v.BindEnv("bootstrap.system_tenant_name", "BOOTSTRAP_SYSTEM_TENANT_NAME")
+	_ = v.BindEnv("bootstrap.super_admin_email", "BOOTSTRAP_SUPER_ADMIN_EMAIL")
+	_ = v.BindEnv("bootstrap.super_admin_password", "BOOTSTRAP_SUPER_ADMIN_PASSWORD")
 
 	_ = v.BindEnv("smtp.host", "SMTP_HOST")
 	_ = v.BindEnv("smtp.port", "SMTP_PORT")

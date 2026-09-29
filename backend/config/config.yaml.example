@@ -42,3 +42,10 @@ smtp:
   from: "Employee360 <no-reply@example.com>"
   use_tls: true
 
+
+# Read only by cmd/bootstrap. Prefer the env vars BOOTSTRAP_SUPER_ADMIN_EMAIL /
+# BOOTSTRAP_SUPER_ADMIN_PASSWORD over committing credentials to a file.
+bootstrap:
+  system_tenant_name: "System"
+  super_admin_email: ""
+  super_admin_password: ""
