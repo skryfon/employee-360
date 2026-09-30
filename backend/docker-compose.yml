@@ -56,7 +56,7 @@ services:
       SMTP_USERNAME: ""
       SMTP_PASSWORD: ""
     volumes:
-      - ./:/app
+      - ./backend:/app
       - employee360_worker_gocache:/go/pkg/mod
 
 volumes:
