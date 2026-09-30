@@ -1,6 +1,6 @@
 //go:build integration
 
-package eventing_test
+package integration
 
 import (
 	"context"

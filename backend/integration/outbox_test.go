@@ -1,14 +1,12 @@
 //go:build integration
 
-package eventing_test
+package integration
 
 import (
 	"context"
 	"errors"
 	"fmt"
-	"os"
 	"path/filepath"
-	"runtime"
 	"testing"
 	"time"
 
@@ -19,31 +17,16 @@ import (
 	"github.com/stretchr/testify/require"
 	"gorm.io/gorm"
 
-	"github.com/skryfon/employee360/backend/config"
 	"github.com/skryfon/employee360/backend/internal/domain/entity"
 	"github.com/skryfon/employee360/backend/internal/domain/event"
 	"github.com/skryfon/employee360/backend/internal/infrastructure/database"
 	"github.com/skryfon/employee360/backend/internal/infrastructure/eventing"
 )
 
-func migrationsDir(t *testing.T) string {
-	t.Helper()
-	_, thisFile, _, ok := runtime.Caller(0)
-	if !ok {
-		t.Fatal("failed to resolve caller for migrationsDir")
-	}
-	dir := filepath.Join(filepath.Dir(thisFile), "..", "..", "..", "migrations")
-	if _, err := os.Stat(dir); err != nil {
-		t.Fatalf("expected migrations directory at %s: %v", dir, err)
-	}
-	return dir
-}
-
 func ensureMigrated(t *testing.T, dbURL string) {
 	t.Helper()
 
-	dir := migrationsDir(t)
-	absDir, err := filepath.Abs(dir)
+	absDir, err := filepath.Abs(realMigrationsDir)
 	if err != nil {
 		t.Fatalf("failed to resolve absolute migrations dir: %v", err)
 	}
@@ -61,18 +44,15 @@ func ensureMigrated(t *testing.T, dbURL string) {
 
 func setup(t *testing.T) (*gorm.DB, *eventing.RiverPublisher, *database.GormTransactor) {
 	t.Helper()
-	cfg, err := config.Load("../../../..")
+	cfg := getTestDatabaseConfig()
+	db, err := database.Connect(cfg)
 	if err != nil {
-		t.Skipf("skipping: %v", err)
-	}
-	db, err := database.Connect(cfg.Database)
-	if err != nil {
-		if os.Getenv("CI") == "true" || os.Getenv("GITHUB_ACTIONS") == "true" {
+		if isCI() {
 			t.Fatalf("PostgreSQL must be reachable in CI: %v", err)
 		}
 		t.Skipf("skipping: PostgreSQL unreachable: %v", err)
 	}
-	ensureMigrated(t, cfg.Database.URL())
+	ensureMigrated(t, cfg.URL())
 	require.True(t, db.Migrator().HasTable("river_job"), "river_job missing: run `make migrate`")
 	sqlDB, err := db.DB()
 	require.NoError(t, err)
