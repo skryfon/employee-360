@@ -195,6 +195,7 @@ FK column. See the `create-migration` skill for the full invariant checklist.
 
 - [ ] `auth_handler.go` — `POST /api/v1/auth/login`, `POST /api/v1/auth/refresh`, `POST /api/v1/auth/logout`, `POST /api/v1/auth/forgot-password`, `POST /api/v1/auth/reset-password` — all unauthenticated except logout; `login` serves every role (`super_admin`/`admin`/`employee`)
 - [ ] `invitation_handler.go` (or fold into `user_handler.go`) — `POST /api/v1/users/invitations` (admin-only), `POST /api/v1/users/invitations/:id/resend`, `DELETE /api/v1/users/invitations/:id`, `GET /api/v1/users/invitations`, and an unauthenticated `POST /api/v1/invitations/accept`
+- [ ] `role_handler.go` — `GET /api/v1/roles` (admin/super_admin only; Auth → Tenant → `RequireRole`): lists the caller-tenant roles an admin may assign, excluding `super_admin`, returning `{id, name}` only. Added during EMPLOYEE36-21 because the invite form needs a `role_id` and no endpoint exposed role IDs. Department/position list endpoints are not yet built (the invite form takes raw UUIDs until a follow-up cycle adds them)
 - [ ] Wire `auth.go`/`tenant.go` middleware onto every route above except login/refresh/forgot-password/reset-password/invitation-accept
 
 ### Seeding (`backend/internal/infrastructure/database/seeder/`, run via `cmd/bootstrap`)
@@ -219,7 +220,11 @@ frontend item before its backend endpoint is callable.
   Query mutations via the API client
 - [ ] `clients/admin/src/features/invitations/` — invite-user form (email + role +
   optional department/position), invitations list (pending/accepted/revoked), resend and
-  revoke actions
+  revoke actions; the list is the landing page at `/invitations`, the form lives on
+  `/invitations/new`; the role select is fed by `GET /api/v1/roles`
+- [ ] `clients/admin/` app shell — collapsible sidebar + top header (nav links from
+  `components/layout/navItems.ts`, UI state in a Zustand `uiStore`); added during
+  EMPLOYEE36-21 so later admin features have somewhere to register navigation
 - [ ] `clients/employee/src/features/auth/` — login page (email + password), forgot-password
   page, reset-password page; Zustand store for auth state — same shape as the admin auth
   feature, since login is one mechanism for every role
