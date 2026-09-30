@@ -29,6 +29,18 @@ definitions:
       total_pages:
         type: integer
     type: object
+  github_com_skryfon_employee360_backend_internal_domain_entity.InvitationStatus:
+    enum:
+    - pending
+    - accepted
+    - revoked
+    - expired
+    type: string
+    x-enum-varnames:
+    - InvitationStatusPending
+    - InvitationStatusAccepted
+    - InvitationStatusRevoked
+    - InvitationStatusExpired
   github_com_skryfon_employee360_backend_internal_domain_entity.Role:
     properties:
       created_at:
@@ -136,6 +148,53 @@ definitions:
       refresh_token:
         type: string
       token_type:
+        type: string
+    type: object
+  github_com_skryfon_employee360_backend_internal_types_invitation.AcceptInvitationRequest:
+    properties:
+      password:
+        type: string
+      token:
+        type: string
+    type: object
+  github_com_skryfon_employee360_backend_internal_types_invitation.InvitationResponse:
+    properties:
+      accepted_at:
+        type: string
+      created_at:
+        type: string
+      department_id:
+        type: string
+      email:
+        type: string
+      expires_at:
+        type: string
+      id:
+        type: string
+      invited_by:
+        type: string
+      position_id:
+        type: string
+      revoked_at:
+        type: string
+      role_id:
+        type: string
+      status:
+        $ref: '#/definitions/github_com_skryfon_employee360_backend_internal_domain_entity.InvitationStatus'
+    type: object
+  github_com_skryfon_employee360_backend_internal_types_invitation.InviteUserRequest:
+    properties:
+      department_id:
+        type: string
+      email:
+        type: string
+      first_name:
+        type: string
+      last_name:
+        type: string
+      position_id:
+        type: string
+      role_id:
         type: string
     type: object
   internal_delivery_http_handlers.HealthResponse:
@@ -356,6 +415,165 @@ paths:
       summary: Report application and database health
       tags:
       - health
+  /api/v1/invitations/accept:
+    post:
+      consumes:
+      - application/json
+      parameters:
+      - description: Token and new password
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/github_com_skryfon_employee360_backend_internal_types_invitation.AcceptInvitationRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/github_com_skryfon_employee360_backend_internal_delivery_http_response.Envelope'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/github_com_skryfon_employee360_backend_internal_delivery_http_response.Envelope'
+      summary: Accept invitation
+      tags:
+      - invitations
+  /api/v1/users/invitations:
+    get:
+      parameters:
+      - description: Page (1-based)
+        in: query
+        name: page
+        type: integer
+      - description: Page size (max 100)
+        in: query
+        name: page_size
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            allOf:
+            - $ref: '#/definitions/github_com_skryfon_employee360_backend_internal_delivery_http_response.Envelope'
+            - properties:
+                data:
+                  items:
+                    $ref: '#/definitions/github_com_skryfon_employee360_backend_internal_types_invitation.InvitationResponse'
+                  type: array
+              type: object
+      security:
+      - BearerAuth: []
+      summary: List invitations
+      tags:
+      - invitations
+    post:
+      consumes:
+      - application/json
+      parameters:
+      - description: Invitation details
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/github_com_skryfon_employee360_backend_internal_types_invitation.InviteUserRequest'
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Created
+          schema:
+            allOf:
+            - $ref: '#/definitions/github_com_skryfon_employee360_backend_internal_delivery_http_response.Envelope'
+            - properties:
+                data:
+                  $ref: '#/definitions/github_com_skryfon_employee360_backend_internal_types_invitation.InvitationResponse'
+              type: object
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/github_com_skryfon_employee360_backend_internal_delivery_http_response.Envelope'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/github_com_skryfon_employee360_backend_internal_delivery_http_response.Envelope'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/github_com_skryfon_employee360_backend_internal_delivery_http_response.Envelope'
+        "409":
+          description: Conflict
+          schema:
+            $ref: '#/definitions/github_com_skryfon_employee360_backend_internal_delivery_http_response.Envelope'
+      security:
+      - BearerAuth: []
+      summary: Invite user
+      tags:
+      - invitations
+  /api/v1/users/invitations/{id}:
+    delete:
+      parameters:
+      - description: Invitation ID
+        in: path
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/github_com_skryfon_employee360_backend_internal_delivery_http_response.Envelope'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/github_com_skryfon_employee360_backend_internal_delivery_http_response.Envelope'
+        "409":
+          description: Conflict
+          schema:
+            $ref: '#/definitions/github_com_skryfon_employee360_backend_internal_delivery_http_response.Envelope'
+      security:
+      - BearerAuth: []
+      summary: Revoke invitation
+      tags:
+      - invitations
+  /api/v1/users/invitations/{id}/resend:
+    post:
+      parameters:
+      - description: Invitation ID
+        in: path
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            allOf:
+            - $ref: '#/definitions/github_com_skryfon_employee360_backend_internal_delivery_http_response.Envelope'
+            - properties:
+                data:
+                  $ref: '#/definitions/github_com_skryfon_employee360_backend_internal_types_invitation.InvitationResponse'
+              type: object
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/github_com_skryfon_employee360_backend_internal_delivery_http_response.Envelope'
+        "409":
+          description: Conflict
+          schema:
+            $ref: '#/definitions/github_com_skryfon_employee360_backend_internal_delivery_http_response.Envelope'
+      security:
+      - BearerAuth: []
+      summary: Resend invitation
+      tags:
+      - invitations
   /health:
     get:
       description: Returns application and database connectivity status. Used by load

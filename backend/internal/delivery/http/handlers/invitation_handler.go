@@ -47,11 +47,14 @@ func writeInvitationError(c *gin.Context, err error) {
 		response.Error(c, 409, "CONFLICT", "invitation is no longer pending")
 	case errors.Is(err, domainerrors.ErrEmailAlreadyExists):
 		response.Error(c, 409, "CONFLICT", "a user with that email already exists")
+	case errors.Is(err, domainerrors.ErrInvalidToken):
+		response.BadRequest(c, "invalid or expired invitation token")
 	case errors.Is(err, domainerrors.ErrRoleNotFound),
 		errors.Is(err, domainerrors.ErrDepartmentNotFound),
 		errors.Is(err, domainerrors.ErrPositionNotFound),
 		errors.Is(err, domainerrors.ErrInvalidRole),
-		errors.Is(err, domainerrors.ErrInvalidEmail):
+		errors.Is(err, domainerrors.ErrInvalidEmail),
+		errors.Is(err, domainerrors.ErrInvalidPassword):
 		response.BadRequest(c, err.Error())
 	default:
 		response.Internal(c, "an unexpected error occurred")
@@ -184,14 +187,7 @@ func (h *InvitationHandler) Accept(c *gin.Context) {
 		return
 	}
 	if err := h.acceptUC.Execute(c.Request.Context(), req); err != nil {
-		switch {
-		case errors.Is(err, domainerrors.ErrInvalidToken):
-			response.BadRequest(c, "invalid or expired invitation token")
-		case errors.Is(err, domainerrors.ErrInvalidPassword):
-			response.BadRequest(c, "password must be at least 8 characters")
-		default:
-			response.Internal(c, "an unexpected error occurred")
-		}
+		writeInvitationError(c, err)
 		return
 	}
 	response.Success(c, gin.H{"message": "invitation accepted"})

@@ -220,7 +220,7 @@ func (h *AuthHandler) ResetPassword(c *gin.Context) {
 			return
 		}
 		if errors.Is(err, domainerrors.ErrInvalidPassword) {
-			response.BadRequest(c, "password must be at least 8 characters")
+			response.BadRequest(c, err.Error())
 			return
 		}
 		response.Internal(c, "an unexpected error occurred")
