@@ -1,6 +1,6 @@
 import { isAxiosError } from 'axios';
-import { apiRequest, refreshSession } from './client.ts';
-import { unwrapListResponse, unwrapSingleEntity, type ApiEnvelope } from './unwrap.ts';
+import { refreshSession } from './client.ts';
+import { unwrapListResponse, unwrapSingleEntity } from './unwrap.ts';
 import { clearSession, getSession, setSession } from './session.ts';
 import {
   postApiV1AuthForgotPassword,
@@ -15,6 +15,7 @@ import {
   postApiV1UsersInvitations,
   postApiV1UsersInvitationsIdResend,
 } from './generated/hooks/invitations/invitations.ts';
+import { getApiV1Roles } from './generated/hooks/roles/roles.ts';
 import type { GithubComSkryfonEmployee360BackendInternalTypesAuthLoginRequest as LoginRequest } from './generated/models/githubComSkryfonEmployee360BackendInternalTypesAuthLoginRequest.ts';
 import type { GithubComSkryfonEmployee360BackendInternalTypesAuthLoginResponse as LoginResponse } from './generated/models/githubComSkryfonEmployee360BackendInternalTypesAuthLoginResponse.ts';
 import type { GithubComSkryfonEmployee360BackendInternalTypesAuthForgotPasswordRequest as ForgotPasswordRequest } from './generated/models/githubComSkryfonEmployee360BackendInternalTypesAuthForgotPasswordRequest.ts';
@@ -135,11 +136,9 @@ export async function acceptInvitation(body: AcceptInvitationRequest): Promise<v
 
 /**
  * `GET /api/v1/roles` — admin/super_admin only; super_admin is already excluded
- * server-side. Hand-written (not yet in backend/docs/swagger.json, so not in
- * the Orval output); swap for the generated call after `make swagger` +
- * `pnpm generate:api`.
+ * server-side. Narrows the generated (all-optional) role shape to `RoleOption`.
  */
 export async function listRoles(signal?: AbortSignal): Promise<RoleOption[]> {
-  const res = await apiRequest<ApiEnvelope<RoleOption[]>>({ url: '/api/v1/roles', method: 'GET', signal });
-  return unwrapListResponse(res).data;
+  const { data } = unwrapListResponse(await getApiV1Roles(signal));
+  return data.flatMap((r) => (r.id && r.name ? [{ id: r.id, name: r.name }] : []));
 }

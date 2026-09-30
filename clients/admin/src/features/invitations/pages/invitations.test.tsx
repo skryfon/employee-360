@@ -123,6 +123,47 @@ describe('invitations', () => {
     expect(await screen.findByText('p@x.com')).toBeInTheDocument()
     expect(JSON.parse(mock.history.post[0].data)).toEqual({ email: 'new@x.com', role_id: ROLE_ID })
   })
+
+  it('shows an error when roles fail to load', async () => {
+    signIn()
+    mock.onGet('/api/v1/roles').reply(500, { success: false, error: { message: 'boom' } })
+    renderAt('/invitations/new')
+    expect(await screen.findByText('Could not load roles.')).toBeInTheDocument()
+  })
+
+  it('shows an error when resend fails', async () => {
+    signIn()
+    mock.onPost('/api/v1/users/invitations/i1/resend').reply(500, { success: false, error: { message: 'Resend exploded' } })
+    renderAt('/invitations')
+    await userEvent.click(await screen.findByRole('button', { name: /Resend invitation to p@x.com/ }))
+    expect(await screen.findByText(/Resend exploded|Could not resend invitation/)).toBeInTheDocument()
+  })
+
+  it('shows revoke failure in the dialog and keeps it open', async () => {
+    signIn()
+    mock.onDelete('/api/v1/users/invitations/i1').reply(500, { success: false, error: { message: 'Revoke exploded' } })
+    renderAt('/invitations')
+    await userEvent.click(await screen.findByRole('button', { name: /Revoke invitation for p@x.com/ }))
+    const dialog = screen.getByRole('dialog')
+    await userEvent.click(within(dialog).getByRole('button', { name: 'Revoke' }))
+    expect(await within(dialog).findByText(/Revoke exploded|Could not revoke invitation/)).toBeInTheDocument()
+    expect(screen.getByRole('dialog')).toBeInTheDocument()
+  })
+
+  it('modal moves focus in, closes on Escape, and restores focus to the trigger', async () => {
+    signIn()
+    renderAt('/invitations')
+    const trigger = await screen.findByRole('button', { name: /Revoke invitation for p@x.com/ })
+    await userEvent.click(trigger)
+    const dialog = screen.getByRole('dialog')
+    expect(within(dialog).getByRole('button', { name: 'Cancel' })).toHaveFocus()
+    await userEvent.tab()
+    await userEvent.tab()
+    expect(dialog.contains(document.activeElement)).toBe(true)
+    await userEvent.keyboard('{Escape}')
+    expect(screen.queryByRole('dialog')).toBeNull()
+    expect(trigger).toHaveFocus()
+  })
 })
 
 import { waitFor } from '@testing-library/react'
