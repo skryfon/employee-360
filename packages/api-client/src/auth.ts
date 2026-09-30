@@ -76,9 +76,10 @@ export function refresh(): Promise<string> {
  */
 export async function logout(): Promise<void> {
   try {
-    if (!getSession()?.refreshToken) return;
+    const refreshToken = getSession()?.refreshToken;
+    if (!refreshToken) return;
     try {
-      await postApiV1AuthLogout({ refresh_token: getSession()!.refreshToken });
+      await postApiV1AuthLogout({ refresh_token: refreshToken });
     } catch (error) {
       if (!isAxiosError(error) || error.response?.status !== 401) throw error;
       try {
