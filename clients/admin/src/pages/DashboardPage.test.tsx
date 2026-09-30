@@ -3,7 +3,7 @@ import { render, screen, waitFor } from '@testing-library/react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import MockAdapter from 'axios-mock-adapter';
 import { apiClient } from '@employee360/api-client';
-import App from './App.tsx';
+import DashboardPage from './DashboardPage.tsx';
 
 // Mocks at the HTTP layer (the shared apiClient instance), never the
 // useHealth hook or the @employee360/api-client module itself, so these
@@ -17,12 +17,12 @@ function renderApp() {
   });
   return render(
     <QueryClientProvider client={queryClient}>
-      <App />
+      <DashboardPage />
     </QueryClientProvider>,
   );
 }
 
-describe('App', () => {
+describe('DashboardPage', () => {
   let mock: MockAdapter;
 
   beforeEach(() => {
