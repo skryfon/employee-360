@@ -1,19 +1,14 @@
-import { NavLink, useNavigate } from 'react-router-dom'
-import { useAuthStore } from '../../stores/authStore'
+import { NavLink } from 'react-router-dom'
 import { useUiStore } from '../../stores/uiStore'
-import { useLogoutMutation } from '../../features/auth/queries/authMutations'
 import { NAV_ITEMS } from './navItems'
 
 const FOCUS = 'focus:outline-none focus-visible:ring-2 focus-visible:ring-slate-900 focus-visible:ring-offset-2'
 
 export function Sidebar() {
-  const user = useAuthStore((s) => s.user)
   const collapsed = useUiStore((s) => s.sidebarCollapsed)
   const mobileOpen = useUiStore((s) => s.sidebarMobileOpen)
   const toggle = useUiStore((s) => s.toggleSidebar)
   const setMobileOpen = useUiStore((s) => s.setSidebarMobileOpen)
-  const navigate = useNavigate()
-  const logout = useLogoutMutation()
 
   // Labels stay visible in the mobile drawer even if the desktop rail is collapsed.
   const labelClass = collapsed ? 'md:hidden' : ''
@@ -66,19 +61,6 @@ export function Sidebar() {
             </NavLink>
           ))}
         </nav>
-        <div className="flex flex-col gap-2 border-t border-slate-200 p-2">
-          <span className={`truncate px-3 text-xs text-slate-600 ${labelClass}`}>{user?.email}</span>
-          <button
-            type="button"
-            onClick={() => logout.mutate(undefined, { onSettled: () => navigate('/login', { replace: true }) })}
-            className={`h-9 rounded-sm border border-slate-300 bg-white px-3 text-sm font-medium text-slate-800 hover:bg-slate-100 ${FOCUS}`}
-          >
-            <span className={labelClass}>Sign out</span>
-            <span aria-hidden="true" className={collapsed ? 'hidden md:inline' : 'hidden'}>
-              Out
-            </span>
-          </button>
-        </div>
       </aside>
     </>
   )
