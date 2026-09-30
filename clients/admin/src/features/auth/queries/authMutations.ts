@@ -34,6 +34,7 @@ export function useLoginMutation() {
         firstName: u.first_name,
         lastName: u.last_name,
         roles,
+        roleOptions: (u.roles ?? []).flatMap((r) => (r.id && r.name ? [{ id: r.id, name: r.name }] : [])),
       }
       useAuthStore.getState().setUser(user)
       return user

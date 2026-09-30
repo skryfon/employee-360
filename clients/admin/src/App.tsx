@@ -2,6 +2,7 @@ import { Navigate, Route, Routes } from 'react-router-dom'
 import { authRoutes } from './features/auth/routes'
 import { RequireAuth } from './components/layout/RequireAuth'
 import { AdminShell } from './components/layout/AdminShell'
+import { invitationRoutes } from './features/invitations/routes'
 import DashboardPage from './pages/DashboardPage'
 
 export default function App() {
@@ -11,6 +12,7 @@ export default function App() {
       <Route element={<RequireAuth />}>
         <Route element={<AdminShell />}>
           <Route path="/" element={<DashboardPage />} />
+          {invitationRoutes}
         </Route>
       </Route>
       <Route path="*" element={<Navigate to="/" replace />} />

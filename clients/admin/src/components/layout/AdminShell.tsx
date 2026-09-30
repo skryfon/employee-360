@@ -1,4 +1,4 @@
-import { Outlet, useNavigate } from 'react-router-dom'
+import { Link, Outlet, useNavigate } from 'react-router-dom'
 import { useAuthStore } from '../../stores/authStore'
 import { useLogoutMutation } from '../../features/auth/queries/authMutations'
 
@@ -9,7 +9,12 @@ export function AdminShell() {
   return (
     <div className="min-h-screen bg-slate-50">
       <header className="flex h-12 items-center justify-between border-b border-slate-200 bg-white px-4">
-        <span className="text-base font-semibold text-slate-900">Employee360 Admin</span>
+        <div className="flex items-center gap-6">
+          <span className="text-base font-semibold text-slate-900">Employee360 Admin</span>
+          <Link to="/invitations" className="text-sm text-slate-900 underline hover:text-slate-700">
+            Invitations
+          </Link>
+        </div>
         <div className="flex items-center gap-4">
           <span className="text-sm text-slate-600">{user?.email}</span>
           <button
