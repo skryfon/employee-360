@@ -1,3 +1,4 @@
+import { isAxiosError } from 'axios';
 import { refreshSession } from './client.ts';
 import { unwrapListResponse, unwrapSingleEntity } from './unwrap.ts';
 import { clearSession, getSession, setSession } from './session.ts';
@@ -66,12 +67,28 @@ export function refresh(): Promise<string> {
 
 /**
  * `POST /api/v1/auth/logout` — revokes the refresh token server-side. The
- * local session is always cleared, even if the request fails.
+ * endpoint requires a valid access token, but `/auth/logout` is deliberately
+ * excluded from the 401 interceptor's silent refresh (the body carries the
+ * refresh token, which a replay would have rotated). So on a 401 we do one
+ * best-effort refresh here and retry with the rotated token, so the server-side
+ * revoke is not skipped for an expired access token. The local session is
+ * always cleared, even if the request fails.
  */
 export async function logout(): Promise<void> {
-  const refreshToken = getSession()?.refreshToken;
   try {
-    if (refreshToken) await postApiV1AuthLogout({ refresh_token: refreshToken });
+    if (!getSession()?.refreshToken) return;
+    try {
+      await postApiV1AuthLogout({ refresh_token: getSession()!.refreshToken });
+    } catch (error) {
+      if (!isAxiosError(error) || error.response?.status !== 401) throw error;
+      try {
+        await refreshSession();
+      } catch {
+        return; // refresh token already invalid/unreachable: nothing more to revoke
+      }
+      const rotated = getSession()?.refreshToken;
+      if (rotated) await postApiV1AuthLogout({ refresh_token: rotated });
+    }
   } finally {
     clearSession();
   }

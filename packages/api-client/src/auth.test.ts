@@ -99,6 +99,33 @@ describe('auth & invitation api methods', () => {
     expect(getSession()).toBeNull();
   });
 
+  it('logout refreshes once on an expired access token, then revokes the rotated token', async () => {
+    setSession({ accessToken: 'old', refreshToken: 'r1', tenantId: 't1' });
+    mock
+      .onPost('/api/v1/auth/logout')
+      .replyOnce(401)
+      .onPost('/api/v1/auth/logout')
+      .replyOnce(200, { success: true });
+    mock.onPost('/api/v1/auth/refresh').reply(200, {
+      success: true,
+      data: { access_token: 'new', refresh_token: 'r2' },
+    });
+    await logout();
+    const logouts = mock.history.post.filter((r) => r.url === '/api/v1/auth/logout');
+    expect(logouts).toHaveLength(2);
+    expect(JSON.parse(logouts[1].data)).toEqual({ refresh_token: 'r2' });
+    expect(logouts[1].headers?.Authorization).toBe('Bearer new');
+    expect(getSession()).toBeNull();
+  });
+
+  it('logout still clears the session when the refresh fails', async () => {
+    setSession({ accessToken: 'old', refreshToken: 'r1', tenantId: 't1' });
+    mock.onPost('/api/v1/auth/logout').reply(401);
+    mock.onPost('/api/v1/auth/refresh').reply(401);
+    await expect(logout()).resolves.toBeUndefined();
+    expect(getSession()).toBeNull();
+  });
+
   it('forgotPassword posts the email', async () => {
     mock.onPost('/api/v1/auth/forgot-password').reply(200, { success: true });
     await forgotPassword({ email: 'a@b.co' });

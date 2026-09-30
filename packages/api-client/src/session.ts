@@ -11,8 +11,9 @@
  * `setSessionStorage(customAdapter)`.
  *
  * Security tradeoff: the refresh token in localStorage is readable by any
- * script running on the origin (XSS). Mitigate with a strict CSP and no
- * untrusted HTML; apps that cannot accept this should opt out.
+ * script running on the origin (XSS). Mitigate with no untrusted HTML; apps
+ * that cannot accept this should opt out. Consuming apps should also ship a
+ * strict Content-Security-Policy (no inline/eval scripts, tight script-src).
  */
 import { createLocalStorageSessionAdapter } from './sessionStorage.ts';
 
