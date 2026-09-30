@@ -447,3 +447,37 @@ func TestInvitationRoutes_AcceptRateLimited(t *testing.T) {
 		}
 	}
 }
+
+type fakeListRoles struct{}
+
+func (fakeListRoles) Execute(context.Context) ([]*entity.Role, error) {
+	return []*entity.Role{{ID: uuid.New(), Name: "employee"}}, nil
+}
+
+func TestRoleRoutes_ListRequiresAdminToken(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	jwtSvc := setupTestTokenService(t)
+	cfg := &config.Config{CORS: config.CORSConfig{AllowedOrigins: []string{"*"}}}
+	ctr := testContainer(t, cfg, nil, nil)
+	ctr.Auth = &container.AuthContainer{TokenService: jwtSvc, RoleHandler: handlers.NewRoleHandler(fakeListRoles{})}
+	engine := SetupRouter(cfg, zerolog.Nop(), ctr)
+
+	const path = "/api/v1/roles"
+	tenant := uuid.New()
+	tests := []struct {
+		name, auth string
+		want       int
+	}{
+		{"no token", "", http.StatusUnauthorized},
+		{"employee", bearer(t, jwtSvc, tenant, "employee"), http.StatusForbidden},
+		{"admin", bearer(t, jwtSvc, tenant, "admin"), http.StatusOK},
+		{"super_admin", bearer(t, jwtSvc, tenant, "super_admin"), http.StatusOK},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			if rec := do(engine, http.MethodGet, path, tc.auth, ""); rec.Code != tc.want {
+				t.Fatalf("want %d, got %d: %s", tc.want, rec.Code, rec.Body.String())
+			}
+		})
+	}
+}

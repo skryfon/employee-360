@@ -14,9 +14,11 @@ import (
 	infraservice "github.com/skryfon/employee360/backend/internal/infrastructure/service"
 	authusecaseimpl "github.com/skryfon/employee360/backend/internal/usecase/implementation/auth"
 	invusecaseimpl "github.com/skryfon/employee360/backend/internal/usecase/implementation/invitation"
+	roleusecaseimpl "github.com/skryfon/employee360/backend/internal/usecase/implementation/role"
 	"github.com/skryfon/employee360/backend/internal/usecase/implementation/ucshared"
 	authusecase "github.com/skryfon/employee360/backend/internal/usecase/interface/auth"
 	invusecase "github.com/skryfon/employee360/backend/internal/usecase/interface/invitation"
+	roleusecase "github.com/skryfon/employee360/backend/internal/usecase/interface/role"
 	"gorm.io/gorm"
 )
 
@@ -41,6 +43,9 @@ type AuthContainer struct {
 	Handler      *handlers.AuthHandler
 
 	InvitationHandler *handlers.InvitationHandler
+	RoleHandler       *handlers.RoleHandler
+
+	ListAssignableRolesUseCase roleusecase.ListAssignableRolesUseCase
 
 	// Usecases
 	LoginUseCase          authusecase.LoginUseCase
@@ -136,28 +141,33 @@ func NewAuthContainer(
 
 	invitationHandler := handlers.NewInvitationHandler(inviteUC, acceptInvUC, resendInvUC, revokeInvUC, listInvUC)
 
+	listRolesUC := roleusecaseimpl.NewListAssignableRolesUseCase(roleRepo)
+	roleHandler := handlers.NewRoleHandler(listRolesUC)
+
 	return &AuthContainer{
-		InvitationHandler:       invitationHandler,
-		TokenService:            tokenService,
-		HashService:             hashService,
-		Handler:                 handler,
-		LoginUseCase:            loginUC,
-		TokenRefreshUseCase:     tokenRefreshUC,
-		LogoutUseCase:           logoutUC,
-		ForgotPasswordUseCase:   forgotPasswordUC,
-		ResetPasswordUseCase:    resetPasswordUC,
-		InviteUserUseCase:       inviteUC,
-		AcceptInvitationUseCase: acceptInvUC,
-		ResendInvitationUseCase: resendInvUC,
-		RevokeInvitationUseCase: revokeInvUC,
-		ListInvitationsUseCase:  listInvUC,
-		UserInvitationRepo:      invitationRepo,
-		OrgReferenceRepo:        orgRefRepo,
-		RoleRepo:                roleRepo,
-		UserRoleRepo:            userRoleRepo,
-		AuditRepo:               auditRepo,
-		UserRepo:                userRepo,
-		RefreshTokenRepo:        refreshTokenRepo,
-		PasswordResetRepo:       passwordResetRepo,
+		RoleHandler:                roleHandler,
+		ListAssignableRolesUseCase: listRolesUC,
+		InvitationHandler:          invitationHandler,
+		TokenService:               tokenService,
+		HashService:                hashService,
+		Handler:                    handler,
+		LoginUseCase:               loginUC,
+		TokenRefreshUseCase:        tokenRefreshUC,
+		LogoutUseCase:              logoutUC,
+		ForgotPasswordUseCase:      forgotPasswordUC,
+		ResetPasswordUseCase:       resetPasswordUC,
+		InviteUserUseCase:          inviteUC,
+		AcceptInvitationUseCase:    acceptInvUC,
+		ResendInvitationUseCase:    resendInvUC,
+		RevokeInvitationUseCase:    revokeInvUC,
+		ListInvitationsUseCase:     listInvUC,
+		UserInvitationRepo:         invitationRepo,
+		OrgReferenceRepo:           orgRefRepo,
+		RoleRepo:                   roleRepo,
+		UserRoleRepo:               userRoleRepo,
+		AuditRepo:                  auditRepo,
+		UserRepo:                   userRepo,
+		RefreshTokenRepo:           refreshTokenRepo,
+		PasswordResetRepo:          passwordResetRepo,
 	}, nil
 }
