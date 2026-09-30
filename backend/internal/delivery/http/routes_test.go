@@ -413,3 +413,37 @@ func TestInvitationRoutes_AllRegistered(t *testing.T) {
 		}
 	}
 }
+
+func TestInvitationRoutes_AcceptRateLimited(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	cfg := &config.Config{
+		CORS:      config.CORSConfig{AllowedOrigins: []string{"*"}},
+		RateLimit: config.RateLimitConfig{Enabled: true, RequestsPerSecond: 0.001, Burst: 2},
+	}
+	ctr := testContainer(t, cfg, nil, nil)
+	ctr.Auth = &container.AuthContainer{
+		TokenService:      setupTestTokenService(t),
+		InvitationHandler: handlers.NewInvitationHandler(&fakeInvite{}, &fakeAccept{}, fakeResend{}, fakeRevoke{}, fakeList{}),
+	}
+	engine := SetupRouter(cfg, zerolog.Nop(), ctr)
+
+	body := `{"token":"t","password":"Sup3rSecret!pw"}`
+	for i := 0; i < 2; i++ {
+		if rec := do(engine, http.MethodPost, "/api/v1/invitations/accept", "", body); rec.Code != http.StatusOK {
+			t.Fatalf("request %d: expected 200, got %d: %s", i, rec.Code, rec.Body.String())
+		}
+	}
+	rec := do(engine, http.MethodPost, "/api/v1/invitations/accept", "", body)
+	if rec.Code != http.StatusTooManyRequests {
+		t.Fatalf("expected 429, got %d", rec.Code)
+	}
+	if rec.Header().Get("Retry-After") == "" {
+		t.Fatal("expected Retry-After header")
+	}
+	// Health stays exempt.
+	for i := 0; i < 5; i++ {
+		if rec := do(engine, http.MethodGet, "/healthz", "", ""); rec.Code == http.StatusTooManyRequests {
+			t.Fatal("health route must be exempt from rate limiting")
+		}
+	}
+}
