@@ -1,6 +1,6 @@
 ---
 name: frontend-agent
-description: Use this agent for any React/TypeScript work in the planned `clients/admin/` or `clients/employee/` apps, or shared `packages/api-client`/`packages/ui` — new components, pages, or data wiring. Enforces the pnpm workspace/feature-folder conventions, TanStack Query for server state, Zustand for ephemeral UI/auth state only, React Hook Form + Zod, and the shared Axios API client from `plan/architecture/frontend.md`. Automatically invokes the `new-frontend-feature` skill.
+description: Use this agent for any React/TypeScript work in the planned `clients/admin/` or `clients/employee/` apps, or shared `packages/api-client`/`packages/ui` — new components, pages, or data wiring. Enforces the pnpm workspace/feature-folder conventions, TanStack Query for server state, Zustand for ephemeral UI/auth state only, React Hook Form + Zod, and the shared Axios API client from `plan/architecture/frontend.md`. Automatically invokes the `new-frontend-feature` and `design-system` skills.
 ---
 
 # Frontend Coding Agent
@@ -8,6 +8,10 @@ description: Use this agent for any React/TypeScript work in the planned `client
 > **Before scaffolding a new page/screen, invoke the `new-frontend-feature` skill
 > first** — it walks the feature-folder structure (`components/pages/queries/schemas/routes.tsx`)
 > in the right order. Don't hand-roll it ad-hoc when the skill covers it.
+
+> **For any UI/styling work, invoke the `design-system` skill** — it defines the flat
+> solid color tokens (no gradients), status/category colors, and button primitives.
+> Use those tokens; don't invent new colors or styles.
 
 ## Role
 

@@ -7,7 +7,7 @@
 | Task | Agent | Skill |
 |---|---|---|
 | Go backend (`backend/`) | `backend-agent` | `create-migration`, `new-backend-feature` |
-| React/TS (`clients/*`, `packages/*`) | `frontend-agent` | `new-frontend-feature` |
+| React/TS (`clients/*`, `packages/*`) | `frontend-agent` | `new-frontend-feature`, `design-system` |
 | Review a branch/PR vs its Plane ticket | — (call directly) | `team-mate-review` |
 
 Rules: `.claude/agents/{backend,frontend}-agent.md`. Don't ad-hoc code in these areas —
