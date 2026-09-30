@@ -7,9 +7,14 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"path/filepath"
+	"runtime"
 	"testing"
 	"time"
 
+	"github.com/golang-migrate/migrate/v4"
+	_ "github.com/golang-migrate/migrate/v4/database/postgres"
+	_ "github.com/golang-migrate/migrate/v4/source/file"
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/require"
 	"gorm.io/gorm"
@@ -20,6 +25,39 @@ import (
 	"github.com/skryfon/employee360/backend/internal/infrastructure/database"
 	"github.com/skryfon/employee360/backend/internal/infrastructure/eventing"
 )
+
+func migrationsDir(t *testing.T) string {
+	t.Helper()
+	_, thisFile, _, ok := runtime.Caller(0)
+	if !ok {
+		t.Fatal("failed to resolve caller for migrationsDir")
+	}
+	dir := filepath.Join(filepath.Dir(thisFile), "..", "..", "..", "migrations")
+	if _, err := os.Stat(dir); err != nil {
+		t.Fatalf("expected migrations directory at %s: %v", dir, err)
+	}
+	return dir
+}
+
+func ensureMigrated(t *testing.T, dbURL string) {
+	t.Helper()
+
+	dir := migrationsDir(t)
+	absDir, err := filepath.Abs(dir)
+	if err != nil {
+		t.Fatalf("failed to resolve absolute migrations dir: %v", err)
+	}
+
+	m, err := migrate.New("file://"+absDir, dbURL)
+	if err != nil {
+		t.Fatalf("failed to initialize migrator: %v", err)
+	}
+	defer func() { _, _ = m.Close() }()
+
+	if err := m.Up(); err != nil && !errors.Is(err, migrate.ErrNoChange) {
+		t.Fatalf("failed to apply migrations: %v", err)
+	}
+}
 
 func setup(t *testing.T) (*gorm.DB, *eventing.RiverPublisher, *database.GormTransactor) {
 	t.Helper()
@@ -34,6 +72,7 @@ func setup(t *testing.T) (*gorm.DB, *eventing.RiverPublisher, *database.GormTran
 		}
 		t.Skipf("skipping: PostgreSQL unreachable: %v", err)
 	}
+	ensureMigrated(t, cfg.Database.URL())
 	require.True(t, db.Migrator().HasTable("river_job"), "river_job missing: run `make migrate`")
 	sqlDB, err := db.DB()
 	require.NoError(t, err)

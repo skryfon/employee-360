@@ -84,6 +84,10 @@ jobs:
         with:
           go-version-file: backend/go.mod
 
+      - name: run migrations
+        working-directory: backend
+        run: go run ./cmd/migrate up
+
       - name: run integration tests
         run: make test-backend-integration
 
