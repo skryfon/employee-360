@@ -5,7 +5,6 @@ import (
 	"context"
 	"crypto/tls"
 	"embed"
-	"errors"
 	"fmt"
 	htmltemplate "html/template"
 	"mime/multipart"
@@ -83,11 +82,11 @@ func NewSMTPMailService(cfg config.SMTPConfig, opts ...Option) *SMTPMailService 
 // Send renders the appropriate email template and sends the transactional email via plain SMTP.
 func (s *SMTPMailService) Send(ctx context.Context, msg domainservice.EmailMessage) error {
 	if strings.TrimSpace(msg.To) == "" {
-		return errors.New("email recipient (To) cannot be empty")
+		return fmt.Errorf("%w: recipient (To) cannot be empty", domainservice.ErrInvalidEmailMessage)
 	}
 
 	if msg.TemplateName == "" {
-		return errors.New("email template name cannot be empty")
+		return fmt.Errorf("%w: template name cannot be empty", domainservice.ErrInvalidEmailMessage)
 	}
 
 	// Normalize data for consistent template variable access
@@ -98,7 +97,7 @@ func (s *SMTPMailService) Send(ctx context.Context, msg domainservice.EmailMessa
 	if subject == "" {
 		renderedSubject, err := s.renderSubjectTemplate(msg.TemplateName, data)
 		if err != nil {
-			return fmt.Errorf("failed to render email subject template %q: %w", msg.TemplateName, err)
+			return fmt.Errorf("%w: failed to render email subject template %q: %w", domainservice.ErrInvalidEmailMessage, msg.TemplateName, err)
 		}
 		subject = renderedSubject
 	} else {
@@ -106,11 +105,11 @@ func (s *SMTPMailService) Send(ctx context.Context, msg domainservice.EmailMessa
 		if strings.Contains(subject, "{{") {
 			tmpl, err := texttemplate.New("subject").Parse(subject)
 			if err != nil {
-				return fmt.Errorf("failed to parse custom email subject template: %w", err)
+				return fmt.Errorf("%w: failed to parse custom email subject template: %w", domainservice.ErrInvalidEmailMessage, err)
 			}
 			var buf bytes.Buffer
 			if err := tmpl.Execute(&buf, data); err != nil {
-				return fmt.Errorf("failed to execute custom email subject template: %w", err)
+				return fmt.Errorf("%w: failed to execute custom email subject template: %w", domainservice.ErrInvalidEmailMessage, err)
 			}
 			subject = strings.TrimSpace(buf.String())
 		}
@@ -119,13 +118,13 @@ func (s *SMTPMailService) Send(ctx context.Context, msg domainservice.EmailMessa
 	// Render Plain Text Body
 	textBody, err := s.renderTextTemplate(msg.TemplateName, data)
 	if err != nil {
-		return fmt.Errorf("failed to render email text template %q: %w", msg.TemplateName, err)
+		return fmt.Errorf("%w: failed to render email text template %q: %w", domainservice.ErrInvalidEmailMessage, msg.TemplateName, err)
 	}
 
 	// Render HTML Body
 	htmlBody, err := s.renderHTMLTemplate(msg.TemplateName, data)
 	if err != nil {
-		return fmt.Errorf("failed to render email HTML template %q: %w", msg.TemplateName, err)
+		return fmt.Errorf("%w: failed to render email HTML template %q: %w", domainservice.ErrInvalidEmailMessage, msg.TemplateName, err)
 	}
 
 	// Build MIME message
@@ -136,7 +135,7 @@ func (s *SMTPMailService) Send(ctx context.Context, msg domainservice.EmailMessa
 
 	rawMessage, err := s.buildMIMEMessage(from, msg.To, subject, textBody, htmlBody)
 	if err != nil {
-		return fmt.Errorf("failed to build MIME email message: %w", err)
+		return fmt.Errorf("%w: failed to build MIME email message: %w", domainservice.ErrInvalidEmailMessage, err)
 	}
 
 	// Transmit message via SMTP
@@ -231,7 +230,7 @@ func (s *SMTPMailService) renderHTMLTemplate(templateName domainservice.EmailTem
 // that ends up in a header (From, To, Subject) must be checked here first.
 func validateNoCRLF(fieldName, value string) error {
 	if strings.ContainsAny(value, "\r\n") {
-		return fmt.Errorf("invalid %s header value: contains carriage return or line feed characters", fieldName)
+		return fmt.Errorf("%w: invalid %s header value: contains carriage return or line feed characters", domainservice.ErrInvalidEmailMessage, fieldName)
 	}
 	return nil
 }
@@ -450,6 +449,7 @@ func normalizeTemplateData(data map[string]interface{}) map[string]interface{} {
 		"expires_at":  "ExpiresAt",
 		"expires_in":  "ExpiresIn",
 		"email":       "Email",
+		"user_name":   "UserName",
 		"user_id":     "UserID",
 		"tenant_id":   "TenantID",
 		"invited_by":  "InvitedBy",

@@ -8,6 +8,8 @@ import (
 	"github.com/google/uuid"
 	"gorm.io/gorm"
 
+	"github.com/skryfon/employee360/backend/internal/infrastructure/database"
+
 	"github.com/skryfon/employee360/backend/internal/domain/entity"
 	domainerrors "github.com/skryfon/employee360/backend/internal/domain/errors"
 	"github.com/skryfon/employee360/backend/internal/domain/repository"
@@ -31,7 +33,7 @@ var _ repository.RefreshTokenRepository = (*gormRefreshTokenRepository)(nil)
 // literal, so an empty IPAddress is omitted from the insert entirely rather
 // than written as "", leaving the column NULL.
 func (r *gormRefreshTokenRepository) Create(c context.Context, token *entity.RefreshToken) error {
-	tx := r.db.WithContext(c)
+	tx := database.DBFromContext(c, r.db)
 	if token.IPAddress == "" {
 		tx = tx.Omit("ip_address")
 	}
@@ -45,7 +47,7 @@ func (r *gormRefreshTokenRepository) Create(c context.Context, token *entity.Ref
 // TokenRefreshUseCase and LogoutUseCase.
 func (r *gormRefreshTokenRepository) GetByTokenHash(c context.Context, tokenHash string) (*entity.RefreshToken, error) {
 	var rt entity.RefreshToken
-	if err := r.db.WithContext(c).
+	if err := database.DBFromContext(c, r.db).
 		Where("token_hash = ?", tokenHash).
 		First(&rt).Error; err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
@@ -59,7 +61,7 @@ func (r *gormRefreshTokenRepository) GetByTokenHash(c context.Context, tokenHash
 // Revoke marks a single refresh token as revoked.
 func (r *gormRefreshTokenRepository) Revoke(c context.Context, id uuid.UUID) error {
 	now := time.Now().UTC()
-	return r.db.WithContext(c).
+	return database.DBFromContext(c, r.db).
 		Model(&entity.RefreshToken{}).
 		Where("id = ?", id).
 		Update("revoked_at", now).Error
@@ -69,7 +71,7 @@ func (r *gormRefreshTokenRepository) Revoke(c context.Context, id uuid.UUID) err
 // refresh-token reuse detection).
 func (r *gormRefreshTokenRepository) RevokeFamily(c context.Context, family uuid.UUID) error {
 	now := time.Now().UTC()
-	return r.db.WithContext(c).
+	return database.DBFromContext(c, r.db).
 		Model(&entity.RefreshToken{}).
 		Where("family = ?", family).
 		Update("revoked_at", now).Error
@@ -79,7 +81,7 @@ func (r *gormRefreshTokenRepository) RevokeFamily(c context.Context, family uuid
 // (used on password reset to invalidate all active sessions).
 func (r *gormRefreshTokenRepository) RevokeAllForUser(c context.Context, userID uuid.UUID) error {
 	now := time.Now().UTC()
-	return r.db.WithContext(c).
+	return database.DBFromContext(c, r.db).
 		Model(&entity.RefreshToken{}).
 		Where("user_id = ?", userID).
 		Update("revoked_at", now).Error
@@ -88,7 +90,7 @@ func (r *gormRefreshTokenRepository) RevokeAllForUser(c context.Context, userID 
 // DeleteExpiredTokens hard-deletes refresh tokens that expired before the
 // given time (housekeeping).
 func (r *gormRefreshTokenRepository) DeleteExpiredTokens(c context.Context, before time.Time) error {
-	return r.db.WithContext(c).
+	return database.DBFromContext(c, r.db).
 		Where("expires_at < ?", before).
 		Delete(&entity.RefreshToken{}).Error
 }

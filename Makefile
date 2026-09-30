@@ -2,7 +2,7 @@ SHELL       := /bin/bash
 BACKEND_DIR := backend
 SCOPE       ?= employee-360
 
-.PHONY: help bootstrap dev dev-api dev-admin dev-employee \
+.PHONY: help bootstrap dev dev-api worker dev-admin dev-employee \
         migrate migrate-down migrate-status migrate-version migrate-reset \
         seed bootstrap-admin \
         test test-all test-backend test-backend-integration test-backend-cover cover-func cover-html test-clients \
@@ -22,8 +22,8 @@ bootstrap: ## Install frontend and backend dependencies
 
 ## --- Dev ---
 
-dev: ## Run backend API + admin + employee clients concurrently
-	@$(MAKE) -j3 dev-api dev-admin dev-employee
+dev: ## Run backend API + worker + admin + employee clients concurrently
+	@$(MAKE) -j4 dev-api worker dev-admin dev-employee
 
 dev-api: ## Run the Go backend API (hot reload via air if installed, else go run)
 	@if command -v air >/dev/null 2>&1; then \
@@ -32,6 +32,9 @@ dev-api: ## Run the Go backend API (hot reload via air if installed, else go run
 		echo "air not installed (go install github.com/air-verse/air@latest) — falling back to go run"; \
 		cd $(BACKEND_DIR) && go run ./cmd/api; \
 	fi
+
+worker: ## Run the River background worker (email outbox); run alongside `make dev`
+	cd $(BACKEND_DIR) && go run ./cmd/worker
 
 dev-admin: ## Run admin client (clients/admin)
 	pnpm --filter admin dev
@@ -154,6 +157,7 @@ build-bin: ## Build backend binaries into backend/bin
 	cd $(BACKEND_DIR) && go build -o bin/api ./cmd/api
 	cd $(BACKEND_DIR) && go build -o bin/migrate ./cmd/migrate
 	cd $(BACKEND_DIR) && go build -o bin/bootstrap ./cmd/bootstrap
+	cd $(BACKEND_DIR) && go build -o bin/worker ./cmd/worker
 
 clean: ## Remove build artifacts and temporary files
 	rm -rf $(BACKEND_DIR)/bin $(BACKEND_DIR)/tmp $(BACKEND_DIR)/coverage.out

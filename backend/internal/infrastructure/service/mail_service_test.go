@@ -259,6 +259,7 @@ func TestSMTPMailService_Send_PasswordReset(t *testing.T) {
 			"ResetURL":   "https://app.employee360.example/reset-password?token=secret123",
 			"TenantName": "Acme Corp",
 			"ExpiresIn":  "15 minutes",
+			"user_name":  "Jane Doe",
 		},
 	}
 
@@ -295,6 +296,12 @@ func TestSMTPMailService_Send_PasswordReset(t *testing.T) {
 
 	if !strings.Contains(textBody, "https://app.employee360.example/reset-password?token=secret123") {
 		t.Errorf("expected ResetURL in text body: %s", textBody)
+	}
+	if !strings.Contains(textBody, "Hi Jane Doe,") {
+		t.Errorf("expected greeting with user name in text body: %s", textBody)
+	}
+	if !strings.Contains(htmlBody, "Hi Jane Doe,") {
+		t.Errorf("expected greeting with user name in html body: %s", htmlBody)
 	}
 	if !strings.Contains(textBody, "Acme Corp") {
 		t.Errorf("expected TenantName in text body: %s", textBody)
@@ -827,5 +834,27 @@ func TestSMTPMailService_Send_ContextCancellation(t *testing.T) {
 
 	if err == nil {
 		t.Fatal("expected error on context cancellation/timeout, got nil")
+	}
+}
+
+func TestSMTPMailService_Send_PasswordReset_EmptyNameFallsBack(t *testing.T) {
+	server := startMockSMTPServer(t, false, "", "")
+	defer server.close()
+
+	mailService := infraservice.NewSMTPMailService(config.SMTPConfig{Host: server.addr, Port: server.port, From: "no-reply@employee360.local"})
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	err := mailService.Send(ctx, domainservice.EmailMessage{
+		To:           "jane.doe@example.com",
+		TemplateName: domainservice.EmailTemplatePasswordReset,
+		TemplateData: map[string]interface{}{"ResetURL": "https://x/reset", "user_name": ""},
+	})
+	if err != nil {
+		t.Fatalf("Send() failed: %v", err)
+	}
+	textBody, _ := parseMIMEParts(t, server.getReceivedMessages()[0])
+	if !strings.HasPrefix(textBody, "Hello,") {
+		t.Errorf("expected fallback greeting, got: %s", textBody)
 	}
 }

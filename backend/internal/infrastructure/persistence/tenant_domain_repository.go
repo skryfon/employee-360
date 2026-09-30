@@ -7,6 +7,8 @@ import (
 
 	"gorm.io/gorm"
 
+	"github.com/skryfon/employee360/backend/internal/infrastructure/database"
+
 	"github.com/skryfon/employee360/backend/internal/domain/entity"
 	domainerrors "github.com/skryfon/employee360/backend/internal/domain/errors"
 	"github.com/skryfon/employee360/backend/internal/domain/repository"
@@ -34,7 +36,7 @@ var _ repository.TenantDomainRepository = (*gormTenantDomainRepository)(nil)
 // FindTenantByDomain returns the active tenant that owns the given email domain.
 func (r *gormTenantDomainRepository) FindTenantByDomain(c context.Context, domain string) (*entity.Tenant, error) {
 	var tenant entity.Tenant
-	if err := r.db.WithContext(c).
+	if err := database.DBFromContext(c, r.db).
 		Table("tenants").
 		Joins("JOIN tenant_domains ON tenant_domains.tenant_id = tenants.id").
 		Where("tenant_domains.domain = ? AND tenants.is_active = TRUE", strings.ToLower(domain)).

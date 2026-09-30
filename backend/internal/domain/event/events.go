@@ -54,6 +54,7 @@ type PasswordResetRequestedPayload struct {
 	UserID     uuid.UUID `json:"user_id"`
 	TenantID   uuid.UUID `json:"tenant_id"`
 	Email      string    `json:"email"`
+	UserName   string    `json:"user_name,omitempty"`
 	PlainToken string    `json:"plain_token"`
 	ResetURL   string    `json:"reset_url"`
 	ExpiresAt  time.Time `json:"expires_at"`

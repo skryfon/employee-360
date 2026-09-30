@@ -113,10 +113,12 @@ func TestForgotPasswordUseCase_ExistingUser(t *testing.T) {
 	logger := &mockLogger{}
 
 	user := &entity.User{
-		ID:       userID,
-		TenantID: tenantID,
-		Email:    "alice@example.com",
-		IsActive: true,
+		ID:        userID,
+		TenantID:  tenantID,
+		Email:     "alice@example.com",
+		FirstName: "Alice",
+		LastName:  "Smith",
+		IsActive:  true,
 	}
 	_ = userRepo.Create(context.Background(), user)
 
@@ -171,6 +173,9 @@ func TestForgotPasswordUseCase_ExistingUser(t *testing.T) {
 	}
 	if payload.Email != "alice@example.com" {
 		t.Errorf("expected payload email alice@example.com, got %s", payload.Email)
+	}
+	if payload.UserName != "Alice Smith" {
+		t.Errorf("expected payload user name Alice Smith, got %q", payload.UserName)
 	}
 	if payload.PlainToken == "" {
 		t.Errorf("expected non-empty plain token in event payload")

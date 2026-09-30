@@ -29,6 +29,37 @@ services:
       - "${MAILPIT_SMTP_PORT:-1025}:1025"
       - "${MAILPIT_UI_PORT:-8025}:8025"
 
+  # River background worker: drains the transactional email outbox (river_job)
+  # and delivers via SMTP (Mailpit in dev). No Dockerfile exists yet, so the
+  # source tree is mounted and run with `go run`. Requires migrations to be applied.
+  worker:
+    image: golang:1.26-alpine
+    container_name: employee360-worker
+    restart: unless-stopped
+    working_dir: /app/backend
+    command: go run ./cmd/worker
+    depends_on:
+      postgres:
+        condition: service_healthy
+      mailpit:
+        condition: service_started
+    environment:
+      DATABASE_HOST: postgres
+      DATABASE_PORT: "5432"
+      DATABASE_USER: ${DATABASE_USER:-postgres}
+      DATABASE_PASSWORD: ${DATABASE_PASSWORD:-postgres}
+      DATABASE_NAME: ${DATABASE_NAME:-employee360}
+      DATABASE_SSLMODE: disable
+      SMTP_HOST: mailpit
+      SMTP_PORT: "1025"
+      SMTP_USE_TLS: "false"
+      SMTP_USERNAME: ""
+      SMTP_PASSWORD: ""
+    volumes:
+      - ./:/app
+      - employee360_worker_gocache:/go/pkg/mod
+
 volumes:
   employee360_postgres_data:
+  employee360_worker_gocache:
 

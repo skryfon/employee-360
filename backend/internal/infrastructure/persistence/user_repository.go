@@ -7,6 +7,8 @@ import (
 	"github.com/google/uuid"
 	"gorm.io/gorm"
 
+	"github.com/skryfon/employee360/backend/internal/infrastructure/database"
+
 	"github.com/skryfon/employee360/backend/internal/domain/entity"
 	domainerrors "github.com/skryfon/employee360/backend/internal/domain/errors"
 	"github.com/skryfon/employee360/backend/internal/domain/repository"
@@ -34,13 +36,13 @@ var _ repository.UserRepository = (*gormUserRepository)(nil)
 // it (Create takes no separate tenantID parameter -- the caller already
 // resolved and set TenantID on the entity before calling this).
 func (r *gormUserRepository) Create(c context.Context, user *entity.User) error {
-	return r.db.WithContext(c).Create(user).Error
+	return database.DBFromContext(c, r.db).Create(user).Error
 }
 
 // GetByID looks up a user by id, scoped to the given tenantID.
 func (r *gormUserRepository) GetByID(c context.Context, tenantID, id uuid.UUID) (*entity.User, error) {
 	var user entity.User
-	if err := r.db.WithContext(c).
+	if err := database.DBFromContext(c, r.db).
 		Where("id = ? AND tenant_id = ?", id, tenantID).
 		First(&user).Error; err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
@@ -54,7 +56,7 @@ func (r *gormUserRepository) GetByID(c context.Context, tenantID, id uuid.UUID) 
 // GetByTenantAndEmail looks up a user by (tenant, email).
 func (r *gormUserRepository) GetByTenantAndEmail(c context.Context, tenantID uuid.UUID, email string) (*entity.User, error) {
 	var user entity.User
-	if err := r.db.WithContext(c).
+	if err := database.DBFromContext(c, r.db).
 		Where("tenant_id = ? AND email = ?", tenantID, email).
 		First(&user).Error; err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
@@ -101,7 +103,7 @@ func (r *gormUserRepository) GetByTenantAndEmailWithRoles(c context.Context, ten
 // itself.
 func (r *gormUserRepository) loadRoles(c context.Context, user *entity.User) error {
 	var roles []entity.Role
-	if err := r.db.WithContext(c).
+	if err := database.DBFromContext(c, r.db).
 		Table("roles").
 		Joins("JOIN user_roles ON user_roles.role_id = roles.id").
 		Where("user_roles.user_id = ? AND user_roles.tenant_id = ?", user.ID, user.TenantID).
@@ -117,7 +119,7 @@ func (r *gormUserRepository) loadRoles(c context.Context, user *entity.User) err
 // e.g. clearing PasswordHash) to be written, since GORM's struct-based
 // Updates otherwise silently skips zero values.
 func (r *gormUserRepository) Update(c context.Context, tenantID uuid.UUID, user *entity.User) error {
-	result := r.db.WithContext(c).
+	result := database.DBFromContext(c, r.db).
 		Model(&entity.User{}).
 		Where("id = ? AND tenant_id = ?", user.ID, tenantID).
 		Select("*").
@@ -134,7 +136,7 @@ func (r *gormUserRepository) Update(c context.Context, tenantID uuid.UUID, user 
 
 // Delete removes a user, scoped to the given tenantID.
 func (r *gormUserRepository) Delete(c context.Context, tenantID, id uuid.UUID) error {
-	result := r.db.WithContext(c).
+	result := database.DBFromContext(c, r.db).
 		Where("id = ? AND tenant_id = ?", id, tenantID).
 		Delete(&entity.User{})
 	if result.Error != nil {
@@ -150,7 +152,7 @@ func (r *gormUserRepository) Delete(c context.Context, tenantID, id uuid.UUID) e
 // row count for that tenant.
 func (r *gormUserRepository) List(c context.Context, tenantID uuid.UUID, limit, offset int) ([]*entity.User, int64, error) {
 	var total int64
-	if err := r.db.WithContext(c).
+	if err := database.DBFromContext(c, r.db).
 		Model(&entity.User{}).
 		Where("tenant_id = ?", tenantID).
 		Count(&total).Error; err != nil {
@@ -158,7 +160,7 @@ func (r *gormUserRepository) List(c context.Context, tenantID uuid.UUID, limit, 
 	}
 
 	var users []*entity.User
-	if err := r.db.WithContext(c).
+	if err := database.DBFromContext(c, r.db).
 		Where("tenant_id = ?", tenantID).
 		Order("created_at DESC").
 		Limit(limit).

@@ -1,6 +1,14 @@
 package service
 
-import "context"
+import (
+	"context"
+	"errors"
+)
+
+// ErrInvalidEmailMessage marks a permanent, non-retryable problem with an
+// EmailMessage (missing recipient/template, unrenderable template, header
+// injection attempt). Retrying can never succeed, so workers cancel the job.
+var ErrInvalidEmailMessage = errors.New("invalid email message")
 
 // EmailTemplateName identifies transactional email templates.
 type EmailTemplateName string
