@@ -6,6 +6,7 @@ import (
 	"github.com/rs/zerolog"
 	"github.com/skryfon/employee360/backend/config"
 	"github.com/skryfon/employee360/backend/internal/delivery/http/middleware"
+	"github.com/skryfon/employee360/backend/internal/domain/entity"
 	"github.com/skryfon/employee360/backend/internal/infrastructure/container"
 	"github.com/skryfon/employee360/backend/shared"
 	swaggerFiles "github.com/swaggo/files"
@@ -16,6 +17,12 @@ import (
 func SetupRouter(cfg *config.Config, log zerolog.Logger, ctr *container.AppContainer) *gin.Engine {
 	engine := gin.New()
 
+	// Trust no proxy unless configured: otherwise any client could spoof
+	// X-Forwarded-For to dodge the per-IP rate limiter (gin trusts all by default).
+	if err := engine.SetTrustedProxies(cfg.Server.TrustedProxies); err != nil {
+		log.Fatal().Err(err).Msg("invalid server.trusted_proxies")
+	}
+
 	// Base middleware chain: request_id -> logger -> cors -> recovery.
 	engine.Use(
 		middleware.RequestID(),
@@ -23,6 +30,18 @@ func SetupRouter(cfg *config.Config, log zerolog.Logger, ctr *container.AppConta
 		middleware.CORS(cfg.CORS.AllowedOrigins),
 		middleware.Recovery(log),
 	)
+
+	// Global rate limiting (after recovery so 429s still carry request-id/CORS headers).
+	if cfg.RateLimit.Enabled {
+		limiter, _ := middleware.RateLimit(middleware.RateLimitConfig{
+			RequestsPerSecond: cfg.RateLimit.RequestsPerSecond,
+			Burst:             cfg.RateLimit.Burst,
+			CleanupInterval:   cfg.RateLimit.CleanupInterval,
+			IdleTTL:           cfg.RateLimit.IdleTTL,
+			ExemptPaths:       []string{"/health", "/healthz", shared.APIVersionPrefix + "/health"},
+		})
+		engine.Use(limiter)
+	}
 
 	registerRoutes(engine, ctr)
 
@@ -56,6 +75,26 @@ func registerRoutes(engine *gin.Engine, c *container.Container) {
 				{
 					authProtected.POST("/logout", c.Auth.Handler.Logout)
 				}
+			}
+		}
+
+		if c.Auth != nil && c.Auth.InvitationHandler != nil {
+			ih := c.Auth.InvitationHandler
+
+			// Unauthenticated: the invitee proves possession of the emailed token.
+			v1.POST("/invitations/accept", ih.Accept)
+
+			// Admin-only management routes: auth -> tenant -> role check.
+			invGroup := v1.Group("/users/invitations",
+				middleware.Auth(c.Auth.TokenService),
+				middleware.Tenant(),
+				middleware.RequireRole(entity.RoleAdmin, entity.RoleSuperAdmin),
+			)
+			{
+				invGroup.POST("", ih.Invite)
+				invGroup.GET("", ih.List)
+				invGroup.POST("/:id/resend", ih.Resend)
+				invGroup.DELETE("/:id", ih.Revoke)
 			}
 		}
 	}

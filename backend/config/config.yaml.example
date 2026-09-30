@@ -32,6 +32,17 @@ app:
   # Public base URL of the web client; used to build links in emails.
   frontend_url: "http://localhost:5173"
 
+# Global per-client-IP token-bucket rate limiting (in-memory, per instance).
+# Health probes (/health, /healthz, /api/v1/health) are exempt.
+# Env: RATE_LIMIT_ENABLED, RATE_LIMIT_REQUESTS_PER_SECOND, RATE_LIMIT_BURST,
+#      RATE_LIMIT_CLEANUP_INTERVAL, RATE_LIMIT_IDLE_TTL
+rate_limit:
+  enabled: true
+  requests_per_second: 10
+  burst: 20
+  cleanup_interval: 1m
+  idle_ttl: 10m
+
 cors:
   allowed_origins:
     - "*"

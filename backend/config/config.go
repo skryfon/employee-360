@@ -25,6 +25,8 @@ type Config struct {
 	App      AppConfig      `mapstructure:"app"`
 	CORS     CORSConfig     `mapstructure:"cors"`
 	SMTP     SMTPConfig     `mapstructure:"smtp"`
+	// RateLimit configures the global per-client-IP request throttle.
+	RateLimit RateLimitConfig `mapstructure:"rate_limit"`
 	// Bootstrap holds inputs for cmd/bootstrap only; the API does not use it.
 	Bootstrap BootstrapConfig `mapstructure:"bootstrap"`
 }
@@ -44,6 +46,21 @@ type ServerConfig struct {
 	ReadTimeout     time.Duration `mapstructure:"read_timeout"`
 	WriteTimeout    time.Duration `mapstructure:"write_timeout"`
 	ShutdownTimeout time.Duration `mapstructure:"shutdown_timeout"`
+	// TrustedProxies lists proxy IPs/CIDRs whose X-Forwarded-For header is
+	// honoured when resolving the client IP. Empty (default) trusts no proxy,
+	// so the TCP peer address is used and the header cannot be spoofed.
+	TrustedProxies []string `mapstructure:"trusted_proxies"`
+}
+
+// RateLimitConfig configures the in-memory per-IP token-bucket limiter.
+type RateLimitConfig struct {
+	Enabled           bool    `mapstructure:"enabled"`
+	RequestsPerSecond float64 `mapstructure:"requests_per_second"`
+	Burst             int     `mapstructure:"burst"`
+	// CleanupInterval is how often idle per-IP limiters are swept; entries
+	// unused for longer than IdleTTL are dropped.
+	CleanupInterval time.Duration `mapstructure:"cleanup_interval"`
+	IdleTTL         time.Duration `mapstructure:"idle_ttl"`
 }
 
 // Address returns the formatted host:port listener address.
@@ -128,6 +145,21 @@ func (c *Config) Validate() error {
 			return fmt.Errorf("app.frontend_url (APP_FRONTEND_URL) must be explicitly set in %q environment", c.App.Environment)
 		}
 	}
+	if c.RateLimit.Enabled {
+		rl := c.RateLimit
+		if rl.RequestsPerSecond <= 0 {
+			return fmt.Errorf("rate_limit.requests_per_second (RATE_LIMIT_REQUESTS_PER_SECOND) must be greater than 0 when rate limiting is enabled, got %v", rl.RequestsPerSecond)
+		}
+		if rl.Burst < 1 {
+			return fmt.Errorf("rate_limit.burst (RATE_LIMIT_BURST) must be at least 1 when rate limiting is enabled, got %d", rl.Burst)
+		}
+		if rl.CleanupInterval < 0 {
+			return fmt.Errorf("rate_limit.cleanup_interval (RATE_LIMIT_CLEANUP_INTERVAL) must not be negative, got %s", rl.CleanupInterval)
+		}
+		if rl.IdleTTL < 0 {
+			return fmt.Errorf("rate_limit.idle_ttl (RATE_LIMIT_IDLE_TTL) must not be negative, got %s", rl.IdleTTL)
+		}
+	}
 	return nil
 }
 
@@ -181,6 +213,7 @@ func Load(searchPaths ...string) (*Config, error) {
 	// Viper's Unmarshal doesn't split a comma-separated env var into a
 	// slice automatically, so CORS_ALLOWED_ORIGINS is handled explicitly.
 	applyCORSEnvOverride(&cfg)
+	applyTrustedProxiesEnvOverride(&cfg)
 
 	// 7. Validate configuration
 	if err := cfg.Validate(); err != nil {
@@ -197,6 +230,15 @@ func setDefaults(v *viper.Viper) {
 	v.SetDefault("server.read_timeout", 10*time.Second)
 	v.SetDefault("server.write_timeout", 10*time.Second)
 	v.SetDefault("server.shutdown_timeout", 10*time.Second)
+
+	v.SetDefault("server.trusted_proxies", []string{})
+
+	// Rate limit defaults (per client IP)
+	v.SetDefault("rate_limit.enabled", true)
+	v.SetDefault("rate_limit.requests_per_second", 10.0)
+	v.SetDefault("rate_limit.burst", 20)
+	v.SetDefault("rate_limit.cleanup_interval", time.Minute)
+	v.SetDefault("rate_limit.idle_ttl", 10*time.Minute)
 
 	// Database defaults
 	v.SetDefault("database.host", "localhost")
@@ -279,7 +321,28 @@ func applyCORSEnvOverride(cfg *Config) {
 	}
 }
 
+// applyTrustedProxiesEnvOverride parses the comma-separated SERVER_TRUSTED_PROXIES variable.
+func applyTrustedProxiesEnvOverride(cfg *Config) {
+	raw, ok := os.LookupEnv("SERVER_TRUSTED_PROXIES")
+	if !ok {
+		return
+	}
+	proxies := []string{}
+	for _, p := range strings.Split(raw, ",") {
+		if trimmed := strings.TrimSpace(p); trimmed != "" {
+			proxies = append(proxies, trimmed)
+		}
+	}
+	cfg.Server.TrustedProxies = proxies
+}
+
 func bindEnvAliases(v *viper.Viper) {
+	_ = v.BindEnv("rate_limit.enabled", "RATE_LIMIT_ENABLED")
+	_ = v.BindEnv("rate_limit.requests_per_second", "RATE_LIMIT_REQUESTS_PER_SECOND", "RATE_LIMIT_RPS")
+	_ = v.BindEnv("rate_limit.burst", "RATE_LIMIT_BURST")
+	_ = v.BindEnv("rate_limit.cleanup_interval", "RATE_LIMIT_CLEANUP_INTERVAL")
+	_ = v.BindEnv("rate_limit.idle_ttl", "RATE_LIMIT_IDLE_TTL")
+
 	_ = v.BindEnv("server.port", "SERVER_PORT", "PORT")
 	_ = v.BindEnv("server.host", "SERVER_HOST", "HOST")
 	_ = v.BindEnv("server.read_timeout", "SERVER_READ_TIMEOUT")

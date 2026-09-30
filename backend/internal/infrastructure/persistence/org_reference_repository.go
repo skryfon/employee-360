@@ -1,0 +1,41 @@
+package persistence
+
+import (
+	"context"
+
+	"github.com/google/uuid"
+	"gorm.io/gorm"
+
+	"github.com/skryfon/employee360/backend/internal/domain/repository"
+	"github.com/skryfon/employee360/backend/internal/infrastructure/database"
+)
+
+// gormOrgReferenceRepository implements repository.OrgReferenceRepository
+// with tenant-scoped existence checks on departments and positions.
+type gormOrgReferenceRepository struct {
+	db *gorm.DB
+}
+
+// NewGormOrgReferenceRepository constructs a GORM-backed OrgReferenceRepository.
+func NewGormOrgReferenceRepository(db *gorm.DB) repository.OrgReferenceRepository {
+	return &gormOrgReferenceRepository{db: db}
+}
+
+var _ repository.OrgReferenceRepository = (*gormOrgReferenceRepository)(nil)
+
+func (r *gormOrgReferenceRepository) exists(c context.Context, table string, tenantID, id uuid.UUID) (bool, error) {
+	var n int64
+	err := database.DBFromContext(c, r.db).
+		Table(table).
+		Where("id = ? AND tenant_id = ?", id, tenantID).
+		Count(&n).Error
+	return n > 0, err
+}
+
+func (r *gormOrgReferenceRepository) DepartmentExists(c context.Context, tenantID, id uuid.UUID) (bool, error) {
+	return r.exists(c, "departments", tenantID, id)
+}
+
+func (r *gormOrgReferenceRepository) PositionExists(c context.Context, tenantID, id uuid.UUID) (bool, error) {
+	return r.exists(c, "positions", tenantID, id)
+}
