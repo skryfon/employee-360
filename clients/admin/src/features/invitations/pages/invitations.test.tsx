@@ -136,7 +136,7 @@ describe('invitations', () => {
     mock.onPost('/api/v1/users/invitations/i1/resend').reply(500, { success: false, error: { message: 'Resend exploded' } })
     renderAt('/invitations')
     await userEvent.click(await screen.findByRole('button', { name: /Resend invitation to p@x.com/ }))
-    expect(await screen.findByText(/Resend exploded|Could not resend invitation/)).toBeInTheDocument()
+    expect(await screen.findByText('Resend exploded')).toBeInTheDocument()
   })
 
   it('shows revoke failure in the dialog and keeps it open', async () => {
@@ -146,7 +146,7 @@ describe('invitations', () => {
     await userEvent.click(await screen.findByRole('button', { name: /Revoke invitation for p@x.com/ }))
     const dialog = screen.getByRole('dialog')
     await userEvent.click(within(dialog).getByRole('button', { name: 'Revoke' }))
-    expect(await within(dialog).findByText(/Revoke exploded|Could not revoke invitation/)).toBeInTheDocument()
+    expect(await within(dialog).findByText('Revoke exploded')).toBeInTheDocument()
     expect(screen.getByRole('dialog')).toBeInTheDocument()
   })
 
