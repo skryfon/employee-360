@@ -28,7 +28,7 @@ func NewGormUserInvitationRepository(db *gorm.DB) repository.UserInvitationRepos
 
 var _ repository.UserInvitationRepository = (*gormUserInvitationRepository)(nil)
 
-// pendingScope restricts an update to a still-pending invitation in a tenant.
+// pendingWhere restricts an update to a still-pending invitation in a tenant.
 const pendingWhere = "id = ? AND tenant_id = ? AND accepted_at IS NULL AND revoked_at IS NULL"
 
 func (r *gormUserInvitationRepository) Create(c context.Context, inv *entity.UserInvitation) error {
