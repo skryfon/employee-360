@@ -29,4 +29,9 @@ var (
 	ErrInvalidToken = errors.New("invalid or expired token")
 	ErrTokenExpired = errors.New("token has expired")
 	ErrTokenRevoked = errors.New("token has been revoked")
+
+	// Invitation errors
+	ErrInvitationNotFound   = errors.New("invitation not found")
+	ErrInvitationNotPending = errors.New("invitation is no longer pending")
+	ErrInvalidRole          = errors.New("role cannot be assigned by invitation")
 )
