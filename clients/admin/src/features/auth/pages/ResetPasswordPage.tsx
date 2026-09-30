@@ -1,8 +1,10 @@
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
-import { Link, useSearchParams } from 'react-router-dom'
+import { Link, useNavigate, useSearchParams } from 'react-router-dom'
 import { resetPasswordSchema, type ResetPasswordFormValues } from '../schemas/authSchemas'
 import { useResetPasswordMutation } from '../queries/authMutations'
+import { clearSession } from '@employee360/api-client'
+import { useAuthStore } from '../../../stores/authStore'
 import { AuthLayout } from '../components/AuthLayout'
 import { FormField } from '../components/FormField'
 import { SubmitButton } from '../components/SubmitButton'
@@ -11,6 +13,7 @@ import { InlineAlert } from '../components/InlineAlert'
 export default function ResetPasswordPage() {
   const [params] = useSearchParams()
   const token = params.get('token')
+  const navigate = useNavigate()
   const mutation = useResetPasswordMutation()
   const {
     register,
@@ -31,21 +34,18 @@ export default function ResetPasswordPage() {
     )
   }
 
-  if (mutation.isSuccess) {
-    return (
-      <AuthLayout title="Reset password">
-        <div className="flex flex-col gap-4">
-          <InlineAlert tone="neutral">Your password has been reset. You can now sign in.</InlineAlert>
-          <Link to="/login" className="text-sm text-slate-900 underline hover:text-slate-700">
-            Go to sign in
-          </Link>
-        </div>
-      </AuthLayout>
-    )
-  }
-
   const onSubmit = (v: ResetPasswordFormValues) =>
-    mutation.mutate({ token, new_password: v.newPassword })
+    mutation.mutate(
+      { token, new_password: v.newPassword },
+      {
+        onSuccess: () => {
+          // Drop any active session and strip the token from URL/history.
+          clearSession()
+          useAuthStore.getState().clear()
+          navigate('/login', { replace: true, state: { passwordReset: true } })
+        },
+      },
+    )
 
   return (
     <AuthLayout title="Reset password">

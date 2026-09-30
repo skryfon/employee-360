@@ -44,5 +44,5 @@ subscribeSession((session: Session | null) => {
 export const ADMIN_ROLES = ['admin', 'super_admin']
 
 export function isAuthenticated(s: Pick<AuthState, 'accessToken' | 'user'>): boolean {
-  return Boolean(s.accessToken && s.user)
+  return Boolean(s.accessToken && s.user && s.user.roles.some((r) => ADMIN_ROLES.includes(r)))
 }

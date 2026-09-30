@@ -2,7 +2,7 @@ import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { Link, Navigate, useLocation, useNavigate } from 'react-router-dom'
 import { loginSchema, type LoginFormValues } from '../schemas/authSchemas'
-import { useLoginMutation } from '../queries/authMutations'
+import { NotAdminError, useLoginMutation } from '../queries/authMutations'
 import { isAuthenticated, useAuthStore } from '../../../stores/authStore'
 import { AuthLayout } from '../components/AuthLayout'
 import { FormField } from '../components/FormField'
@@ -10,6 +10,13 @@ import { SubmitButton } from '../components/SubmitButton'
 import { InlineAlert } from '../components/InlineAlert'
 
 const GENERIC_ERROR = 'Invalid email or password.'
+const UNAVAILABLE_ERROR = 'Unable to sign in. Please try again.'
+
+function loginErrorMessage(error: unknown): string {
+  if (error instanceof NotAdminError) return GENERIC_ERROR
+  const status = (error as { response?: { status?: number } } | null)?.response?.status
+  return status === 401 || status === 403 ? GENERIC_ERROR : UNAVAILABLE_ERROR
+}
 
 export default function LoginPage() {
   const navigate = useNavigate()
@@ -22,7 +29,9 @@ export default function LoginPage() {
     formState: { errors },
   } = useForm<LoginFormValues>({ resolver: zodResolver(loginSchema) })
 
-  const from = (location.state as { from?: string } | null)?.from ?? '/'
+  const state = location.state as { from?: string; passwordReset?: boolean } | null
+  const from = state?.from ?? '/'
+  const passwordReset = Boolean(state?.passwordReset)
   if (authed && !mutation.isPending) return <Navigate to={from} replace />
 
   const onSubmit = (values: LoginFormValues) =>
@@ -31,7 +40,10 @@ export default function LoginPage() {
   return (
     <AuthLayout title="Sign in to Admin">
       <form onSubmit={handleSubmit(onSubmit)} noValidate className="flex flex-col gap-4">
-        {mutation.isError && <InlineAlert tone="error">{GENERIC_ERROR}</InlineAlert>}
+        {mutation.isError && <InlineAlert tone="error">{loginErrorMessage(mutation.error)}</InlineAlert>}
+        {!mutation.isError && passwordReset && (
+          <InlineAlert tone="neutral">Your password has been reset. You can now sign in.</InlineAlert>
+        )}
         <FormField
           label="Email"
           type="email"
