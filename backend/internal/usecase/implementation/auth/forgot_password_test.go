@@ -101,6 +101,8 @@ func (f *failingTransactor) WithinTransaction(ctx context.Context, fn func(ctx c
 	return f.err
 }
 
+const testFrontendURL = "http://frontend.test"
+
 func TestForgotPasswordUseCase_ExistingUser(t *testing.T) {
 	tenantID := uuid.New()
 	userID := uuid.New()
@@ -123,7 +125,7 @@ func TestForgotPasswordUseCase_ExistingUser(t *testing.T) {
 	_ = userRepo.Create(context.Background(), user)
 
 	tdRepo := newMockTenantDomainRepository().with("example.com", tenantID)
-	uc := NewForgotPasswordUseCase(userRepo, tdRepo, resetRepo, hashSvc, eventPub, transactor, logger)
+	uc := NewForgotPasswordUseCase(userRepo, tdRepo, resetRepo, hashSvc, eventPub, transactor, logger, testFrontendURL)
 
 	err := uc.Execute(context.Background(), authtypes.ForgotPasswordRequest{
 		Email: "alice@example.com",
@@ -183,6 +185,9 @@ func TestForgotPasswordUseCase_ExistingUser(t *testing.T) {
 	if hashSvc.HashToken(payload.PlainToken) != storedToken.TokenHash {
 		t.Errorf("hash of event plain token does not match stored token hash")
 	}
+	if want := testFrontendURL + "/reset-password?token=" + payload.PlainToken; payload.ResetURL != want {
+		t.Errorf("expected reset URL %q, got %q", want, payload.ResetURL)
+	}
 }
 
 func TestForgotPasswordUseCase_EnumerationSafe(t *testing.T) {
@@ -195,7 +200,7 @@ func TestForgotPasswordUseCase_EnumerationSafe(t *testing.T) {
 	logger := &mockLogger{}
 
 	tdRepo := newMockTenantDomainRepository().with("example.com", tenantID)
-	uc := NewForgotPasswordUseCase(userRepo, tdRepo, resetRepo, hashSvc, eventPub, transactor, logger)
+	uc := NewForgotPasswordUseCase(userRepo, tdRepo, resetRepo, hashSvc, eventPub, transactor, logger, testFrontendURL)
 
 	tests := []struct {
 		name  string
@@ -244,7 +249,7 @@ func TestForgotPasswordUseCase_InactiveUser(t *testing.T) {
 	_ = userRepo.Create(context.Background(), user)
 
 	tdRepo := newMockTenantDomainRepository().with("example.com", tenantID)
-	uc := NewForgotPasswordUseCase(userRepo, tdRepo, resetRepo, hashSvc, eventPub, transactor, logger)
+	uc := NewForgotPasswordUseCase(userRepo, tdRepo, resetRepo, hashSvc, eventPub, transactor, logger, testFrontendURL)
 
 	err := uc.Execute(context.Background(), authtypes.ForgotPasswordRequest{
 		Email: "inactive@example.com",
@@ -289,7 +294,7 @@ func TestForgotPasswordUseCase_TenantIsolation(t *testing.T) {
 	})
 
 	tdRepo := newMockTenantDomainRepository().with("example.com", tenantA)
-	uc := NewForgotPasswordUseCase(userRepo, tdRepo, resetRepo, hashSvc, eventPub, transactor, logger)
+	uc := NewForgotPasswordUseCase(userRepo, tdRepo, resetRepo, hashSvc, eventPub, transactor, logger, testFrontendURL)
 
 	err := uc.Execute(context.Background(), authtypes.ForgotPasswordRequest{
 		Email: sharedEmail,
@@ -368,7 +373,7 @@ func TestForgotPasswordUseCase_TransactionFailureIsLoggedNotSwallowed(t *testing
 	_ = userRepo.Create(context.Background(), user)
 
 	tdRepo := newMockTenantDomainRepository().with("example.com", tenantID)
-	uc := NewForgotPasswordUseCase(userRepo, tdRepo, resetRepo, hashSvc, eventPub, transactor, logger)
+	uc := NewForgotPasswordUseCase(userRepo, tdRepo, resetRepo, hashSvc, eventPub, transactor, logger, testFrontendURL)
 
 	err := uc.Execute(context.Background(), authtypes.ForgotPasswordRequest{
 		Email: "alice@example.com",
@@ -399,7 +404,7 @@ func TestForgotPasswordUseCase_UnknownDomain(t *testing.T) {
 		ID: uuid.New(), TenantID: uuid.New(), Email: "alice@unmapped.example", IsActive: true,
 	})
 
-	uc := NewForgotPasswordUseCase(userRepo, tdRepo, resetRepo, &mockHashService{}, eventPub, ucshared.NewNopTransactor(), &mockLogger{})
+	uc := NewForgotPasswordUseCase(userRepo, tdRepo, resetRepo, &mockHashService{}, eventPub, ucshared.NewNopTransactor(), &mockLogger{}, testFrontendURL)
 
 	if err := uc.Execute(context.Background(), authtypes.ForgotPasswordRequest{Email: "alice@unmapped.example"}); err != nil {
 		t.Fatalf("expected nil error, got %v", err)

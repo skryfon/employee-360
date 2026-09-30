@@ -39,7 +39,7 @@ func migrationsDir(t *testing.T) string {
 }
 
 // setupTestDB connects to a live PostgreSQL instance (same config resolution
-// as backend/integration/migrate_test.go's checkLiveDBOrSkip: config.Load
+// as backend/integration/migrate_test.go: config.Load
 // defaults + DATABASE_* env vars) and ensures the full schema is applied.
 // It skips the test (fails in CI) if PostgreSQL is unreachable, matching the
 // existing convention in this repo for DB-touching tests.

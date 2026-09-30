@@ -4,6 +4,8 @@ package integration
 
 import (
 	"bytes"
+	"crypto/rand"
+	"encoding/hex"
 	"fmt"
 	"os"
 	"os/exec"
@@ -64,29 +66,73 @@ func countRealUpMigrations(t *testing.T) (count int, maxVersion int) {
 	return len(matches), maxVersion
 }
 
-func checkLiveDBOrSkip(t *testing.T) {
+func inCI() bool {
+	return os.Getenv("CI") == "true" || os.Getenv("GITHUB_ACTIONS") == "true"
+}
+
+// scratchDBEnv creates a uniquely named scratch database on the configured
+// PostgreSQL server and returns an environment (os.Environ() plus overrides)
+// that points cmd/migrate child processes at it. The scratch database is
+// dropped on test cleanup, so these tests never touch the dev database's
+// golang-migrate version table or schema.
+//
+// Skips when PostgreSQL is unreachable or the role cannot CREATE DATABASE
+// outside CI; both are fatal in CI.
+func scratchDBEnv(t *testing.T) []string {
 	t.Helper()
 	cfg, err := config.Load()
 	if err != nil {
-		if os.Getenv("CI") == "true" || os.Getenv("GITHUB_ACTIONS") == "true" {
+		if inCI() {
 			t.Fatalf("failed to load config in CI: %v", err)
 		}
 		t.Skipf("skipping live database test: %v", err)
 	}
-	db, err := database.Connect(cfg.Database)
+	admin, err := database.Connect(cfg.Database)
 	if err != nil {
-		if os.Getenv("CI") == "true" || os.Getenv("GITHUB_ACTIONS") == "true" {
+		if inCI() {
 			t.Fatalf("PostgreSQL must be reachable in CI: %v", err)
 		}
 		t.Skipf("skipping live database test (PostgreSQL unreachable: %v)", err)
 	}
-	if sqlDB, err := db.DB(); err == nil {
-		_ = sqlDB.Close()
+	adminSQL, err := admin.DB()
+	if err != nil {
+		t.Fatalf("failed to get sql.DB: %v", err)
 	}
+
+	suffix := make([]byte, 6)
+	if _, err := rand.Read(suffix); err != nil {
+		t.Fatalf("failed to generate random db name: %v", err)
+	}
+	// Fixed prefix + lowercase hex: identifier-safe, no user input.
+	name := "employee360_migtest_" + hex.EncodeToString(suffix)
+
+	if _, err := adminSQL.Exec(`CREATE DATABASE "` + name + `"`); err != nil {
+		_ = adminSQL.Close()
+		if inCI() {
+			t.Fatalf("role must be able to CREATE DATABASE in CI: %v", err)
+		}
+		t.Skipf("skipping live database test (cannot CREATE DATABASE: %v)", err)
+	}
+
+	t.Cleanup(func() {
+		defer adminSQL.Close()
+		if _, err := adminSQL.Exec(`DROP DATABASE IF EXISTS "` + name + `" WITH (FORCE)`); err != nil {
+			t.Errorf("failed to drop scratch database %s: %v", name, err)
+		}
+	})
+
+	// Override every alias config.bindEnvAliases accepts for the DB name so
+	// no pre-existing variable can shadow the scratch database.
+	return append(os.Environ(),
+		"DATABASE_NAME="+name,
+		"DATABASE_DBNAME="+name,
+		"DB_NAME="+name,
+		"POSTGRES_DB="+name,
+	)
 }
 
 func TestMigrate_LiveDatabaseZeroMigrationsClean(t *testing.T) {
-	checkLiveDBOrSkip(t)
+	env := scratchDBEnv(t)
 
 	// Deliberately use an explicit empty tempDir here (via -dir), not the
 	// default auto-detected directory: findMigrationsDir() now resolves to
@@ -103,6 +149,7 @@ func TestMigrate_LiveDatabaseZeroMigrationsClean(t *testing.T) {
 	// Test "up" with zero migrations (AC-4 & AC-5)
 	cmdUp := exec.Command("go", "run", ".", "-dir", emptyDir, "up")
 	cmdUp.Dir = migrateDir
+	cmdUp.Env = env
 	var stdoutUp, stderrUp bytes.Buffer
 	cmdUp.Stdout = &stdoutUp
 	cmdUp.Stderr = &stderrUp
@@ -117,6 +164,7 @@ func TestMigrate_LiveDatabaseZeroMigrationsClean(t *testing.T) {
 	// Test "status" with zero migrations
 	cmdStatus := exec.Command("go", "run", ".", "-dir", emptyDir, "status")
 	cmdStatus.Dir = migrateDir
+	cmdStatus.Env = env
 	var stdoutStatus, stderrStatus bytes.Buffer
 	cmdStatus.Stdout = &stdoutStatus
 	cmdStatus.Stderr = &stderrStatus
@@ -130,7 +178,7 @@ func TestMigrate_LiveDatabaseZeroMigrationsClean(t *testing.T) {
 }
 
 func TestMigrate_LiveDatabaseApplyAndRevert(t *testing.T) {
-	checkLiveDBOrSkip(t)
+	env := scratchDBEnv(t)
 
 	tempDir := t.TempDir()
 	upContent := "CREATE TABLE IF NOT EXISTS _smoke_test_table (id serial primary key, name text);\n"
@@ -146,6 +194,7 @@ func TestMigrate_LiveDatabaseApplyAndRevert(t *testing.T) {
 	// 1. Run UP
 	cmdUp := exec.Command("go", "run", ".", "-dir", tempDir, "up")
 	cmdUp.Dir = migrateDir
+	cmdUp.Env = env
 	var stdoutUp, stderrUp bytes.Buffer
 	cmdUp.Stdout = &stdoutUp
 	cmdUp.Stderr = &stderrUp
@@ -160,6 +209,7 @@ func TestMigrate_LiveDatabaseApplyAndRevert(t *testing.T) {
 	// 2. Check STATUS
 	cmdStatus := exec.Command("go", "run", ".", "-dir", tempDir, "status")
 	cmdStatus.Dir = migrateDir
+	cmdStatus.Env = env
 	var stdoutStatus, stderrStatus bytes.Buffer
 	cmdStatus.Stdout = &stdoutStatus
 	cmdStatus.Stderr = &stderrStatus
@@ -174,6 +224,7 @@ func TestMigrate_LiveDatabaseApplyAndRevert(t *testing.T) {
 	// 3. Run DOWN
 	cmdDown := exec.Command("go", "run", ".", "-dir", tempDir, "down", "1")
 	cmdDown.Dir = migrateDir
+	cmdDown.Env = env
 	var stdoutDown, stderrDown bytes.Buffer
 	cmdDown.Stdout = &stdoutDown
 	cmdDown.Stderr = &stderrDown
@@ -200,7 +251,7 @@ func TestMigrate_LiveDatabaseApplyAndRevert(t *testing.T) {
 // (up) against the real directory was smoke-tested in CI, but `make
 // migrate-down` against the real down-scripts never actually ran anywhere.
 func TestMigrate_LiveDatabaseRealMigrationsApplyAndRevert(t *testing.T) {
-	checkLiveDBOrSkip(t)
+	env := scratchDBEnv(t)
 
 	count, maxVersion := countRealUpMigrations(t)
 
@@ -210,6 +261,7 @@ func TestMigrate_LiveDatabaseRealMigrationsApplyAndRevert(t *testing.T) {
 	// exactly as `make migrate` does in production.
 	cmdUp := exec.Command("go", "run", ".", "up")
 	cmdUp.Dir = migrateDir
+	cmdUp.Env = env
 	var stdoutUp, stderrUp bytes.Buffer
 	cmdUp.Stdout = &stdoutUp
 	cmdUp.Stderr = &stderrUp
@@ -225,6 +277,7 @@ func TestMigrate_LiveDatabaseRealMigrationsApplyAndRevert(t *testing.T) {
 	// not hardcoded, so this doesn't go stale as migrations are added).
 	cmdStatus := exec.Command("go", "run", ".", "status")
 	cmdStatus.Dir = migrateDir
+	cmdStatus.Env = env
 	var stdoutStatus, stderrStatus bytes.Buffer
 	cmdStatus.Stdout = &stdoutStatus
 	cmdStatus.Stderr = &stderrStatus
@@ -244,6 +297,7 @@ func TestMigrate_LiveDatabaseRealMigrationsApplyAndRevert(t *testing.T) {
 	// in sequence -- the part of AC-3 that had no automated coverage.
 	cmdDown := exec.Command("go", "run", ".", "down", strconv.Itoa(count))
 	cmdDown.Dir = migrateDir
+	cmdDown.Env = env
 	var stdoutDown, stderrDown bytes.Buffer
 	cmdDown.Stdout = &stdoutDown
 	cmdDown.Stderr = &stderrDown
@@ -261,6 +315,7 @@ func TestMigrate_LiveDatabaseRealMigrationsApplyAndRevert(t *testing.T) {
 	// for other tests in this package.
 	cmdFinalStatus := exec.Command("go", "run", ".", "status")
 	cmdFinalStatus.Dir = migrateDir
+	cmdFinalStatus.Env = env
 	var stdoutFinalStatus, stderrFinalStatus bytes.Buffer
 	cmdFinalStatus.Stdout = &stdoutFinalStatus
 	cmdFinalStatus.Stderr = &stderrFinalStatus

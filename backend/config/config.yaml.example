@@ -29,6 +29,8 @@ jwt:
 app:
   environment: "development"
   log_level: "debug"
+  # Public base URL of the web client; used to build links in emails.
+  frontend_url: "http://localhost:5173"
 
 cors:
   allowed_origins:

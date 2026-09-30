@@ -3,6 +3,7 @@ package eventing
 import (
 	"database/sql"
 	"log/slog"
+	"time"
 
 	"github.com/riverqueue/river"
 	"github.com/riverqueue/river/riverdriver/riverdatabasesql"
@@ -24,8 +25,10 @@ func NewWorkerClient(db *sql.DB, emailService service.EmailService, logger *slog
 	workers := river.NewWorkers()
 	river.AddWorker(workers, job.NewEmailWorker(emailService))
 	return river.NewClient(riverdatabasesql.New(db), &river.Config{
-		Logger:  logger,
-		Queues:  map[string]river.QueueConfig{river.QueueDefault: {MaxWorkers: maxWorkers}},
-		Workers: workers,
+		Logger: logger,
+		// Completed jobs carry reset/invite URLs in their args; keep them briefly.
+		CompletedJobRetentionPeriod: time.Hour,
+		Queues:                      map[string]river.QueueConfig{river.QueueDefault: {MaxWorkers: maxWorkers}},
+		Workers:                     workers,
 	})
 }

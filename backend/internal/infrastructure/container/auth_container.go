@@ -95,7 +95,7 @@ func NewAuthContainer(
 	loginUC := authusecaseimpl.NewLoginUseCase(userRepo, tenantDomainRepo, tokenService, hashService, refreshTokenRepo, loggerAdapter)
 	tokenRefreshUC := authusecaseimpl.NewTokenRefreshUseCase(userRepo, tokenService, hashService, refreshTokenRepo, loggerAdapter)
 	logoutUC := authusecaseimpl.NewLogoutUseCase(tokenService, hashService, refreshTokenRepo)
-	forgotPasswordUC := authusecaseimpl.NewForgotPasswordUseCase(userRepo, tenantDomainRepo, passwordResetRepo, hashService, eventPublisher, transactor, loggerAdapter)
+	forgotPasswordUC := authusecaseimpl.NewForgotPasswordUseCase(userRepo, tenantDomainRepo, passwordResetRepo, hashService, eventPublisher, transactor, loggerAdapter, cfg.App.FrontendURL)
 	resetPasswordUC := authusecaseimpl.NewResetPasswordUseCase(userRepo, passwordResetRepo, refreshTokenRepo, hashService, transactor)
 
 	handler := handlers.NewAuthHandler(

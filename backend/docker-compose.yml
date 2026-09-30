@@ -36,7 +36,7 @@ services:
     image: golang:1.26-alpine
     container_name: employee360-worker
     restart: unless-stopped
-    working_dir: /app/backend
+    working_dir: /app
     command: go run ./cmd/worker
     depends_on:
       postgres:

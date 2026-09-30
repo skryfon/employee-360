@@ -31,6 +31,7 @@ type ForgotPasswordUseCaseImpl struct {
 	transactor        ucshared.Transactor
 	logger            service.Logger
 	tokenExpiry       time.Duration
+	frontendBaseURL   string
 }
 
 var _ authusecase.ForgotPasswordUseCase = (*ForgotPasswordUseCaseImpl)(nil)
@@ -44,6 +45,7 @@ func NewForgotPasswordUseCase(
 	eventPublisher service.EventPublisher,
 	transactor ucshared.Transactor,
 	logger service.Logger,
+	frontendBaseURL string,
 ) *ForgotPasswordUseCaseImpl {
 	return &ForgotPasswordUseCaseImpl{
 		userRepo:          userRepo,
@@ -54,6 +56,7 @@ func NewForgotPasswordUseCase(
 		transactor:        transactor,
 		logger:            logger,
 		tokenExpiry:       defaultResetTokenExpiry,
+		frontendBaseURL:   strings.TrimRight(frontendBaseURL, "/"),
 	}
 }
 
@@ -116,7 +119,7 @@ func (u *ForgotPasswordUseCaseImpl) Execute(ctx context.Context, input authtypes
 			Email:      user.Email,
 			UserName:   strings.TrimSpace(user.FirstName + " " + user.LastName),
 			PlainToken: plainToken,
-			ResetURL:   "https://app.skryfon.com/reset-password?token=" + plainToken,
+			ResetURL:   u.frontendBaseURL + "/reset-password?token=" + plainToken,
 			ExpiresAt:  tokenEntity.ExpiresAt,
 		},
 		OccurredAt: now,

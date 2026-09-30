@@ -91,6 +91,7 @@ func TestConfig_EnvOverrides(t *testing.T) {
 	t.Setenv("SERVER_PORT", "9090")
 	t.Setenv("APP_ENV", "staging")
 	t.Setenv("JWT_SECRET", "custom-32-byte-secure-jwt-secret-key-360")
+	t.Setenv("APP_FRONTEND_URL", "https://app.example.com")
 
 	cfg, err := Load()
 	if err != nil {
@@ -157,6 +158,7 @@ func TestConfig_JWTSecretValidationInProduction(t *testing.T) {
 
 	// Now set a strong custom secret
 	t.Setenv("JWT_SECRET", "a-secure-production-jwt-secret-with-over-32-chars")
+	t.Setenv("APP_FRONTEND_URL", "https://app.example.com")
 	cfg, err := Load()
 	if err != nil {
 		t.Fatalf("expected Load() to succeed with strong secret in production: %v", err)

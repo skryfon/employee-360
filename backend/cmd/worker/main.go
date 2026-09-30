@@ -36,7 +36,7 @@ func main() {
 
 	log.Info().Msg("employee360 worker: connected to database")
 
-	wc, err := container.NewWorkerContainer(cfg, db, log)
+	wc, err := container.NewWorkerContainer(cfg, db)
 	if err != nil {
 		log.Error().Err(err).Msg("failed to wire worker dependencies")
 		os.Exit(1)

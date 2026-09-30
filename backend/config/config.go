@@ -14,6 +14,9 @@ import (
 // DefaultJWTSecret is the fallback secret used exclusively in local development mode.
 const DefaultJWTSecret = "employee360-super-secret-key-change-in-production"
 
+// DefaultFrontendURL is the local-development web client URL; it must be overridden in production/staging.
+const DefaultFrontendURL = "http://localhost:5173"
+
 // Config represents the root application configuration for Employee360.
 type Config struct {
 	Server   ServerConfig   `mapstructure:"server"`
@@ -92,6 +95,9 @@ type JWTConfig struct {
 type AppConfig struct {
 	Environment string `mapstructure:"environment"`
 	LogLevel    string `mapstructure:"log_level"`
+	// FrontendURL is the public base URL of the web client, used to build links
+	// in emails (e.g. password reset). No trailing slash.
+	FrontendURL string `mapstructure:"frontend_url"`
 }
 
 // CORSConfig contains cross-origin resource sharing configuration.
@@ -117,6 +123,9 @@ func (c *Config) Validate() error {
 	if env == "production" || env == "staging" {
 		if c.JWT.Secret == DefaultJWTSecret || len(c.JWT.Secret) < 32 {
 			return fmt.Errorf("jwt.secret must be explicitly set to a custom strong secret (min 32 chars) in %q environment", c.App.Environment)
+		}
+		if c.App.FrontendURL == "" || c.App.FrontendURL == DefaultFrontendURL {
+			return fmt.Errorf("app.frontend_url (APP_FRONTEND_URL) must be explicitly set in %q environment", c.App.Environment)
 		}
 	}
 	return nil
@@ -209,6 +218,7 @@ func setDefaults(v *viper.Viper) {
 	// App defaults
 	v.SetDefault("app.environment", "development")
 	v.SetDefault("app.log_level", "debug")
+	v.SetDefault("app.frontend_url", DefaultFrontendURL)
 
 	// CORS defaults
 	v.SetDefault("cors.allowed_origins", []string{"*"})
@@ -293,6 +303,7 @@ func bindEnvAliases(v *viper.Viper) {
 
 	_ = v.BindEnv("app.environment", "APP_ENV", "ENVIRONMENT", "ENV")
 	_ = v.BindEnv("app.log_level", "LOG_LEVEL", "APP_LOG_LEVEL")
+	_ = v.BindEnv("app.frontend_url", "APP_FRONTEND_URL", "FRONTEND_URL")
 
 	_ = v.BindEnv("bootstrap.system_tenant_name", "BOOTSTRAP_SYSTEM_TENANT_NAME")
 	_ = v.BindEnv("bootstrap.super_admin_email", "BOOTSTRAP_SUPER_ADMIN_EMAIL")

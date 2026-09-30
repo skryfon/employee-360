@@ -8,15 +8,15 @@ import (
 	"os"
 
 	"github.com/riverqueue/river"
-	infraservice "github.com/skryfon/employee360/backend/internal/infrastructure/service"
-
 	"github.com/rs/zerolog"
+	"gorm.io/gorm"
+
 	"github.com/skryfon/employee360/backend/config"
 	domainservice "github.com/skryfon/employee360/backend/internal/domain/service"
 	"github.com/skryfon/employee360/backend/internal/infrastructure/database"
 	"github.com/skryfon/employee360/backend/internal/infrastructure/eventing"
+	infraservice "github.com/skryfon/employee360/backend/internal/infrastructure/service"
 	"github.com/skryfon/employee360/backend/internal/usecase/implementation/ucshared"
-	"gorm.io/gorm"
 )
 
 // AppContainer holds wired configuration, infrastructure, and domain sub-containers.
@@ -77,14 +77,11 @@ func New(cfg *config.Config, db *gorm.DB, log zerolog.Logger) (*AppContainer, er
 
 // WorkerContainer holds the dependencies of the cmd/worker process.
 type WorkerContainer struct {
-	Config      *config.Config
-	Log         zerolog.Logger
-	EmailSvc    domainservice.EmailService
 	RiverClient *river.Client[*sql.Tx]
 }
 
 // NewWorkerContainer wires the River worker client with the SMTP EmailService.
-func NewWorkerContainer(cfg *config.Config, db *gorm.DB, log zerolog.Logger) (*WorkerContainer, error) {
+func NewWorkerContainer(cfg *config.Config, db *gorm.DB) (*WorkerContainer, error) {
 	sqlDB, err := db.DB()
 	if err != nil {
 		return nil, fmt.Errorf("container: resolve sql.DB: %w", err)
@@ -95,5 +92,5 @@ func NewWorkerContainer(cfg *config.Config, db *gorm.DB, log zerolog.Logger) (*W
 	if err != nil {
 		return nil, fmt.Errorf("container: build river worker client: %w", err)
 	}
-	return &WorkerContainer{Config: cfg, Log: log, EmailSvc: emailSvc, RiverClient: client}, nil
+	return &WorkerContainer{RiverClient: client}, nil
 }

@@ -30,13 +30,13 @@ func (d *Dispatcher) Dispatch(evt event.Event) (river.JobArgs, error) {
 		if !ok {
 			return nil, fmt.Errorf("%w: %s payload %T", ErrUnsupportedEvent, evt.EventType, evt.Payload)
 		}
-		return invitationArgs(p.TenantID.String(), p.Email, p.RoleName, p.PlainToken, p.InviteURL, p.ExpiresAt), nil
+		return invitationArgs(p.TenantID.String(), p.Email, p.RoleName, p.InviteURL, p.ExpiresAt), nil
 	case event.EventTypeInvitationResent:
 		p, ok := payloadAs[event.InvitationResentPayload](evt.Payload)
 		if !ok {
 			return nil, fmt.Errorf("%w: %s payload %T", ErrUnsupportedEvent, evt.EventType, evt.Payload)
 		}
-		return invitationArgs(p.TenantID.String(), p.Email, p.RoleName, p.PlainToken, p.InviteURL, p.ExpiresAt), nil
+		return invitationArgs(p.TenantID.String(), p.Email, p.RoleName, p.InviteURL, p.ExpiresAt), nil
 	case event.EventTypePasswordResetRequested:
 		p, ok := payloadAs[event.PasswordResetRequestedPayload](evt.Payload)
 		if !ok {
@@ -47,13 +47,12 @@ func (d *Dispatcher) Dispatch(evt event.Event) (river.JobArgs, error) {
 			TemplateName: service.EmailTemplatePasswordReset,
 			To:           p.Email,
 			TemplateData: map[string]interface{}{
-				"email":       p.Email,
-				"user_name":   strings.TrimSpace(p.UserName),
-				"user_id":     p.UserID.String(),
-				"tenant_id":   p.TenantID.String(),
-				"plain_token": p.PlainToken,
-				"reset_url":   p.ResetURL,
-				"expires_at":  p.ExpiresAt.UTC().Format(time.RFC3339),
+				"email":      p.Email,
+				"user_name":  strings.TrimSpace(p.UserName),
+				"user_id":    p.UserID.String(),
+				"tenant_id":  p.TenantID.String(),
+				"reset_url":  p.ResetURL,
+				"expires_at": p.ExpiresAt.UTC().Format(time.RFC3339),
 			},
 		}, nil
 	default:
@@ -61,18 +60,17 @@ func (d *Dispatcher) Dispatch(evt event.Event) (river.JobArgs, error) {
 	}
 }
 
-func invitationArgs(tenantID, email, role, token, inviteURL string, expiresAt time.Time) job.SendEmailArgs {
+func invitationArgs(tenantID, email, role, inviteURL string, expiresAt time.Time) job.SendEmailArgs {
 	return job.SendEmailArgs{
 		TenantID:     tenantID,
 		TemplateName: service.EmailTemplateUserInvitation,
 		To:           email,
 		TemplateData: map[string]interface{}{
-			"email":       email,
-			"tenant_id":   tenantID,
-			"role_name":   role,
-			"plain_token": token,
-			"invite_url":  inviteURL,
-			"expires_at":  expiresAt.UTC().Format(time.RFC3339),
+			"email":      email,
+			"tenant_id":  tenantID,
+			"role_name":  role,
+			"invite_url": inviteURL,
+			"expires_at": expiresAt.UTC().Format(time.RFC3339),
 		},
 	}
 }

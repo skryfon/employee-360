@@ -40,6 +40,7 @@ func TestDispatcher_MapsAllEmailEvents(t *testing.T) {
 			assert.Equal(t, tenantID.String(), got.TenantID)
 			assert.Equal(t, tc.url, got.TemplateData[tc.urlKey])
 			assert.Equal(t, "2030-01-02T03:04:05Z", got.TemplateData["expires_at"])
+			assert.NotContains(t, got.TemplateData, "plain_token", "plaintext tokens must not be persisted in river_job.args")
 			if tc.template == service.EmailTemplatePasswordReset {
 				assert.Equal(t, "Ann Lee", got.TemplateData["user_name"])
 			}
