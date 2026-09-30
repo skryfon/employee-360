@@ -40,7 +40,7 @@ Reviewed range: `d07fecf..ef78b6d` (this ticket's 10 commits). Local `origin/mai
 - [x] (resolved in 508de5f) `clients/admin/src/features/invitations/components/InviteUserForm.tsx:55` — `mutation.isSuccess && "Invitation sent."` is effectively dead now that the create page navigates away on success. — Fix: drop it, or show a success notice on the list page.
 - [x] (resolved in 508de5f) `invitations.test.tsx` — no test for the roles-load error state ("Could not load roles."), nor for resend/revoke failure messages. — Fix: add one test each.
 - [ ] (still open, deferred: needs org-reference list endpoints, follow-up ticket) `InviteUserForm.tsx` — department/position are raw UUID text inputs (no lookup endpoints exist yet), which is unusable for real admins. Acceptable as a stopgap; track a follow-up ticket for org-reference lists.
-- [ ] `clients/admin/src/features/invitations/pages/invitations.test.tsx:139,150` — the resend/revoke failure tests assert on a loose regex alternation (`/Resend exploded|Could not resend invitation/`), so they pass whichever message is shown. — Fix: assert the exact expected message.
+- [x] (resolved in follow-up commit: exact messages asserted) `clients/admin/src/features/invitations/pages/invitations.test.tsx:139,150` — the resend/revoke failure tests assert on a loose regex alternation (`/Resend exploded|Could not resend invitation/`), so they pass whichever message is shown. — Fix: assert the exact expected message.
 
 ## Verdict
 - **Score:** 98/100
