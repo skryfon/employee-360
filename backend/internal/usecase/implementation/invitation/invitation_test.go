@@ -17,13 +17,13 @@ import (
 )
 
 func (f *fixture) invite() *InviteUserUseCaseImpl {
-	return NewInviteUserUseCase(f.s, fakeUserRoleRepo{f.s}, fakeRoleRepo{f.s}, fakeInvRepo{f.s}, f.hash, f.s, f.s, "http://app/")
+	return NewInviteUserUseCase(f.s, fakeUserRoleRepo{f.s}, fakeRoleRepo{f.s}, fakeInvRepo{f.s}, fakeOrgRepo{f.s}, fakeAuditRepo{f.s}, f.hash, f.s, f.s, "http://app/")
 }
 func (f *fixture) resend() *ResendInvitationUseCaseImpl {
-	return NewResendInvitationUseCase(fakeRoleRepo{f.s}, fakeInvRepo{f.s}, f.hash, f.s, f.s, "http://app")
+	return NewResendInvitationUseCase(fakeRoleRepo{f.s}, fakeInvRepo{f.s}, fakeAuditRepo{f.s}, f.hash, f.s, f.s, "http://app")
 }
 func (f *fixture) revoke() *RevokeInvitationUseCaseImpl {
-	return NewRevokeInvitationUseCase(fakeInvRepo{f.s})
+	return NewRevokeInvitationUseCase(fakeInvRepo{f.s}, f.s, fakeUserRoleRepo{f.s}, fakeAuditRepo{f.s}, f.s)
 }
 func (f *fixture) accept() *AcceptInvitationUseCaseImpl {
 	return NewAcceptInvitationUseCase(f.s, fakeInvRepo{f.s}, f.hash, f.s)
@@ -199,4 +199,101 @@ func TestList_TenantScoped(t *testing.T) {
 	for _, i := range list {
 		assert.Equal(t, f.tenantA, i.TenantID)
 	}
+}
+
+func TestInvite_MalformedEmailIsValidationError(t *testing.T) {
+	f := newFixture()
+	for _, e := range []string{"", "nope", "@x.com", "a@"} {
+		_, err := f.invite().Execute(f.adminCtx, invtypes.InviteUserRequest{Email: e, RoleID: f.employeeRl.ID})
+		assert.ErrorIs(t, err, domainerrors.ErrInvalidEmail, e)
+	}
+}
+
+func TestInvite_DepartmentPositionMustBelongToTenant(t *testing.T) {
+	f := newFixture()
+	ownDept, ownPos := uuid.New(), uuid.New()
+	foreignDept, foreignPos := uuid.New(), uuid.New()
+	f.s.depts[ownDept], f.s.positions[ownPos] = f.tenantA, f.tenantA
+	f.s.depts[foreignDept], f.s.positions[foreignPos] = f.tenantB, f.tenantB
+
+	_, err := f.invite().Execute(f.adminCtx, invtypes.InviteUserRequest{Email: "d@acme.com", RoleID: f.employeeRl.ID, DepartmentID: &foreignDept})
+	assert.ErrorIs(t, err, domainerrors.ErrDepartmentNotFound)
+	_, err = f.invite().Execute(f.adminCtx, invtypes.InviteUserRequest{Email: "p@acme.com", RoleID: f.employeeRl.ID, PositionID: &foreignPos})
+	assert.ErrorIs(t, err, domainerrors.ErrPositionNotFound)
+	assert.Empty(t, f.s.users)
+	assert.Empty(t, f.s.invitations)
+	assert.Empty(t, f.s.audits)
+
+	inv, err := f.invite().Execute(f.adminCtx, invtypes.InviteUserRequest{Email: "ok@acme.com", RoleID: f.employeeRl.ID, DepartmentID: &ownDept, PositionID: &ownPos})
+	require.NoError(t, err)
+	assert.Equal(t, &ownDept, inv.DepartmentID)
+}
+
+func TestRevoke_RemovesPendingUserAndAllowsReinvite(t *testing.T) {
+	f := newFixture()
+	inv, _ := f.doInvite(t, "again@acme.com")
+	require.NoError(t, f.revoke().Execute(f.adminCtx, inv.ID))
+	assert.Empty(t, f.s.users)
+	assert.Empty(t, f.s.userRoles)
+
+	inv2, _ := f.doInvite(t, "again@acme.com")
+	assert.NotEqual(t, inv.ID, inv2.ID)
+}
+
+func TestRevoke_KeepsActivatedUser(t *testing.T) {
+	f := newFixture()
+	inv, _ := f.doInvite(t, "act@acme.com")
+	u, _ := f.s.GetByTenantAndEmail(f.adminCtx, f.tenantA, "act@acme.com")
+	u.IsActive = true // activated out-of-band while invitation remained pending
+	require.NoError(t, f.revoke().Execute(f.adminCtx, inv.ID))
+	assert.Len(t, f.s.users, 1)
+}
+
+// racyInvRepo simulates another request accepting the invitation between this
+// request's lookup and its MarkAccepted.
+type racyInvRepo struct{ fakeInvRepo }
+
+func (r racyInvRepo) GetByTokenHash(c context.Context, h string) (*entity.UserInvitation, error) {
+	inv, err := r.fakeInvRepo.GetByTokenHash(c, h)
+	if err == nil {
+		now := time.Now()
+		r.s.invitations[inv.ID].AcceptedAt = &now
+	}
+	return inv, err
+}
+
+func TestAccept_AlreadyAcceptedBetweenCheckAndMark(t *testing.T) {
+	f := newFixture()
+	inv, tok := f.doInvite(t, "race@acme.com")
+	uc := NewAcceptInvitationUseCase(f.s, racyInvRepo{fakeInvRepo{f.s}}, f.hash, f.s)
+	err := uc.Execute(context.Background(), invtypes.AcceptInvitationRequest{Token: tok, Password: "password123"})
+	assert.ErrorIs(t, err, domainerrors.ErrInvalidToken)
+	u, _ := f.s.GetByTenantAndEmail(context.Background(), f.tenantA, inv.Email)
+	assert.False(t, u.IsActive)
+}
+
+func TestAudit_InviteResendRevoke(t *testing.T) {
+	f := newFixture()
+	inv, _ := f.doInvite(t, "aud@acme.com")
+	_, err := f.resend().Execute(f.adminCtx, inv.ID)
+	require.NoError(t, err)
+	require.NoError(t, f.revoke().Execute(f.adminCtx, inv.ID))
+
+	require.Len(t, f.s.audits, 3)
+	want := []string{auditActionInvite, auditActionResend, auditActionRevoke}
+	for i, a := range f.s.audits {
+		assert.Equal(t, want[i], a.Action)
+		assert.Equal(t, f.tenantA, a.TenantID)
+		assert.Equal(t, inv.ID, a.EntityID)
+		require.NotNil(t, a.ActorUserID)
+		assert.Equal(t, f.adminID, *a.ActorUserID)
+	}
+}
+
+func TestAudit_RolledBackWithTransaction(t *testing.T) {
+	f := newFixture()
+	f.s.publishErr = errors.New("enqueue failed")
+	_, err := f.invite().Execute(f.adminCtx, invtypes.InviteUserRequest{Email: "rb@acme.com", RoleID: f.employeeRl.ID})
+	require.Error(t, err)
+	assert.Empty(t, f.s.audits)
 }

@@ -19,6 +19,7 @@ import (
 type ResendInvitationUseCaseImpl struct {
 	roleRepo       repository.RoleRepository
 	invitationRepo repository.UserInvitationRepository
+	auditRepo      repository.AuditRepository
 	hashService    service.HashService
 	eventPublisher service.EventPublisher
 	transactor     ucshared.Transactor
@@ -32,13 +33,14 @@ var _ invusecase.ResendInvitationUseCase = (*ResendInvitationUseCaseImpl)(nil)
 func NewResendInvitationUseCase(
 	roleRepo repository.RoleRepository,
 	invitationRepo repository.UserInvitationRepository,
+	auditRepo repository.AuditRepository,
 	hashService service.HashService,
 	eventPublisher service.EventPublisher,
 	transactor ucshared.Transactor,
 	frontendBaseURL string,
 ) *ResendInvitationUseCaseImpl {
 	return &ResendInvitationUseCaseImpl{
-		roleRepo: roleRepo, invitationRepo: invitationRepo, hashService: hashService,
+		roleRepo: roleRepo, invitationRepo: invitationRepo, auditRepo: auditRepo, hashService: hashService,
 		eventPublisher: eventPublisher, transactor: transactor,
 		expiry: defaultInvitationExpiry, frontendURL: strings.TrimRight(frontendBaseURL, "/"),
 	}
@@ -50,6 +52,10 @@ func (u *ResendInvitationUseCaseImpl) Execute(c context.Context, id uuid.UUID) (
 		return nil, err
 	}
 	tenantID, err := tenantFromContext(c)
+	if err != nil {
+		return nil, err
+	}
+	actorID, err := actorFromContext(c)
 	if err != nil {
 		return nil, err
 	}
@@ -91,6 +97,10 @@ func (u *ResendInvitationUseCaseImpl) Execute(c context.Context, id uuid.UUID) (
 
 	if err := u.transactor.WithinTransaction(c, func(txCtx context.Context) error {
 		if err := u.invitationRepo.UpdateToken(txCtx, tenantID, inv.ID, inv.TokenHash, inv.ExpiresAt); err != nil {
+			return err
+		}
+		if err := writeAudit(txCtx, u.auditRepo, tenantID, actorID, inv.ID, auditActionResend,
+			map[string]any{"email": inv.Email}); err != nil {
 			return err
 		}
 		return u.eventPublisher.Publish(txCtx, evt)

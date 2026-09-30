@@ -24,6 +24,8 @@ type InviteUserUseCaseImpl struct {
 	userRoleRepo   repository.UserRoleRepository
 	roleRepo       repository.RoleRepository
 	invitationRepo repository.UserInvitationRepository
+	orgRefRepo     repository.OrgReferenceRepository
+	auditRepo      repository.AuditRepository
 	hashService    service.HashService
 	eventPublisher service.EventPublisher
 	transactor     ucshared.Transactor
@@ -39,6 +41,8 @@ func NewInviteUserUseCase(
 	userRoleRepo repository.UserRoleRepository,
 	roleRepo repository.RoleRepository,
 	invitationRepo repository.UserInvitationRepository,
+	orgRefRepo repository.OrgReferenceRepository,
+	auditRepo repository.AuditRepository,
 	hashService service.HashService,
 	eventPublisher service.EventPublisher,
 	transactor ucshared.Transactor,
@@ -46,7 +50,7 @@ func NewInviteUserUseCase(
 ) *InviteUserUseCaseImpl {
 	return &InviteUserUseCaseImpl{
 		userRepo: userRepo, userRoleRepo: userRoleRepo, roleRepo: roleRepo,
-		invitationRepo: invitationRepo, hashService: hashService,
+		invitationRepo: invitationRepo, orgRefRepo: orgRefRepo, auditRepo: auditRepo, hashService: hashService,
 		eventPublisher: eventPublisher, transactor: transactor,
 		expiry:      defaultInvitationExpiry,
 		frontendURL: strings.TrimRight(frontendBaseURL, "/"),
@@ -70,7 +74,7 @@ func (u *InviteUserUseCaseImpl) Execute(c context.Context, req invtypes.InviteUs
 
 	email := strings.ToLower(strings.TrimSpace(req.Email))
 	if at := strings.Index(email, "@"); at <= 0 || at == len(email)-1 {
-		return nil, domainerrors.ErrInvalidCredentials
+		return nil, domainerrors.ErrInvalidEmail
 	}
 
 	// The role must belong to the caller's tenant; super_admin is never invitable.
@@ -80,6 +84,26 @@ func (u *InviteUserUseCaseImpl) Execute(c context.Context, req invtypes.InviteUs
 	}
 	if role.Name == roleSuperAdmin {
 		return nil, domainerrors.ErrInvalidRole
+	}
+
+	// Department/position must belong to the caller's tenant (FKs only check existence).
+	if req.DepartmentID != nil {
+		ok, err := u.orgRefRepo.DepartmentExists(c, tenantID, *req.DepartmentID)
+		if err != nil {
+			return nil, err
+		}
+		if !ok {
+			return nil, domainerrors.ErrDepartmentNotFound
+		}
+	}
+	if req.PositionID != nil {
+		ok, err := u.orgRefRepo.PositionExists(c, tenantID, *req.PositionID)
+		if err != nil {
+			return nil, err
+		}
+		if !ok {
+			return nil, domainerrors.ErrPositionNotFound
+		}
 	}
 
 	existing, err := u.userRepo.GetByTenantAndEmail(c, tenantID, email)
@@ -146,6 +170,10 @@ func (u *InviteUserUseCaseImpl) Execute(c context.Context, req invtypes.InviteUs
 			return err
 		}
 		if err := u.invitationRepo.Create(txCtx, inv); err != nil {
+			return err
+		}
+		if err := writeAudit(txCtx, u.auditRepo, tenantID, inviterID, inv.ID, auditActionInvite,
+			map[string]any{"email": email, "role_id": role.ID, "user_id": user.ID}); err != nil {
 			return err
 		}
 		return u.eventPublisher.Publish(txCtx, evt)

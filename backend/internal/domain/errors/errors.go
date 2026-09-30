@@ -34,4 +34,7 @@ var (
 	ErrInvitationNotFound   = errors.New("invitation not found")
 	ErrInvitationNotPending = errors.New("invitation is no longer pending")
 	ErrInvalidRole          = errors.New("role cannot be assigned by invitation")
+	ErrInvalidEmail         = errors.New("invalid email address")
+	ErrDepartmentNotFound   = errors.New("department not found")
+	ErrPositionNotFound     = errors.New("position not found")
 )

@@ -2,27 +2,44 @@ package invitation
 
 import (
 	"context"
+	"errors"
 	"time"
 
 	"github.com/google/uuid"
 	domainerrors "github.com/skryfon/employee360/backend/internal/domain/errors"
 	"github.com/skryfon/employee360/backend/internal/domain/repository"
+	"github.com/skryfon/employee360/backend/internal/usecase/implementation/ucshared"
 	invusecase "github.com/skryfon/employee360/backend/internal/usecase/interface/invitation"
 )
 
 // RevokeInvitationUseCaseImpl implements invusecase.RevokeInvitationUseCase.
 type RevokeInvitationUseCaseImpl struct {
 	invitationRepo repository.UserInvitationRepository
+	userRepo       repository.UserRepository
+	userRoleRepo   repository.UserRoleRepository
+	auditRepo      repository.AuditRepository
+	transactor     ucshared.Transactor
 }
 
 var _ invusecase.RevokeInvitationUseCase = (*RevokeInvitationUseCaseImpl)(nil)
 
 // NewRevokeInvitationUseCase constructs a RevokeInvitationUseCaseImpl.
-func NewRevokeInvitationUseCase(invitationRepo repository.UserInvitationRepository) *RevokeInvitationUseCaseImpl {
-	return &RevokeInvitationUseCaseImpl{invitationRepo: invitationRepo}
+func NewRevokeInvitationUseCase(
+	invitationRepo repository.UserInvitationRepository,
+	userRepo repository.UserRepository,
+	userRoleRepo repository.UserRoleRepository,
+	auditRepo repository.AuditRepository,
+	transactor ucshared.Transactor,
+) *RevokeInvitationUseCaseImpl {
+	return &RevokeInvitationUseCaseImpl{
+		invitationRepo: invitationRepo, userRepo: userRepo, userRoleRepo: userRoleRepo,
+		auditRepo: auditRepo, transactor: transactor,
+	}
 }
 
-// Execute revokes a pending invitation in the caller's tenant.
+// Execute revokes a pending invitation in the caller's tenant and, in the same
+// transaction, removes the still-inactive pending user (and its role
+// assignment) so the email can be invited again.
 func (u *RevokeInvitationUseCaseImpl) Execute(c context.Context, id uuid.UUID) error {
 	if err := requireAdmin(c); err != nil {
 		return err
@@ -31,12 +48,38 @@ func (u *RevokeInvitationUseCaseImpl) Execute(c context.Context, id uuid.UUID) e
 	if err != nil {
 		return err
 	}
-	inv, err := u.invitationRepo.GetByID(c, tenantID, id)
-	if err != nil || inv == nil {
-		return domainerrors.ErrInvitationNotFound
+	actorID, err := actorFromContext(c)
+	if err != nil {
+		return err
 	}
-	if !inv.IsPending() {
-		return domainerrors.ErrInvitationNotPending
-	}
-	return u.invitationRepo.MarkRevoked(c, tenantID, inv.ID, time.Now().UTC())
+	return u.transactor.WithinTransaction(c, func(txCtx context.Context) error {
+		inv, err := u.invitationRepo.GetByID(txCtx, tenantID, id)
+		if err != nil || inv == nil {
+			return domainerrors.ErrInvitationNotFound
+		}
+		if !inv.IsPending() {
+			return domainerrors.ErrInvitationNotPending
+		}
+		if err := u.invitationRepo.MarkRevoked(txCtx, tenantID, inv.ID, time.Now().UTC()); err != nil {
+			return err
+		}
+
+		user, err := u.userRepo.GetByTenantAndEmail(txCtx, tenantID, inv.Email)
+		if err != nil && !errors.Is(err, domainerrors.ErrNotFound) && !errors.Is(err, domainerrors.ErrUserNotFound) {
+			return err
+		}
+		// Only a never-activated pending user is removed; a real account is left alone.
+		removed := false
+		if user != nil && !user.IsActive && user.PasswordHash == nil && user.EmailVerifiedAt == nil && user.LastLoginAt == nil {
+			if err := u.userRoleRepo.DeleteByUserID(txCtx, user.ID); err != nil {
+				return err
+			}
+			if err := u.userRepo.Delete(txCtx, tenantID, user.ID); err != nil {
+				return err
+			}
+			removed = true
+		}
+		return writeAudit(txCtx, u.auditRepo, tenantID, actorID, inv.ID, auditActionRevoke,
+			map[string]any{"email": inv.Email, "pending_user_removed": removed})
+	})
 }
