@@ -13,8 +13,10 @@ import (
 	"github.com/skryfon/employee360/backend/internal/infrastructure/persistence"
 	infraservice "github.com/skryfon/employee360/backend/internal/infrastructure/service"
 	authusecaseimpl "github.com/skryfon/employee360/backend/internal/usecase/implementation/auth"
+	invusecaseimpl "github.com/skryfon/employee360/backend/internal/usecase/implementation/invitation"
 	"github.com/skryfon/employee360/backend/internal/usecase/implementation/ucshared"
 	authusecase "github.com/skryfon/employee360/backend/internal/usecase/interface/auth"
+	invusecase "github.com/skryfon/employee360/backend/internal/usecase/interface/invitation"
 	"gorm.io/gorm"
 )
 
@@ -45,10 +47,22 @@ type AuthContainer struct {
 	ForgotPasswordUseCase authusecase.ForgotPasswordUseCase
 	ResetPasswordUseCase  authusecase.ResetPasswordUseCase
 
+	// Invitation usecases (no HTTP handlers/routes yet)
+	InviteUserUseCase       invusecase.InviteUserUseCase
+	AcceptInvitationUseCase invusecase.AcceptInvitationUseCase
+	ResendInvitationUseCase invusecase.ResendInvitationUseCase
+	RevokeInvitationUseCase invusecase.RevokeInvitationUseCase
+	ListInvitationsUseCase  invusecase.ListInvitationsUseCase
+
 	// Repositories
-	UserRepo          repository.UserRepository
-	RefreshTokenRepo  repository.RefreshTokenRepository
-	PasswordResetRepo repository.PasswordResetRepository
+	UserInvitationRepo repository.UserInvitationRepository
+	OrgReferenceRepo   repository.OrgReferenceRepository
+	RoleRepo           repository.RoleRepository
+	UserRoleRepo       repository.UserRoleRepository
+	AuditRepo          repository.AuditRepository
+	UserRepo           repository.UserRepository
+	RefreshTokenRepo   repository.RefreshTokenRepository
+	PasswordResetRepo  repository.PasswordResetRepository
 }
 
 // NewAuthContainer initializes and wires all auth-related repositories, services, usecases, and handlers.
@@ -85,6 +99,12 @@ func NewAuthContainer(
 	tenantDomainRepo := persistence.NewGormTenantDomainRepository(db)
 	passwordResetRepo := persistence.NewGormPasswordResetRepository(db)
 
+	invitationRepo := persistence.NewGormUserInvitationRepository(db)
+	orgRefRepo := persistence.NewGormOrgReferenceRepository(db)
+	roleRepo := persistence.NewGormRoleRepository(db)
+	userRoleRepo := persistence.NewGormUserRoleRepository(db)
+	auditRepo := persistence.NewGormAuditRepository(db)
+
 	if transactor == nil {
 		transactor = ucshared.NewNopTransactor()
 	}
@@ -98,6 +118,12 @@ func NewAuthContainer(
 	forgotPasswordUC := authusecaseimpl.NewForgotPasswordUseCase(userRepo, tenantDomainRepo, passwordResetRepo, hashService, eventPublisher, transactor, loggerAdapter, cfg.App.FrontendURL)
 	resetPasswordUC := authusecaseimpl.NewResetPasswordUseCase(userRepo, passwordResetRepo, refreshTokenRepo, hashService, transactor)
 
+	inviteUC := invusecaseimpl.NewInviteUserUseCase(userRepo, userRoleRepo, roleRepo, invitationRepo, orgRefRepo, auditRepo, hashService, eventPublisher, transactor, cfg.App.FrontendURL)
+	acceptInvUC := invusecaseimpl.NewAcceptInvitationUseCase(userRepo, invitationRepo, hashService, transactor)
+	resendInvUC := invusecaseimpl.NewResendInvitationUseCase(roleRepo, invitationRepo, auditRepo, hashService, eventPublisher, transactor, cfg.App.FrontendURL)
+	revokeInvUC := invusecaseimpl.NewRevokeInvitationUseCase(invitationRepo, userRepo, userRoleRepo, auditRepo, transactor)
+	listInvUC := invusecaseimpl.NewListInvitationsUseCase(invitationRepo)
+
 	handler := handlers.NewAuthHandler(
 		loginUC,
 		tokenRefreshUC,
@@ -107,16 +133,26 @@ func NewAuthContainer(
 	)
 
 	return &AuthContainer{
-		TokenService:          tokenService,
-		HashService:           hashService,
-		Handler:               handler,
-		LoginUseCase:          loginUC,
-		TokenRefreshUseCase:   tokenRefreshUC,
-		LogoutUseCase:         logoutUC,
-		ForgotPasswordUseCase: forgotPasswordUC,
-		ResetPasswordUseCase:  resetPasswordUC,
-		UserRepo:              userRepo,
-		RefreshTokenRepo:      refreshTokenRepo,
-		PasswordResetRepo:     passwordResetRepo,
+		TokenService:            tokenService,
+		HashService:             hashService,
+		Handler:                 handler,
+		LoginUseCase:            loginUC,
+		TokenRefreshUseCase:     tokenRefreshUC,
+		LogoutUseCase:           logoutUC,
+		ForgotPasswordUseCase:   forgotPasswordUC,
+		ResetPasswordUseCase:    resetPasswordUC,
+		InviteUserUseCase:       inviteUC,
+		AcceptInvitationUseCase: acceptInvUC,
+		ResendInvitationUseCase: resendInvUC,
+		RevokeInvitationUseCase: revokeInvUC,
+		ListInvitationsUseCase:  listInvUC,
+		UserInvitationRepo:      invitationRepo,
+		OrgReferenceRepo:        orgRefRepo,
+		RoleRepo:                roleRepo,
+		UserRoleRepo:            userRoleRepo,
+		AuditRepo:               auditRepo,
+		UserRepo:                userRepo,
+		RefreshTokenRepo:        refreshTokenRepo,
+		PasswordResetRepo:       passwordResetRepo,
 	}, nil
 }
