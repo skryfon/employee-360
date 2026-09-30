@@ -1,6 +1,6 @@
 # Review: EMPLOYEE36-7 — EPIC-B: Cycle 2 — Auth Core, Tenant Resolution & Email Service (Overview)
 
-> Branch: feature/EPIC-B | Last reviewed: 2026-09-30 | Iteration: 1 | Verdict: 🟡
+> Branch: feature/EPIC-B | Last reviewed: 2026-09-30 | Iteration: 2 | Verdict: 🟢
 
 ## Ticket
 **Identifier:** EMPLOYEE36-7 (epic; children EMPLOYEE36-9..15, 24 = B1..B8)
@@ -21,7 +21,7 @@ Real auth (login/refresh/logout/forgot/reset), tenant-domain resolution, async R
 Child tickets B1–B8 each carry a prior review with 🟢 (B2/EMPLOYEE36-10 shows 🟡 at its last iteration).
 
 ## Latest commit reviewed
-`ea2be49` — test(backend): move eventing integration tests to backend/integration
+`9973d2d` — test(backend): add live-DB auth flow integration tests (EMPLOYEE36-7)
 
 ## Verification run
 - `go build ./...`, `go vet ./...` clean
@@ -34,16 +34,21 @@ Child tickets B1–B8 each carry a prior review with 🟢 (B2/EMPLOYEE36-10 show
 - [ ] (none)
 
 ### 🟡 Major
-- [x] Prior EMPLOYEE36-10 (B2) review last recorded 🟡 — confirm its open findings were closed (`plan/reviews/review-EMPLOYEE36-10.md`) before merging the epic. **(fixed, uncommitted** — re-checked against current code: every code finding in review-EMPLOYEE36-10.md is already resolved and ticked; the sole remaining unchecked item is a ticket-scope process note with no code defect, now marked acknowledged there.)
-- [x] No live-DB, HTTP-level test exercising login → refresh → logout (or forgot → worker → reset) through the real router; `/auth/*` is only covered in `internal/delivery/http/routes_test.go` and mocked usecase tests. DoD-3/5/6 are therefore proven per layer, not end to end. Add one `integration/auth_flow_test.go`. **(fixed, uncommitted** — `backend/integration/auth_flow_test.go` added: login/refresh-rotation/logout-revocation and forgot-password -> river_job -> worker -> reset-password (all refresh tokens revoked) through the real router/container on live Postgres.)
+- [x] Prior EMPLOYEE36-10 (B2) review last recorded 🟡 — confirm its open findings were closed (`plan/reviews/review-EMPLOYEE36-10.md`) before merging the epic. **(resolved in 9973d2d** — re-checked against current code: every code finding in review-EMPLOYEE36-10.md is already resolved and ticked; the sole remaining unchecked item is a ticket-scope process note with no code defect, now marked acknowledged there.)
+- [x] No live-DB, HTTP-level test exercising login → refresh → logout (or forgot → worker → reset) through the real router; `/auth/*` is only covered in `internal/delivery/http/routes_test.go` and mocked usecase tests. DoD-3/5/6 are therefore proven per layer, not end to end. Add one `integration/auth_flow_test.go`. **(resolved in 9973d2d** — `backend/integration/auth_flow_test.go` added: login/refresh-rotation/logout-revocation and forgot-password -> river_job -> worker -> reset-password (all refresh tokens revoked) through the real router/container on live Postgres.)
 
 ### 🟢 Minor
-- [ ] `ea2be49` is not yet pushed (`feature/EPIC-B` is 1 ahead of origin).
+- [ ] `ea2be49` and `9973d2d` are not yet pushed (`feature/EPIC-B` is 2 ahead of origin).
 
 ## Verdict
-- **Score:** 89/100
-- **Flag:** 🟡 Reviewer call (a major is open; no criticals)
-- **Notes:** Epic is functionally complete and consistent with cycle-02 scope and project invariants. Only gap is missing end-to-end auth-flow coverage plus confirming B2's earlier 🟡 was resolved.
+- **Score:** 99/100
+- **Flag:** 🟢 Merge
+- **Notes:** Both majors closed. New `auth_flow_test.go` proves login/refresh/logout and forgot->worker->reset end to end on live Postgres; build, vet and integration suite pass. Only remaining item is pushing the branch.
 
 ## Re-review Log
-_(empty — first review)_
+### Iteration 2 — 2026-09-30 — sha `9973d2d`
+- **Resolved:** B2 (EMPLOYEE36-10) open-findings check; missing end-to-end auth-flow integration test
+- **Still open:** unpushed commits (minor)
+- **New issues:** none
+- **Score:** 89 → 99 (+10)
+- **Verdict:** 🟢 Merge
