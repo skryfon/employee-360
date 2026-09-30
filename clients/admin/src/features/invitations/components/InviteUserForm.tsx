@@ -16,7 +16,7 @@ const EMPTY: InviteUserFormValues = {
   positionId: '',
 }
 
-export function InviteUserForm() {
+export function InviteUserForm({ onSuccess, onCancel }: { onSuccess?: () => void; onCancel?: () => void }) {
   const mutation = useInviteUserMutation()
   const roles = useRolesQuery()
   const roleOptions = roles.data ?? []
@@ -37,7 +37,12 @@ export function InviteUserForm() {
         department_id: v.departmentId || undefined,
         position_id: v.positionId || undefined,
       },
-      { onSuccess: () => reset(EMPTY) },
+      {
+        onSuccess: () => {
+          reset(EMPTY)
+          onSuccess?.()
+        },
+      },
     )
 
   return (
@@ -86,8 +91,17 @@ export function InviteUserForm() {
         <FormField label="Department ID (optional)" error={errors.departmentId?.message} {...register('departmentId')} />
         <FormField label="Position ID (optional)" error={errors.positionId?.message} {...register('positionId')} />
       </div>
-      <div>
+      <div className="flex items-center gap-2">
         <SubmitButton loading={mutation.isPending}>Send invitation</SubmitButton>
+        {onCancel && (
+          <button
+            type="button"
+            onClick={onCancel}
+            className="h-9 rounded-sm border border-slate-300 bg-white px-4 text-sm font-medium text-slate-800 hover:bg-slate-100 active:bg-slate-200 focus:outline-none focus-visible:ring-2 focus-visible:ring-slate-900 focus-visible:ring-offset-2"
+          >
+            Cancel
+          </button>
+        )}
       </div>
     </form>
   )

@@ -13,6 +13,7 @@ function renderShell(path = '/invitations') {
       <MemoryRouter initialEntries={[path]}>
         <Routes>
           <Route element={<AdminShell />}>
+            <Route path="/invitations/new" element={<p>new page</p>} />
             <Route path="/invitations" element={<p>invitations page</p>} />
             <Route path="/" element={<p>home</p>} />
           </Route>
@@ -35,6 +36,11 @@ describe('Sidebar', () => {
     expect(link).toHaveAttribute('aria-current', 'page')
     expect(screen.getByText('admin@x.com')).toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'Sign out' })).toBeInTheDocument()
+  })
+
+  it('keeps Invitations highlighted on /invitations/new', () => {
+    renderShell('/invitations/new')
+    expect(screen.getByRole('link', { name: 'Invitations' })).toHaveAttribute('aria-current', 'page')
   })
 
   it('does not mark the link active on other routes', () => {

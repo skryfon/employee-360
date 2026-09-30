@@ -83,10 +83,35 @@ describe('invitations', () => {
     expect(mock.history.post).toHaveLength(1)
   })
 
-  it('validates and submits the invite form', async () => {
+  it('list page has a Create invitation button that navigates and no inline form', async () => {
+    signIn()
+    renderAt('/invitations')
+    expect(screen.queryByRole('form', { name: 'Invite user' })).toBeNull()
+    await userEvent.click(await screen.findByRole('link', { name: 'Create invitation' }))
+    expect(await screen.findByRole('heading', { name: 'Create invitation' })).toBeInTheDocument()
+    expect(screen.getByRole('form', { name: 'Invite user' })).toBeInTheDocument()
+    expect(screen.getByRole('link', { name: 'Invitations' })).toHaveAttribute('aria-current', 'page')
+  })
+
+  it('redirects unauthenticated users from /invitations/new to login', () => {
+    renderAt('/invitations/new')
+    expect(screen.getByRole('heading', { name: /sign in/i })).toBeInTheDocument()
+  })
+
+  it('cancel and back links return to the list', async () => {
+    signIn()
+    renderAt('/invitations/new')
+    await userEvent.click(await screen.findByRole('button', { name: 'Cancel' }))
+    expect(await screen.findByRole('link', { name: 'Create invitation' })).toBeInTheDocument()
+    await userEvent.click(screen.getByRole('link', { name: 'Create invitation' }))
+    await userEvent.click(await screen.findByRole('link', { name: 'Back to invitations' }))
+    expect(await screen.findByRole('link', { name: 'Create invitation' })).toBeInTheDocument()
+  })
+
+  it('validates, submits the invite form, and redirects to the list', async () => {
     signIn()
     mock.onPost('/api/v1/users/invitations').reply(201, { success: true, data: rows[0] })
-    renderAt('/invitations')
+    renderAt('/invitations/new')
     await userEvent.click(await screen.findByRole('button', { name: 'Send invitation' }))
     expect(await screen.findByText('Email is required')).toBeInTheDocument()
     expect(screen.getAllByRole('alert').map((a) => a.textContent)).toContain('Select a role')
@@ -94,7 +119,8 @@ describe('invitations', () => {
     await screen.findByRole('option', { name: 'admin' })
     await userEvent.selectOptions(screen.getByLabelText('Role'), ROLE_ID)
     await userEvent.click(screen.getByRole('button', { name: 'Send invitation' }))
-    expect(await screen.findByText('Invitation sent.')).toBeInTheDocument()
+    expect(await screen.findByRole('link', { name: 'Create invitation' })).toBeInTheDocument()
+    expect(await screen.findByText('p@x.com')).toBeInTheDocument()
     expect(JSON.parse(mock.history.post[0].data)).toEqual({ email: 'new@x.com', role_id: ROLE_ID })
   })
 })
