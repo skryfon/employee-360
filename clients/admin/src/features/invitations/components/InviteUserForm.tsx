@@ -2,8 +2,7 @@ import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { getErrorMessage } from '@employee360/api-client'
 import { inviteUserSchema, type InviteUserFormValues } from '../schemas/invitationSchemas'
-import { useInviteUserMutation } from '../queries/invitationQueries'
-import { useAuthStore } from '../../../stores/authStore'
+import { useInviteUserMutation, useRolesQuery } from '../queries/invitationQueries'
 import { FormField } from '../../auth/components/FormField'
 import { SubmitButton } from '../../auth/components/SubmitButton'
 import { InlineAlert } from '../../auth/components/InlineAlert'
@@ -19,7 +18,8 @@ const EMPTY: InviteUserFormValues = {
 
 export function InviteUserForm() {
   const mutation = useInviteUserMutation()
-  const roleOptions = useAuthStore((s) => s.user?.roleOptions) ?? []
+  const roles = useRolesQuery()
+  const roleOptions = roles.data ?? []
   const {
     register,
     handleSubmit,
@@ -63,13 +63,18 @@ export function InviteUserForm() {
             className="h-9 w-full rounded-sm border border-slate-300 bg-white px-3 text-sm text-slate-900 focus:border-slate-900 focus:outline-none focus:ring-1 focus:ring-slate-900 aria-[invalid=true]:border-red-600"
             {...register('roleId')}
           >
-            <option value="">Select a role</option>
+            <option value="">{roles.isPending ? 'Loading roles...' : 'Select a role'}</option>
             {roleOptions.map((r) => (
               <option key={r.id} value={r.id}>
                 {r.name}
               </option>
             ))}
           </select>
+          {roles.isError && (
+            <p role="alert" className="text-xs text-red-700">
+              Could not load roles.
+            </p>
+          )}
           {errors.roleId && (
             <p id="roleId-error" role="alert" className="text-xs text-red-700">
               {errors.roleId.message}

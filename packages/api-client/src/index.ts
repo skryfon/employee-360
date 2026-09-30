@@ -26,6 +26,7 @@ export {
   resetPassword,
   inviteUser,
   listInvitations,
+  listRoles,
   resendInvitation,
   revokeInvitation,
   acceptInvitation,
@@ -40,6 +41,7 @@ export type {
   Invitation,
   PageMeta,
   ListInvitationsParams,
+  RoleOption,
 } from './auth.ts';
 
 export { fetchHealth, useHealth } from './health.ts';

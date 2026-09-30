@@ -7,6 +7,7 @@ import {
   forgotPassword,
   inviteUser,
   listInvitations,
+  listRoles,
   login,
   logout,
   refresh,
@@ -136,6 +137,16 @@ describe('auth & invitation api methods', () => {
     mock.onPost('/api/v1/auth/reset-password').reply(200, { success: true });
     await resetPassword({ token: 't', new_password: 'Newpass123!' });
     expect(JSON.parse(mock.history.post[0].data)).toEqual({ token: 't', new_password: 'Newpass123!' });
+  });
+
+  it('listRoles returns the role options', async () => {
+    mock.onGet('/api/v1/roles').reply(200, { success: true, data: [{ id: 'r1', name: 'admin' }] });
+    expect(await listRoles()).toEqual([{ id: 'r1', name: 'admin' }]);
+  });
+
+  it('listRoles returns [] when data is null', async () => {
+    mock.onGet('/api/v1/roles').reply(200, { success: true, data: null });
+    expect(await listRoles()).toEqual([]);
   });
 
   it('inviteUser posts the body and returns the invitation', async () => {

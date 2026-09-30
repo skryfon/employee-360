@@ -8,8 +8,6 @@ export interface AuthUser {
   firstName?: string
   lastName?: string
   roles: string[]
-  /** The caller's own roles with ids (from login). No roles-list endpoint exists yet. */
-  roleOptions?: { id: string; name: string }[]
 }
 
 interface AuthState {

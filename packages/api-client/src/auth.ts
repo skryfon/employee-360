@@ -1,6 +1,6 @@
 import { isAxiosError } from 'axios';
-import { refreshSession } from './client.ts';
-import { unwrapListResponse, unwrapSingleEntity } from './unwrap.ts';
+import { apiRequest, refreshSession } from './client.ts';
+import { unwrapListResponse, unwrapSingleEntity, type ApiEnvelope } from './unwrap.ts';
 import { clearSession, getSession, setSession } from './session.ts';
 import {
   postApiV1AuthForgotPassword,
@@ -24,6 +24,12 @@ import type { GithubComSkryfonEmployee360BackendInternalTypesInvitationAcceptInv
 import type { GithubComSkryfonEmployee360BackendInternalTypesInvitationInvitationResponse as Invitation } from './generated/models/githubComSkryfonEmployee360BackendInternalTypesInvitationInvitationResponse.ts';
 import type { GithubComSkryfonEmployee360BackendInternalDeliveryHttpResponseMeta as PageMeta } from './generated/models/githubComSkryfonEmployee360BackendInternalDeliveryHttpResponseMeta.ts';
 import type { GetApiV1UsersInvitationsParams as ListInvitationsParams } from './generated/models/getApiV1UsersInvitationsParams.ts';
+
+/** Role option for the invite form (`GET /api/v1/roles`; `id` is the invite `role_id`). */
+export interface RoleOption {
+  id: string;
+  name: string;
+}
 
 export type {
   LoginRequest,
@@ -125,4 +131,15 @@ export async function revokeInvitation(id: string): Promise<void> {
 /** Unauthenticated; the invitee sets a password to activate their account. */
 export async function acceptInvitation(body: AcceptInvitationRequest): Promise<void> {
   await postApiV1InvitationsAccept(body);
+}
+
+/**
+ * `GET /api/v1/roles` — admin/super_admin only; super_admin is already excluded
+ * server-side. Hand-written (not yet in backend/docs/swagger.json, so not in
+ * the Orval output); swap for the generated call after `make swagger` +
+ * `pnpm generate:api`.
+ */
+export async function listRoles(signal?: AbortSignal): Promise<RoleOption[]> {
+  const res = await apiRequest<ApiEnvelope<RoleOption[]>>({ url: '/api/v1/roles', method: 'GET', signal });
+  return unwrapListResponse(res).data;
 }

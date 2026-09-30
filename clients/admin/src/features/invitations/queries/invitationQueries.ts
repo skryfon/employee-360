@@ -2,6 +2,7 @@ import { keepPreviousData, useMutation, useQuery, useQueryClient } from '@tansta
 import {
   inviteUser,
   listInvitations,
+  listRoles,
   resendInvitation,
   revokeInvitation,
   type InviteUserRequest,
@@ -15,6 +16,16 @@ export function useInvitationsQuery(page: number) {
     queryKey: [...INVITATIONS_KEY, { page }],
     queryFn: ({ signal }) => listInvitations({ page, page_size: INVITATIONS_PAGE_SIZE }, signal),
     placeholderData: keepPreviousData,
+  })
+}
+
+export const ROLES_KEY = ['roles'] as const
+
+export function useRolesQuery() {
+  return useQuery({
+    queryKey: ROLES_KEY,
+    queryFn: ({ signal }) => listRoles(signal),
+    staleTime: 5 * 60 * 1000,
   })
 }
 

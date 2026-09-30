@@ -29,7 +29,7 @@ function signIn() {
   setSession({ accessToken: 'a', refreshToken: 'r', tenantId: 't1' })
   useAuthStore.setState({
     accessToken: 'a',
-    user: { id: 'u1', email: 'admin@x.com', roles: ['admin'], roleOptions: [{ id: ROLE_ID, name: 'admin' }] },
+    user: { id: 'u1', email: 'admin@x.com', roles: ['admin'] },
   })
 }
 
@@ -37,6 +37,7 @@ beforeEach(() => {
   rows = [inv('i1', 'p@x.com', 'pending'), inv('i2', 'a@x.com', 'accepted'), inv('i3', 'r@x.com', 'revoked')]
   mock = new MockAdapter(apiClient)
   mock.onGet('/api/v1/users/invitations').reply(() => [200, { success: true, data: rows, meta: { total_pages: 1 } }])
+  mock.onGet('/api/v1/roles').reply(200, { success: true, data: [{ id: ROLE_ID, name: 'admin' }] })
   clearSession()
   useAuthStore.getState().clear()
   localStorage.clear()
@@ -90,6 +91,7 @@ describe('invitations', () => {
     expect(await screen.findByText('Email is required')).toBeInTheDocument()
     expect(screen.getAllByRole('alert').map((a) => a.textContent)).toContain('Select a role')
     await userEvent.type(screen.getByLabelText('Email'), 'new@x.com')
+    await screen.findByRole('option', { name: 'admin' })
     await userEvent.selectOptions(screen.getByLabelText('Role'), ROLE_ID)
     await userEvent.click(screen.getByRole('button', { name: 'Send invitation' }))
     expect(await screen.findByText('Invitation sent.')).toBeInTheDocument()
