@@ -369,6 +369,57 @@ const docTemplate = `{
                 }
             }
         },
+        "/api/v1/roles": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "roles"
+                ],
+                "summary": "List assignable roles",
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/github_com_skryfon_employee360_backend_internal_delivery_http_response.Envelope"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "type": "array",
+                                            "items": {
+                                                "$ref": "#/definitions/github_com_skryfon_employee360_backend_internal_types_role.RoleResponse"
+                                            }
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/github_com_skryfon_employee360_backend_internal_delivery_http_response.Envelope"
+                        }
+                    },
+                    "403": {
+                        "description": "Forbidden",
+                        "schema": {
+                            "$ref": "#/definitions/github_com_skryfon_employee360_backend_internal_delivery_http_response.Envelope"
+                        }
+                    }
+                }
+            }
+        },
         "/api/v1/users/invitations": {
             "get": {
                 "security": [
@@ -940,6 +991,17 @@ const docTemplate = `{
                     "type": "string"
                 },
                 "role_id": {
+                    "type": "string"
+                }
+            }
+        },
+        "github_com_skryfon_employee360_backend_internal_types_role.RoleResponse": {
+            "type": "object",
+            "properties": {
+                "id": {
+                    "type": "string"
+                },
+                "name": {
                     "type": "string"
                 }
             }
