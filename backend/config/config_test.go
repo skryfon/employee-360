@@ -276,3 +276,157 @@ func TestConfig_SMTP(t *testing.T) {
 		t.Errorf("expected SMTP.UseTLS true, got %v", cfg.SMTP.UseTLS)
 	}
 }
+
+func TestConfig_RateLimitDefaults(t *testing.T) {
+	t.Chdir(t.TempDir())
+	for _, k := range []string{"RATE_LIMIT_ENABLED", "RATE_LIMIT_REQUESTS_PER_SECOND", "RATE_LIMIT_RPS", "RATE_LIMIT_BURST", "RATE_LIMIT_CLEANUP_INTERVAL", "RATE_LIMIT_IDLE_TTL"} {
+		t.Setenv(k, "")
+		os.Unsetenv(k)
+	}
+
+	cfg, err := Load()
+	if err != nil {
+		t.Fatalf("expected Load() to succeed, got: %v", err)
+	}
+	rl := cfg.RateLimit
+	if !rl.Enabled {
+		t.Error("expected RateLimit.Enabled true by default")
+	}
+	if rl.RequestsPerSecond != 10 {
+		t.Errorf("expected RequestsPerSecond 10, got %v", rl.RequestsPerSecond)
+	}
+	if rl.Burst != 20 {
+		t.Errorf("expected Burst 20, got %d", rl.Burst)
+	}
+	if rl.CleanupInterval != time.Minute {
+		t.Errorf("expected CleanupInterval 1m, got %s", rl.CleanupInterval)
+	}
+	if rl.IdleTTL != 10*time.Minute {
+		t.Errorf("expected IdleTTL 10m, got %s", rl.IdleTTL)
+	}
+}
+
+func TestConfig_RateLimitEnvOverrides(t *testing.T) {
+	t.Chdir(t.TempDir())
+	t.Setenv("RATE_LIMIT_ENABLED", "false")
+	t.Setenv("RATE_LIMIT_REQUESTS_PER_SECOND", "2.5")
+	t.Setenv("RATE_LIMIT_BURST", "7")
+	t.Setenv("RATE_LIMIT_CLEANUP_INTERVAL", "30s")
+	t.Setenv("RATE_LIMIT_IDLE_TTL", "5m")
+
+	cfg, err := Load()
+	if err != nil {
+		t.Fatalf("expected Load() to succeed, got: %v", err)
+	}
+	rl := cfg.RateLimit
+	if rl.Enabled {
+		t.Error("expected RateLimit.Enabled false")
+	}
+	if rl.RequestsPerSecond != 2.5 {
+		t.Errorf("expected RequestsPerSecond 2.5, got %v", rl.RequestsPerSecond)
+	}
+	if rl.Burst != 7 {
+		t.Errorf("expected Burst 7, got %d", rl.Burst)
+	}
+	if rl.CleanupInterval != 30*time.Second {
+		t.Errorf("expected CleanupInterval 30s, got %s", rl.CleanupInterval)
+	}
+	if rl.IdleTTL != 5*time.Minute {
+		t.Errorf("expected IdleTTL 5m, got %s", rl.IdleTTL)
+	}
+}
+
+func TestConfig_RateLimitRPSAlias(t *testing.T) {
+	t.Chdir(t.TempDir())
+	t.Setenv("RATE_LIMIT_REQUESTS_PER_SECOND", "")
+	os.Unsetenv("RATE_LIMIT_REQUESTS_PER_SECOND")
+	t.Setenv("RATE_LIMIT_RPS", "42")
+
+	cfg, err := Load()
+	if err != nil {
+		t.Fatalf("expected Load() to succeed, got: %v", err)
+	}
+	if cfg.RateLimit.RequestsPerSecond != 42 {
+		t.Errorf("expected RequestsPerSecond 42 via RATE_LIMIT_RPS, got %v", cfg.RateLimit.RequestsPerSecond)
+	}
+}
+
+func TestConfig_RateLimitValidation(t *testing.T) {
+	valid := RateLimitConfig{Enabled: true, RequestsPerSecond: 10, Burst: 20, CleanupInterval: time.Minute, IdleTTL: 10 * time.Minute}
+
+	tests := []struct {
+		name    string
+		mutate  func(rl *RateLimitConfig)
+		wantErr bool
+	}{
+		{"valid", func(rl *RateLimitConfig) {}, false},
+		{"zero durations allowed", func(rl *RateLimitConfig) { rl.CleanupInterval, rl.IdleTTL = 0, 0 }, false},
+		{"burst zero", func(rl *RateLimitConfig) { rl.Burst = 0 }, true},
+		{"burst negative", func(rl *RateLimitConfig) { rl.Burst = -1 }, true},
+		{"rps zero", func(rl *RateLimitConfig) { rl.RequestsPerSecond = 0 }, true},
+		{"rps negative", func(rl *RateLimitConfig) { rl.RequestsPerSecond = -5 }, true},
+		{"negative cleanup interval", func(rl *RateLimitConfig) { rl.CleanupInterval = -time.Second }, true},
+		{"negative idle ttl", func(rl *RateLimitConfig) { rl.IdleTTL = -time.Second }, true},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name+"/enabled", func(t *testing.T) {
+			cfg := &Config{RateLimit: valid}
+			tt.mutate(&cfg.RateLimit)
+			err := cfg.Validate()
+			if tt.wantErr && err == nil {
+				t.Error("expected Validate() to fail when enabled")
+			}
+			if !tt.wantErr && err != nil {
+				t.Errorf("expected Validate() to succeed, got: %v", err)
+			}
+		})
+		t.Run(tt.name+"/disabled", func(t *testing.T) {
+			cfg := &Config{RateLimit: valid}
+			tt.mutate(&cfg.RateLimit)
+			cfg.RateLimit.Enabled = false
+			if err := cfg.Validate(); err != nil {
+				t.Errorf("expected Validate() to skip rate limit checks when disabled, got: %v", err)
+			}
+		})
+	}
+}
+
+func TestConfig_TrustedProxiesEnvOverride(t *testing.T) {
+	tests := []struct {
+		name  string
+		value *string
+		want  []string
+	}{
+		{"unset", nil, []string{}},
+		{"empty string", strPtr(""), []string{}},
+		{"two entries trimmed", strPtr("10.0.0.5, 10.0.0.0/8"), []string{"10.0.0.5", "10.0.0.0/8"}},
+		{"trailing comma", strPtr("10.0.0.5,"), []string{"10.0.0.5"}},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Chdir(t.TempDir())
+			t.Setenv("SERVER_TRUSTED_PROXIES", "")
+			os.Unsetenv("SERVER_TRUSTED_PROXIES")
+			if tt.value != nil {
+				t.Setenv("SERVER_TRUSTED_PROXIES", *tt.value)
+			}
+
+			cfg, err := Load()
+			if err != nil {
+				t.Fatalf("expected Load() to succeed, got: %v", err)
+			}
+			got := cfg.Server.TrustedProxies
+			if len(got) != len(tt.want) {
+				t.Fatalf("expected %v, got %v", tt.want, got)
+			}
+			for i := range tt.want {
+				if got[i] != tt.want[i] {
+					t.Errorf("entry[%d]: expected %q, got %q", i, tt.want[i], got[i])
+				}
+			}
+		})
+	}
+}
+
+func strPtr(s string) *string { return &s }

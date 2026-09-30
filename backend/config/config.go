@@ -145,6 +145,21 @@ func (c *Config) Validate() error {
 			return fmt.Errorf("app.frontend_url (APP_FRONTEND_URL) must be explicitly set in %q environment", c.App.Environment)
 		}
 	}
+	if c.RateLimit.Enabled {
+		rl := c.RateLimit
+		if rl.RequestsPerSecond <= 0 {
+			return fmt.Errorf("rate_limit.requests_per_second (RATE_LIMIT_REQUESTS_PER_SECOND) must be greater than 0 when rate limiting is enabled, got %v", rl.RequestsPerSecond)
+		}
+		if rl.Burst < 1 {
+			return fmt.Errorf("rate_limit.burst (RATE_LIMIT_BURST) must be at least 1 when rate limiting is enabled, got %d", rl.Burst)
+		}
+		if rl.CleanupInterval < 0 {
+			return fmt.Errorf("rate_limit.cleanup_interval (RATE_LIMIT_CLEANUP_INTERVAL) must not be negative, got %s", rl.CleanupInterval)
+		}
+		if rl.IdleTTL < 0 {
+			return fmt.Errorf("rate_limit.idle_ttl (RATE_LIMIT_IDLE_TTL) must not be negative, got %s", rl.IdleTTL)
+		}
+	}
 	return nil
 }
 
