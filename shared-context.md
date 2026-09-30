@@ -141,7 +141,7 @@ make migrate
 make migrate-down
 
 # Seed system tenant, roles, and platform Super Admin
-make bootstrap
+make bootstrap-admin
 
 # Run tests
 make test

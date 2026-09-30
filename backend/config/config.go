@@ -14,6 +14,9 @@ import (
 // DefaultJWTSecret is the fallback secret used exclusively in local development mode.
 const DefaultJWTSecret = "employee360-super-secret-key-change-in-production"
 
+// DefaultFrontendURL is the local-development web client URL; it must be overridden in production/staging.
+const DefaultFrontendURL = "http://localhost:5173"
+
 // Config represents the root application configuration for Employee360.
 type Config struct {
 	Server   ServerConfig   `mapstructure:"server"`
@@ -21,6 +24,17 @@ type Config struct {
 	JWT      JWTConfig      `mapstructure:"jwt"`
 	App      AppConfig      `mapstructure:"app"`
 	CORS     CORSConfig     `mapstructure:"cors"`
+	SMTP     SMTPConfig     `mapstructure:"smtp"`
+	// Bootstrap holds inputs for cmd/bootstrap only; the API does not use it.
+	Bootstrap BootstrapConfig `mapstructure:"bootstrap"`
+}
+
+// BootstrapConfig holds the platform Super Admin seed inputs. There are no
+// defaults for email/password: they must be supplied via env/config.
+type BootstrapConfig struct {
+	SystemTenantName   string `mapstructure:"system_tenant_name"`
+	SuperAdminEmail    string `mapstructure:"super_admin_email"`
+	SuperAdminPassword string `mapstructure:"super_admin_password"`
 }
 
 // ServerConfig contains HTTP server configuration parameters.
@@ -81,6 +95,9 @@ type JWTConfig struct {
 type AppConfig struct {
 	Environment string `mapstructure:"environment"`
 	LogLevel    string `mapstructure:"log_level"`
+	// FrontendURL is the public base URL of the web client, used to build links
+	// in emails (e.g. password reset). No trailing slash.
+	FrontendURL string `mapstructure:"frontend_url"`
 }
 
 // CORSConfig contains cross-origin resource sharing configuration.
@@ -90,12 +107,25 @@ type CORSConfig struct {
 	AllowedOrigins []string `mapstructure:"allowed_origins"`
 }
 
+// SMTPConfig contains SMTP client configuration for transactional emails.
+type SMTPConfig struct {
+	Host     string `mapstructure:"host"`
+	Port     int    `mapstructure:"port"`
+	Username string `mapstructure:"username"`
+	Password string `mapstructure:"password"`
+	From     string `mapstructure:"from"`
+	UseTLS   bool   `mapstructure:"use_tls"`
+}
+
 // Validate verifies that the configuration meets environment and security requirements.
 func (c *Config) Validate() error {
 	env := strings.ToLower(c.App.Environment)
 	if env == "production" || env == "staging" {
 		if c.JWT.Secret == DefaultJWTSecret || len(c.JWT.Secret) < 32 {
 			return fmt.Errorf("jwt.secret must be explicitly set to a custom strong secret (min 32 chars) in %q environment", c.App.Environment)
+		}
+		if c.App.FrontendURL == "" || c.App.FrontendURL == DefaultFrontendURL {
+			return fmt.Errorf("app.frontend_url (APP_FRONTEND_URL) must be explicitly set in %q environment", c.App.Environment)
 		}
 	}
 	return nil
@@ -188,9 +218,23 @@ func setDefaults(v *viper.Viper) {
 	// App defaults
 	v.SetDefault("app.environment", "development")
 	v.SetDefault("app.log_level", "debug")
+	v.SetDefault("app.frontend_url", DefaultFrontendURL)
 
 	// CORS defaults
 	v.SetDefault("cors.allowed_origins", []string{"*"})
+
+	// Bootstrap defaults (credentials intentionally have none)
+	v.SetDefault("bootstrap.system_tenant_name", "System")
+	v.SetDefault("bootstrap.super_admin_email", "")
+	v.SetDefault("bootstrap.super_admin_password", "")
+
+	// SMTP defaults
+	v.SetDefault("smtp.host", "localhost")
+	v.SetDefault("smtp.port", 1025)
+	v.SetDefault("smtp.username", "")
+	v.SetDefault("smtp.password", "")
+	v.SetDefault("smtp.from", "no-reply@employee360.local")
+	v.SetDefault("smtp.use_tls", false)
 }
 
 func loadDotEnv(searchPaths ...string) {
@@ -259,4 +303,16 @@ func bindEnvAliases(v *viper.Viper) {
 
 	_ = v.BindEnv("app.environment", "APP_ENV", "ENVIRONMENT", "ENV")
 	_ = v.BindEnv("app.log_level", "LOG_LEVEL", "APP_LOG_LEVEL")
+	_ = v.BindEnv("app.frontend_url", "APP_FRONTEND_URL", "FRONTEND_URL")
+
+	_ = v.BindEnv("bootstrap.system_tenant_name", "BOOTSTRAP_SYSTEM_TENANT_NAME")
+	_ = v.BindEnv("bootstrap.super_admin_email", "BOOTSTRAP_SUPER_ADMIN_EMAIL")
+	_ = v.BindEnv("bootstrap.super_admin_password", "BOOTSTRAP_SUPER_ADMIN_PASSWORD")
+
+	_ = v.BindEnv("smtp.host", "SMTP_HOST")
+	_ = v.BindEnv("smtp.port", "SMTP_PORT")
+	_ = v.BindEnv("smtp.username", "SMTP_USERNAME", "SMTP_USER")
+	_ = v.BindEnv("smtp.password", "SMTP_PASSWORD", "SMTP_PASS")
+	_ = v.BindEnv("smtp.from", "SMTP_FROM", "SMTP_FROM_EMAIL", "EMAIL_FROM")
+	_ = v.BindEnv("smtp.use_tls", "SMTP_USE_TLS", "SMTP_TLS")
 }

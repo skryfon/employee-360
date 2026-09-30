@@ -29,7 +29,25 @@ jwt:
 app:
   environment: "development"
   log_level: "debug"
+  # Public base URL of the web client; used to build links in emails.
+  frontend_url: "http://localhost:5173"
 
 cors:
   allowed_origins:
     - "*"
+
+smtp:
+  host: "smtp.resend.com"
+  port: 465
+  username: "resend"
+  password: "<RESEND_API_KEY>"
+  from: "Employee360 <no-reply@example.com>"
+  use_tls: true
+
+
+# Read only by cmd/bootstrap. Prefer the env vars BOOTSTRAP_SUPER_ADMIN_EMAIL /
+# BOOTSTRAP_SUPER_ADMIN_PASSWORD over committing credentials to a file.
+bootstrap:
+  system_tenant_name: "System"
+  super_admin_email: ""
+  super_admin_password: ""

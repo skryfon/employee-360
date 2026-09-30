@@ -6,9 +6,11 @@ import "context"
 type contextKey string
 
 const (
-	tenantIDKey contextKey = "employee360:tenant_id"
-	userIDKey   contextKey = "employee360:user_id"
-	rolesKey    contextKey = "employee360:roles"
+	tenantIDKey  contextKey = "employee360:tenant_id"
+	userIDKey    contextKey = "employee360:user_id"
+	rolesKey     contextKey = "employee360:roles"
+	clientIPKey  contextKey = "employee360:client_ip"
+	userAgentKey contextKey = "employee360:user_agent"
 )
 
 // WithTenantID returns a new context carrying the given tenant ID.
@@ -45,4 +47,26 @@ func WithRoles(parent context.Context, roles []string) context.Context {
 func RolesFromContext(c context.Context) ([]string, bool) {
 	roles, ok := c.Value(rolesKey).([]string)
 	return roles, ok
+}
+
+// WithClientIP returns a new context carrying the given client IP address.
+func WithClientIP(parent context.Context, ip string) context.Context {
+	return context.WithValue(parent, clientIPKey, ip)
+}
+
+// ClientIPFromContext extracts the client IP address from the context.
+func ClientIPFromContext(c context.Context) (string, bool) {
+	ip, ok := c.Value(clientIPKey).(string)
+	return ip, ok
+}
+
+// WithUserAgent returns a new context carrying the given user agent string.
+func WithUserAgent(parent context.Context, userAgent string) context.Context {
+	return context.WithValue(parent, userAgentKey, userAgent)
+}
+
+// UserAgentFromContext extracts the user agent string from the context.
+func UserAgentFromContext(c context.Context) (string, bool) {
+	ua, ok := c.Value(userAgentKey).(string)
+	return ua, ok
 }

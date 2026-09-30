@@ -2,42 +2,95 @@
 package container
 
 import (
-	"github.com/gin-gonic/gin"
+	"database/sql"
+	"fmt"
+	"log/slog"
+	"os"
+
+	"github.com/riverqueue/river"
 	"github.com/rs/zerolog"
-	"github.com/skryfon/employee360/backend/config"
-	deliveryhttp "github.com/skryfon/employee360/backend/internal/delivery/http"
-	"github.com/skryfon/employee360/backend/internal/delivery/http/handlers"
-	"github.com/skryfon/employee360/backend/internal/infrastructure/database"
-	usecaseimpl "github.com/skryfon/employee360/backend/internal/usecase/implementation"
 	"gorm.io/gorm"
+
+	"github.com/skryfon/employee360/backend/config"
+	domainservice "github.com/skryfon/employee360/backend/internal/domain/service"
+	"github.com/skryfon/employee360/backend/internal/infrastructure/database"
+	"github.com/skryfon/employee360/backend/internal/infrastructure/eventing"
+	infraservice "github.com/skryfon/employee360/backend/internal/infrastructure/service"
+	"github.com/skryfon/employee360/backend/internal/usecase/implementation/ucshared"
 )
 
-// Container holds wired dependencies and handlers for the application.
-type Container struct {
+// AppContainer holds wired configuration, infrastructure, and domain sub-containers.
+type AppContainer struct {
 	Config *config.Config
-	Logger zerolog.Logger
+	Log    zerolog.Logger
 	DB     *gorm.DB
 
-	Handlers deliveryhttp.Handlers
+	Health *HealthContainer
+	Auth   *AuthContainer
 }
 
-// New wires the full dependency graph for the application.
-func New(cfg *config.Config, db *gorm.DB, log zerolog.Logger) (*Container, error) {
-	dbPinger := database.NewGormDatabasePinger(db)
-	healthUseCase := usecaseimpl.NewHealthUseCase(dbPinger)
-	healthHandler := handlers.NewHealthHandler(healthUseCase)
+// NewAppContainer wires the full dependency graph for the application.
+func NewAppContainer(cfg *config.Config, db *gorm.DB, log zerolog.Logger) (*AppContainer, error) {
+	healthContainer := NewHealthContainer(db)
 
-	return &Container{
+	// Transactional outbox: the GORM transactor and River-backed publisher share
+	// the in-flight transaction via context. A nil db (construction-only tests)
+	// falls back to the no-op transactor/publisher inside NewAuthContainer.
+	var (
+		transactor ucshared.Transactor
+		publisher  domainservice.EventPublisher
+	)
+	if db != nil {
+		sqlDB, err := db.DB()
+		if err != nil {
+			return nil, fmt.Errorf("container: resolve sql.DB: %w", err)
+		}
+		riverClient, err := eventing.NewInsertOnlyClient(sqlDB)
+		if err != nil {
+			return nil, fmt.Errorf("container: build river insert client: %w", err)
+		}
+		transactor = database.NewGormTransactor(db)
+		publisher = eventing.NewRiverPublisher(riverClient, eventing.NewDispatcher())
+	}
+
+	authContainer, err := NewAuthContainer(cfg, db, log, transactor, publisher)
+	if err != nil {
+		return nil, err
+	}
+
+	return &AppContainer{
 		Config: cfg,
-		Logger: log,
+		Log:    log,
 		DB:     db,
-		Handlers: deliveryhttp.Handlers{
-			Health: healthHandler,
-		},
+		Health: healthContainer,
+		Auth:   authContainer,
 	}, nil
 }
 
-// Router constructs and returns the configured Gin engine.
-func (c *Container) Router() *gin.Engine {
-	return deliveryhttp.NewRouter(c.Logger, c.Config.CORS.AllowedOrigins, c.Handlers)
+// Container is an alias for AppContainer.
+type Container = AppContainer
+
+// New is an alias for NewAppContainer.
+func New(cfg *config.Config, db *gorm.DB, log zerolog.Logger) (*AppContainer, error) {
+	return NewAppContainer(cfg, db, log)
+}
+
+// WorkerContainer holds the dependencies of the cmd/worker process.
+type WorkerContainer struct {
+	RiverClient *river.Client[*sql.Tx]
+}
+
+// NewWorkerContainer wires the River worker client with the SMTP EmailService.
+func NewWorkerContainer(cfg *config.Config, db *gorm.DB) (*WorkerContainer, error) {
+	sqlDB, err := db.DB()
+	if err != nil {
+		return nil, fmt.Errorf("container: resolve sql.DB: %w", err)
+	}
+	emailSvc := infraservice.NewSMTPMailService(cfg.SMTP)
+	slogger := slog.New(slog.NewJSONHandler(os.Stderr, &slog.HandlerOptions{Level: slog.LevelInfo}))
+	client, err := eventing.NewWorkerClient(sqlDB, emailSvc, slogger, 0)
+	if err != nil {
+		return nil, fmt.Errorf("container: build river worker client: %w", err)
+	}
+	return &WorkerContainer{RiverClient: client}, nil
 }

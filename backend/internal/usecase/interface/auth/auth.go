@@ -1,0 +1,47 @@
+package auth
+
+import (
+	"context"
+
+	"github.com/google/uuid"
+	authtypes "github.com/skryfon/employee360/backend/internal/types/auth"
+)
+
+// LoginUseCase defines the port for user login across all roles.
+//
+// ipAddress and userAgent are passed as explicit parameters rather than fields
+// on LoginRequest: they are server-derived HTTP request metadata used only for
+// refresh-token audit fields -- neither is part of what the client actually
+// submits to log in (see authtypes.LoginRequest).
+type LoginUseCase interface {
+	Execute(ctx context.Context, req authtypes.LoginRequest, ipAddress, userAgent string) (*authtypes.LoginResponse, error)
+}
+
+// TokenRefreshUseCase defines the port for rotating refresh tokens.
+//
+// ipAddress and userAgent are server-derived HTTP request metadata (never part
+// of the client payload), recorded on the rotated refresh token for audit.
+type TokenRefreshUseCase interface {
+	Execute(ctx context.Context, req authtypes.TokenRefreshRequest, ipAddress, userAgent string) (*authtypes.TokenRefreshResponse, error)
+}
+
+// LogoutUseCase defines the port for revoking sessions and refresh tokens.
+//
+// tenantID and userID are the authenticated caller's identity from the verified
+// access token; the presented refresh token must belong to them.
+type LogoutUseCase interface {
+	Execute(ctx context.Context, tenantID, userID uuid.UUID, req authtypes.LogoutRequest) error
+}
+
+// ForgotPasswordUseCase defines the port for requesting a password reset (enumeration-safe).
+//
+// The tenant is resolved inside the usecase from the email's domain
+// (tenant_domains); it is never client-supplied.
+type ForgotPasswordUseCase interface {
+	Execute(ctx context.Context, req authtypes.ForgotPasswordRequest) error
+}
+
+// ResetPasswordUseCase defines the port for executing a password reset with a valid token.
+type ResetPasswordUseCase interface {
+	Execute(ctx context.Context, req authtypes.ResetPasswordRequest) error
+}
