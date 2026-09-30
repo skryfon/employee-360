@@ -4,7 +4,12 @@
 // authenticated request context (or, for accept, from the token itself).
 package invitation
 
-import "github.com/google/uuid"
+import (
+	"time"
+
+	"github.com/google/uuid"
+	"github.com/skryfon/employee360/backend/internal/domain/entity"
+)
 
 // InviteUserRequest is what an admin submits to invite a user.
 type InviteUserRequest struct {
@@ -20,4 +25,28 @@ type InviteUserRequest struct {
 type AcceptInvitationRequest struct {
 	Token    string `json:"token"`
 	Password string `json:"password"`
+}
+
+// InvitationResponse is the API representation of an invitation (never includes the token).
+type InvitationResponse struct {
+	ID           uuid.UUID               `json:"id"`
+	Email        string                  `json:"email"`
+	RoleID       uuid.UUID               `json:"role_id"`
+	DepartmentID *uuid.UUID              `json:"department_id,omitempty"`
+	PositionID   *uuid.UUID              `json:"position_id,omitempty"`
+	InvitedBy    uuid.UUID               `json:"invited_by"`
+	Status       entity.InvitationStatus `json:"status"`
+	ExpiresAt    time.Time               `json:"expires_at"`
+	AcceptedAt   *time.Time              `json:"accepted_at,omitempty"`
+	RevokedAt    *time.Time              `json:"revoked_at,omitempty"`
+	CreatedAt    time.Time               `json:"created_at"`
+}
+
+// ToInvitationResponse maps an invitation entity to its API representation.
+func ToInvitationResponse(i *entity.UserInvitation) InvitationResponse {
+	return InvitationResponse{
+		ID: i.ID, Email: i.Email, RoleID: i.RoleID, DepartmentID: i.DepartmentID,
+		PositionID: i.PositionID, InvitedBy: i.InvitedBy, Status: i.Status(time.Now()),
+		ExpiresAt: i.ExpiresAt, AcceptedAt: i.AcceptedAt, RevokedAt: i.RevokedAt, CreatedAt: i.CreatedAt,
+	}
 }

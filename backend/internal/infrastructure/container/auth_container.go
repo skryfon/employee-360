@@ -40,6 +40,8 @@ type AuthContainer struct {
 	HashService  domainservice.HashService
 	Handler      *handlers.AuthHandler
 
+	InvitationHandler *handlers.InvitationHandler
+
 	// Usecases
 	LoginUseCase          authusecase.LoginUseCase
 	TokenRefreshUseCase   authusecase.TokenRefreshUseCase
@@ -47,7 +49,7 @@ type AuthContainer struct {
 	ForgotPasswordUseCase authusecase.ForgotPasswordUseCase
 	ResetPasswordUseCase  authusecase.ResetPasswordUseCase
 
-	// Invitation usecases (no HTTP handlers/routes yet)
+	// Invitation usecases (served by InvitationHandler)
 	InviteUserUseCase       invusecase.InviteUserUseCase
 	AcceptInvitationUseCase invusecase.AcceptInvitationUseCase
 	ResendInvitationUseCase invusecase.ResendInvitationUseCase
@@ -132,7 +134,10 @@ func NewAuthContainer(
 		resetPasswordUC,
 	)
 
+	invitationHandler := handlers.NewInvitationHandler(inviteUC, acceptInvUC, resendInvUC, revokeInvUC, listInvUC)
+
 	return &AuthContainer{
+		InvitationHandler:       invitationHandler,
 		TokenService:            tokenService,
 		HashService:             hashService,
 		Handler:                 handler,

@@ -6,6 +6,7 @@ import (
 	"github.com/rs/zerolog"
 	"github.com/skryfon/employee360/backend/config"
 	"github.com/skryfon/employee360/backend/internal/delivery/http/middleware"
+	"github.com/skryfon/employee360/backend/internal/domain/entity"
 	"github.com/skryfon/employee360/backend/internal/infrastructure/container"
 	"github.com/skryfon/employee360/backend/shared"
 	swaggerFiles "github.com/swaggo/files"
@@ -56,6 +57,26 @@ func registerRoutes(engine *gin.Engine, c *container.Container) {
 				{
 					authProtected.POST("/logout", c.Auth.Handler.Logout)
 				}
+			}
+		}
+
+		if c.Auth != nil && c.Auth.InvitationHandler != nil {
+			ih := c.Auth.InvitationHandler
+
+			// Unauthenticated: the invitee proves possession of the emailed token.
+			v1.POST("/invitations/accept", ih.Accept)
+
+			// Admin-only management routes: auth -> tenant -> role check.
+			invGroup := v1.Group("/users/invitations",
+				middleware.Auth(c.Auth.TokenService),
+				middleware.Tenant(),
+				middleware.RequireRole(entity.RoleAdmin, entity.RoleSuperAdmin),
+			)
+			{
+				invGroup.POST("", ih.Invite)
+				invGroup.GET("", ih.List)
+				invGroup.POST("/:id/resend", ih.Resend)
+				invGroup.DELETE("/:id", ih.Revoke)
 			}
 		}
 	}
