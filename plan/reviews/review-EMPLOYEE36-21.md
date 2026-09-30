@@ -1,6 +1,6 @@
 # Review: EMPLOYEE36-21 — D3 — Admin app: invitation-management UI
 
-> Branch: ebin/feat/EPIC-D/EMPLOYEE36-21 | Last reviewed: 2026-09-30 23:10 | Iteration: 2 | Verdict: 🟢
+> Branch: ebin/feat/EPIC-D/EMPLOYEE36-21 | Last reviewed: 2026-09-30 23:30 | Iteration: 3 | Verdict: 🟢
 
 ## Ticket
 **Identifier:** EMPLOYEE36-21
@@ -22,7 +22,7 @@ Scope:
 - [x] AC-3: Resend/revoke hidden for accepted/revoked — impl `components/InvitationsTable.tsx` (`pending && …`); test `invitations.test.tsx` "shows resend/revoke only for pending invitations"
 
 ## Latest commit reviewed
-`bfb6bd5` — docs: record roles route and admin shell in cycle-02 scope; update EMPLOYEE36-21 review (EMPLOYEE36-21)
+`3f8f371` — test(admin): assert exact resend/revoke failure messages (EMPLOYEE36-21)
 
 Reviewed range: `d07fecf..ef78b6d` (this ticket's 10 commits). Local `origin/main` is stale (still lacks earlier merged work), so a `origin/main...HEAD` diff would pull in unrelated tickets; no `git fetch` was run. Tests were not re-run by the reviewer beyond typecheck/lint on an earlier commit; implementer reports api-client 74, admin 35, employee 3 passing.
 
@@ -40,12 +40,12 @@ Reviewed range: `d07fecf..ef78b6d` (this ticket's 10 commits). Local `origin/mai
 - [x] (resolved in 508de5f) `clients/admin/src/features/invitations/components/InviteUserForm.tsx:55` — `mutation.isSuccess && "Invitation sent."` is effectively dead now that the create page navigates away on success. — Fix: drop it, or show a success notice on the list page.
 - [x] (resolved in 508de5f) `invitations.test.tsx` — no test for the roles-load error state ("Could not load roles."), nor for resend/revoke failure messages. — Fix: add one test each.
 - [ ] (still open, deferred: needs org-reference list endpoints, follow-up ticket) `InviteUserForm.tsx` — department/position are raw UUID text inputs (no lookup endpoints exist yet), which is unusable for real admins. Acceptable as a stopgap; track a follow-up ticket for org-reference lists.
-- [x] (resolved in follow-up commit: exact messages asserted) `clients/admin/src/features/invitations/pages/invitations.test.tsx:139,150` — the resend/revoke failure tests assert on a loose regex alternation (`/Resend exploded|Could not resend invitation/`), so they pass whichever message is shown. — Fix: assert the exact expected message.
+- [x] (resolved in 3f8f371: exact messages asserted) `clients/admin/src/features/invitations/pages/invitations.test.tsx:139,150` — the resend/revoke failure tests assert on a loose regex alternation (`/Resend exploded|Could not resend invitation/`), so they pass whichever message is shown. — Fix: assert the exact expected message.
 
 ## Verdict
-- **Score:** 98/100
+- **Score:** 99/100
 - **Flag:** 🟢 Merge
-- **Notes:** All three ACs remain met with implementation and test evidence. The iteration-1 Major (backend roles route inside a frontend ticket) is resolved by recording the route, the `/invitations` split and the admin shell in the cycle-02 scope doc, rather than splitting the commit; accepted. The swagger, modal accessibility, dead success alert and missing-test findings are all fixed and verified in the diff (generated `listRoles` wrapper, focus trap/Escape/focus-restore in `ConfirmRevokeModal`, four new tests). Two minors remain: raw UUID inputs for department/position (deferred to a follow-up ticket) and loose regex assertions in two failure tests. Clear for merge; consider squashing the width/Back-link restyle commits.
+- **Notes:** All three ACs remain met with implementation and test evidence. The iteration-1 Major (backend roles route inside a frontend ticket) is resolved by recording the route, the `/invitations` split and the admin shell in the cycle-02 scope doc, rather than splitting the commit; accepted. The swagger, modal accessibility, dead success alert and missing-test findings are all fixed and verified in the diff (generated `listRoles` wrapper, focus trap/Escape/focus-restore in `ConfirmRevokeModal`, four new tests). One minor remains: raw UUID inputs for department/position (deferred to a follow-up ticket); the loose regex assertions were tightened in 3f8f371. Clear for merge; consider squashing the width/Back-link restyle commits.
 
 ## Re-review Log
 ### Iteration 2 — 2026-09-30 — sha `bfb6bd5`
@@ -53,4 +53,11 @@ Reviewed range: `d07fecf..ef78b6d` (this ticket's 10 commits). Local `origin/mai
 - **Still open:** raw UUID department/position inputs (deferred, follow-up ticket)
 - **New issues:** loose regex assertions in the resend/revoke failure tests (🟢)
 - **Score:** 90 → 98 (+8)
+- **Verdict:** 🟢 Merge
+
+### Iteration 3 — 2026-09-30 — sha `3f8f371`
+- **Resolved:** loose regex assertions in the resend/revoke failure tests (now assert `Resend exploded` / `Revoke exploded`; matches `getErrorMessage` returning the server message first)
+- **Still open:** raw UUID department/position inputs (deferred, follow-up ticket)
+- **New issues:** none
+- **Score:** 98 → 99 (+1)
 - **Verdict:** 🟢 Merge
