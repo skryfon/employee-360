@@ -4,7 +4,7 @@ import { InviteUserForm } from '../components/InviteUserForm'
 export default function CreateInvitationPage() {
   const navigate = useNavigate()
   return (
-    <div className="mx-auto flex max-w-4xl flex-col gap-4">
+    <div className="flex w-full flex-col gap-4">
       <Link
         to="/invitations"
         className="text-sm text-slate-900 underline hover:text-slate-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-slate-900 focus-visible:ring-offset-2"
