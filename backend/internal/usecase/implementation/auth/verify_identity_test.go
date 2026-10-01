@@ -12,51 +12,33 @@ import (
 	"github.com/skryfon/employee360/backend/internal/domain/repository"
 )
 
-type viTenantReader struct {
-	tenant *entity.Tenant
-	err    error
+// viIdentityReader is a fake IdentityReader that mirrors the adapter's
+// tenant+user scoping and counts calls.
+type viIdentityReader struct {
+	tenant    *entity.Tenant
+	user      *entity.User
+	roles     []string
+	err       error
+	calls     int
+	gotTenant uuid.UUID
+	gotUser   uuid.UUID
 }
 
-func (r *viTenantReader) GetByID(_ context.Context, id uuid.UUID) (*entity.Tenant, error) {
+func (r *viIdentityReader) GetIdentityState(_ context.Context, tenantID, userID uuid.UUID) (*repository.IdentityState, error) {
+	r.calls++
+	r.gotTenant, r.gotUser = tenantID, userID
 	if r.err != nil {
 		return nil, r.err
 	}
-	if r.tenant == nil || r.tenant.ID != id {
+	if r.tenant == nil || r.tenant.ID != tenantID || r.tenant.DeletedAt != nil {
 		return nil, domainerrors.ErrTenantNotFound
 	}
-	return r.tenant, nil
-}
-
-// viUserRepo embeds the interface so only GetByID needs implementing.
-type viUserRepo struct {
-	repository.UserRepository
-	user      *entity.User
-	err       error
-	gotTenant uuid.UUID
-	calls     int
-}
-
-func (r *viUserRepo) GetByID(_ context.Context, tenantID, id uuid.UUID) (*entity.User, error) {
-	r.calls++
-	r.gotTenant = tenantID
-	if r.err != nil {
-		return nil, r.err
+	st := &repository.IdentityState{TenantActive: r.tenant.IsActive, RoleNames: []string{}}
+	if r.user != nil && r.user.ID == userID && r.user.TenantID == tenantID && r.user.DeletedAt == nil {
+		st.UserFound, st.UserActive = true, r.user.IsActive
+		st.RoleNames = append(st.RoleNames, r.roles...)
 	}
-	// Mirror the real adapter: scoped by tenant, hides deleted users.
-	if r.user == nil || r.user.ID != id || r.user.TenantID != tenantID || r.user.DeletedAt != nil {
-		return nil, domainerrors.ErrUserNotFound
-	}
-	return r.user, nil
-}
-
-type viUserRoleRepo struct {
-	repository.UserRoleRepository
-	roles []*entity.Role
-	err   error
-}
-
-func (r *viUserRoleRepo) GetRolesByUserID(context.Context, uuid.UUID, uuid.UUID) ([]*entity.Role, error) {
-	return r.roles, r.err
+	return st, nil
 }
 
 func TestVerifyIdentityUseCase(t *testing.T) {
@@ -69,32 +51,33 @@ func TestVerifyIdentityUseCase(t *testing.T) {
 
 	tests := []struct {
 		name      string
-		tenant    *viTenantReader
-		user      *viUserRepo
-		roles     *viUserRoleRepo
+		reader    *viIdentityReader
 		wantErr   error // matched with errors.Is
 		wantRoles []string
 	}{
-		{"valid, current roles loaded", &viTenantReader{tenant: okTenant()}, &viUserRepo{user: okUser()},
-			&viUserRoleRepo{roles: []*entity.Role{{Name: "admin"}, {Name: "employee"}}}, nil, []string{"admin", "employee"}},
-		{"valid, no roles", &viTenantReader{tenant: okTenant()}, &viUserRepo{user: okUser()}, &viUserRoleRepo{}, nil, []string{}},
-		{"tenant missing", &viTenantReader{}, &viUserRepo{user: okUser()}, &viUserRoleRepo{}, domainerrors.ErrUnauthorized, nil},
-		{"tenant inactive", &viTenantReader{tenant: &entity.Tenant{ID: tenantID, IsActive: false}}, &viUserRepo{user: okUser()}, &viUserRoleRepo{}, domainerrors.ErrUnauthorized, nil},
-		{"tenant soft-deleted", &viTenantReader{tenant: &entity.Tenant{ID: tenantID, IsActive: true, DeletedAt: &now}}, &viUserRepo{user: okUser()}, &viUserRoleRepo{}, domainerrors.ErrUnauthorized, nil},
-		{"user unknown", &viTenantReader{tenant: okTenant()}, &viUserRepo{}, &viUserRoleRepo{}, domainerrors.ErrUnauthorized, nil},
-		{"user in another tenant", &viTenantReader{tenant: okTenant()}, &viUserRepo{user: &entity.User{ID: userID, TenantID: uuid.New(), IsActive: true}}, &viUserRoleRepo{}, domainerrors.ErrUnauthorized, nil},
-		{"user inactive", &viTenantReader{tenant: okTenant()}, &viUserRepo{user: &entity.User{ID: userID, TenantID: tenantID, IsActive: false}}, &viUserRoleRepo{}, domainerrors.ErrUnauthorized, nil},
-		{"user soft-deleted", &viTenantReader{tenant: okTenant()}, &viUserRepo{user: &entity.User{ID: userID, TenantID: tenantID, IsActive: true, DeletedAt: &now}}, &viUserRoleRepo{}, domainerrors.ErrUnauthorized, nil},
-		{"tenant repo error is not unauthorized", &viTenantReader{err: dbErr}, &viUserRepo{user: okUser()}, &viUserRoleRepo{}, dbErr, nil},
-		{"user repo error is not unauthorized", &viTenantReader{tenant: okTenant()}, &viUserRepo{err: dbErr}, &viUserRoleRepo{}, dbErr, nil},
-		{"roles repo error is not unauthorized", &viTenantReader{tenant: okTenant()}, &viUserRepo{user: okUser()}, &viUserRoleRepo{err: dbErr}, dbErr, nil},
+		{"valid, current roles loaded", &viIdentityReader{tenant: okTenant(), user: okUser(), roles: []string{"admin", "employee"}}, nil, []string{"admin", "employee"}},
+		{"valid, no roles", &viIdentityReader{tenant: okTenant(), user: okUser()}, nil, []string{}},
+		{"tenant missing", &viIdentityReader{user: okUser()}, domainerrors.ErrUnauthorized, nil},
+		{"tenant inactive", &viIdentityReader{tenant: &entity.Tenant{ID: tenantID, IsActive: false}, user: okUser()}, domainerrors.ErrUnauthorized, nil},
+		{"tenant soft-deleted", &viIdentityReader{tenant: &entity.Tenant{ID: tenantID, IsActive: true, DeletedAt: &now}, user: okUser()}, domainerrors.ErrUnauthorized, nil},
+		{"user unknown", &viIdentityReader{tenant: okTenant()}, domainerrors.ErrUnauthorized, nil},
+		{"user in another tenant", &viIdentityReader{tenant: okTenant(), user: &entity.User{ID: userID, TenantID: uuid.New(), IsActive: true}}, domainerrors.ErrUnauthorized, nil},
+		{"user inactive", &viIdentityReader{tenant: okTenant(), user: &entity.User{ID: userID, TenantID: tenantID, IsActive: false}}, domainerrors.ErrUnauthorized, nil},
+		{"user soft-deleted", &viIdentityReader{tenant: okTenant(), user: &entity.User{ID: userID, TenantID: tenantID, IsActive: true, DeletedAt: &now}}, domainerrors.ErrUnauthorized, nil},
+		{"reader error is not unauthorized", &viIdentityReader{err: dbErr}, dbErr, nil},
 	}
 
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			uc := NewVerifyIdentityUseCase(tc.tenant, tc.user, tc.roles)
+			uc := NewVerifyIdentityUseCase(tc.reader)
 			got, err := uc.Execute(context.Background(), tenantID, userID)
 
+			if tc.reader.calls != 1 {
+				t.Errorf("identity reader calls = %d, want exactly 1", tc.reader.calls)
+			}
+			if tc.reader.gotTenant != tenantID || tc.reader.gotUser != userID {
+				t.Errorf("lookup scoped to tenant %s user %s", tc.reader.gotTenant, tc.reader.gotUser)
+			}
 			if tc.wantErr != nil {
 				if !errors.Is(err, tc.wantErr) {
 					t.Fatalf("err = %v, want %v", err, tc.wantErr)
@@ -121,16 +104,13 @@ func TestVerifyIdentityUseCase(t *testing.T) {
 					t.Errorf("roles = %v, want %v", got.Roles, tc.wantRoles)
 				}
 			}
-			if tc.user.gotTenant != tenantID {
-				t.Errorf("user lookup scoped to %s, want %s", tc.user.gotTenant, tenantID)
-			}
 		})
 	}
 }
 
 func TestVerifyIdentityUseCase_NilUUIDsRejectedWithoutLookup(t *testing.T) {
-	users := &viUserRepo{}
-	uc := NewVerifyIdentityUseCase(&viTenantReader{}, users, &viUserRoleRepo{})
+	users := &viIdentityReader{}
+	uc := NewVerifyIdentityUseCase(users)
 	if _, err := uc.Execute(context.Background(), uuid.Nil, uuid.New()); !errors.Is(err, domainerrors.ErrUnauthorized) {
 		t.Errorf("nil tenant: err = %v", err)
 	}

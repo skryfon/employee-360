@@ -115,7 +115,7 @@ func NewAuthContainer(
 	roleRepo := persistence.NewGormRoleRepository(db)
 	userRoleRepo := persistence.NewGormUserRoleRepository(db)
 	auditRepo := persistence.NewGormAuditRepository(db)
-	tenantReader := persistence.NewGormTenantReader(db)
+	identityReader := persistence.NewGormIdentityReader(db)
 
 	if transactor == nil {
 		transactor = ucshared.NewNopTransactor()
@@ -128,7 +128,7 @@ func NewAuthContainer(
 	tokenRefreshUC := authusecaseimpl.NewTokenRefreshUseCase(userRepo, tokenService, hashService, refreshTokenRepo, loggerAdapter)
 	logoutUC := authusecaseimpl.NewLogoutUseCase(tokenService, hashService, refreshTokenRepo)
 	forgotPasswordUC := authusecaseimpl.NewForgotPasswordUseCase(userRepo, tenantDomainRepo, passwordResetRepo, hashService, eventPublisher, transactor, loggerAdapter, cfg.App.FrontendURL)
-	verifyIdentityUC := authusecaseimpl.NewVerifyIdentityUseCase(tenantReader, userRepo, userRoleRepo)
+	verifyIdentityUC := authusecaseimpl.NewVerifyIdentityUseCase(identityReader)
 	resetPasswordUC := authusecaseimpl.NewResetPasswordUseCase(userRepo, passwordResetRepo, refreshTokenRepo, hashService, transactor)
 
 	inviteAppURLs := invusecaseimpl.AppURLs{Default: cfg.App.FrontendURL, Admin: cfg.App.AdminURL, Employee: cfg.App.EmployeeURL}

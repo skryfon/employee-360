@@ -107,7 +107,7 @@ func (r *gormUserRepository) loadRoles(c context.Context, user *entity.User) err
 	if err := database.DBFromContext(c, r.db).
 		Table("roles").
 		Joins("JOIN user_roles ON user_roles.role_id = roles.id").
-		Where("user_roles.user_id = ? AND user_roles.tenant_id = ?", user.ID, user.TenantID).
+		Where("user_roles.user_id = ? AND user_roles.tenant_id = ? AND roles.deleted_at IS NULL", user.ID, user.TenantID).
 		Find(&roles).Error; err != nil {
 		return err
 	}

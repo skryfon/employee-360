@@ -1,6 +1,6 @@
 # Refactor: Identity (tenant_id / user_id) flows Handler → Usecase → Repository
 
-Status: proposed · Area: `backend/` · Owner agent: `backend-agent`
+Status: implemented · Area: `backend/` · Owner agent: `backend-agent`
 
 ## Goal
 
@@ -153,6 +153,13 @@ roles passed in by the handler (`roles []string`), otherwise rely on the route-l
 
 ## Out of scope
 
-- Changing the JWT claims or the auth/tenant middleware logic.
-- New endpoints or schema changes.
+- Changing the JWT claims.
+- New endpoints.
 - Frontend changes.
+
+> Scope note (as implemented): two items originally listed here were included
+> in this change: (1) the auth middleware now verifies identity against the DB
+> (tenant + user + current roles via a single-query `IdentityReader`, uniform
+> 401, 503 fail-closed), and (2) migration `000015_add_audit_columns` adds
+> audit and soft-delete columns (`created_by/updated_by/deleted_by/deleted_at`),
+> with soft-delete read filtering in the affected repositories.

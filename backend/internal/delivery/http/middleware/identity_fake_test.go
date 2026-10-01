@@ -57,6 +57,11 @@ func (f *fakeVerifier) Execute(_ context.Context, tenantID, userID uuid.UUID) (*
 // registeringTokenService wraps a TokenService so every access token minted in a
 // test also registers a matching healthy identity in the fake verifier (roles
 // taken from the claims), keeping pre-existing tests unchanged.
+//
+// CAUTION: this wrapper can mask a missing/unwired verifier. Use mintRaw (see
+// auth_identity_test.go) for anything about identity verification itself; the
+// "unknown user" case there proves a validly signed but unregistered token is
+// rejected with 401.
 type registeringTokenService struct {
 	domainservice.TokenService
 	verifier *fakeVerifier

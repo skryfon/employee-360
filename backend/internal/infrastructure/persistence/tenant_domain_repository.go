@@ -39,7 +39,7 @@ func (r *gormTenantDomainRepository) FindTenantByDomain(c context.Context, domai
 	if err := database.DBFromContext(c, r.db).
 		Table("tenants").
 		Joins("JOIN tenant_domains ON tenant_domains.tenant_id = tenants.id").
-		Where("tenant_domains.domain = ? AND tenants.is_active = TRUE", strings.ToLower(domain)).
+		Where("tenant_domains.domain = ? AND tenants.is_active = TRUE AND tenants.deleted_at IS NULL AND tenant_domains.deleted_at IS NULL", strings.ToLower(domain)).
 		First(&tenant).Error; err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
 			return nil, domainerrors.ErrTenantNotFound

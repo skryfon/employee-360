@@ -27,7 +27,7 @@ func (r *gormOrgReferenceRepository) exists(c context.Context, table string, ten
 	var n int64
 	err := database.DBFromContext(c, r.db).
 		Table(table).
-		Where("id = ? AND tenant_id = ?", id, tenantID).
+		Where("id = ? AND tenant_id = ? AND deleted_at IS NULL", id, tenantID).
 		Count(&n).Error
 	return n > 0, err
 }

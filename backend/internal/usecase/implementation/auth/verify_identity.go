@@ -13,61 +13,36 @@ import (
 
 // VerifyIdentityUseCaseImpl implements authusecase.VerifyIdentityUseCase.
 type VerifyIdentityUseCaseImpl struct {
-	tenantReader repository.TenantReader
-	userRepo     repository.UserRepository
-	userRoleRepo repository.UserRoleRepository
+	identityReader repository.IdentityReader
 }
 
 var _ authusecase.VerifyIdentityUseCase = (*VerifyIdentityUseCaseImpl)(nil)
 
 // NewVerifyIdentityUseCase constructs a new VerifyIdentityUseCaseImpl.
-func NewVerifyIdentityUseCase(
-	tenantReader repository.TenantReader,
-	userRepo repository.UserRepository,
-	userRoleRepo repository.UserRoleRepository,
-) *VerifyIdentityUseCaseImpl {
-	return &VerifyIdentityUseCaseImpl{tenantReader: tenantReader, userRepo: userRepo, userRoleRepo: userRoleRepo}
+func NewVerifyIdentityUseCase(identityReader repository.IdentityReader) *VerifyIdentityUseCaseImpl {
+	return &VerifyIdentityUseCaseImpl{identityReader: identityReader}
 }
 
-// Execute verifies the tenant and user and loads the user's current roles.
+// Execute verifies the tenant and user and loads the user's current roles with
+// a single repository call. Any unusable identity is a uniform ErrUnauthorized;
+// repository errors propagate so callers can fail closed.
 func (u *VerifyIdentityUseCaseImpl) Execute(ctx context.Context, tenantID, userID uuid.UUID) (*authtypes.VerifiedIdentity, error) {
 	if tenantID == uuid.Nil || userID == uuid.Nil {
 		return nil, domainerrors.ErrUnauthorized
 	}
 
-	tenant, err := u.tenantReader.GetByID(ctx, tenantID)
+	state, err := u.identityReader.GetIdentityState(ctx, tenantID, userID)
 	if err != nil {
-		if errors.Is(err, domainerrors.ErrTenantNotFound) {
+		if errors.Is(err, domainerrors.ErrTenantNotFound) || errors.Is(err, domainerrors.ErrUserNotFound) {
 			return nil, domainerrors.ErrUnauthorized
 		}
 		return nil, err
 	}
-	if tenant == nil || !tenant.IsActive || tenant.DeletedAt != nil {
+	if state == nil || !state.TenantActive || !state.UserFound || !state.UserActive {
 		return nil, domainerrors.ErrUnauthorized
 	}
 
-	// Scoped by tenantID: a user id from another tenant is simply not found.
-	user, err := u.userRepo.GetByID(ctx, tenantID, userID)
-	if err != nil {
-		if errors.Is(err, domainerrors.ErrUserNotFound) {
-			return nil, domainerrors.ErrUnauthorized
-		}
-		return nil, err
-	}
-	if user == nil || !user.IsActive || user.DeletedAt != nil || user.TenantID != tenantID {
-		return nil, domainerrors.ErrUnauthorized
-	}
-
-	roles, err := u.userRoleRepo.GetRolesByUserID(ctx, tenantID, userID)
-	if err != nil {
-		return nil, err
-	}
-	names := make([]string, 0, len(roles))
-	for _, r := range roles {
-		if r != nil {
-			names = append(names, r.Name)
-		}
-	}
-
-	return &authtypes.VerifiedIdentity{TenantID: tenantID, UserID: userID, Roles: names}, nil
+	roles := make([]string, len(state.RoleNames))
+	copy(roles, state.RoleNames)
+	return &authtypes.VerifiedIdentity{TenantID: tenantID, UserID: userID, Roles: roles}, nil
 }

@@ -29,7 +29,7 @@ var _ repository.RoleRepository = (*gormRoleRepository)(nil)
 
 // scoped returns a DB handle restricted to tenantID.
 func (r *gormRoleRepository) scoped(c context.Context, tenantID uuid.UUID) *gorm.DB {
-	return database.DBFromContext(c, r.db).Where("tenant_id = ?", tenantID)
+	return database.DBFromContext(c, r.db).Where("tenant_id = ? AND deleted_at IS NULL", tenantID)
 }
 
 func (r *gormRoleRepository) Create(c context.Context, role *entity.Role) error {

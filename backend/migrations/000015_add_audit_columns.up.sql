@@ -53,6 +53,15 @@ ALTER TABLE user_roles
     ADD COLUMN created_by UUID,
     ADD COLUMN updated_by UUID;
 
+-- REVERSAL SEMANTICS (see the down file): the down migration is lossless. Soft-
+-- deleted users are NOT purged; their emails are rewritten to
+-- "<email>+deleted-<id>" (tenant_id, id are unique) so the original
+-- UNIQUE (tenant_id, email) constraint can be restored while the rows, their
+-- user_roles/token rows and any user_invitations.invited_by references are
+-- preserved. The audit/soft-delete columns themselves (and any values in them)
+-- are dropped, so after a down the "deleted" marker on those users is lost:
+-- they become ordinary (still is_active-controlled) rows with a renamed email.
+--
 -- Users are soft-deleted (revoking an invitation removes the pending user), so
 -- email uniqueness must only apply to live rows or the email could never be re-invited.
 ALTER TABLE users DROP CONSTRAINT uq_users_tenant_id_email;

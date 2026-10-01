@@ -41,7 +41,7 @@ func (r *gormUserRoleRepository) GetRolesByUserID(c context.Context, tenantID, u
 	var roles []*entity.Role
 	err := database.DBFromContext(c, r.db).
 		Joins("JOIN user_roles ur ON ur.role_id = roles.id AND ur.tenant_id = roles.tenant_id").
-		Where("ur.user_id = ? AND ur.tenant_id = ?", userID, tenantID).
+		Where("ur.user_id = ? AND ur.tenant_id = ? AND roles.deleted_at IS NULL", userID, tenantID).
 		Find(&roles).Error
 	return roles, err
 }

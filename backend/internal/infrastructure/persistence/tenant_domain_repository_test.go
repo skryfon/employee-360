@@ -8,6 +8,7 @@ import (
 	"testing"
 
 	"github.com/google/uuid"
+	"github.com/stretchr/testify/require"
 	"gorm.io/gorm"
 
 	domainerrors "github.com/skryfon/employee360/backend/internal/domain/errors"
@@ -85,6 +86,30 @@ func TestGormTenantDomainRepository_FindTenantByDomain(t *testing.T) {
 		got, err := repo.FindTenantByDomain(c, domain)
 		if !errors.Is(err, domainerrors.ErrTenantNotFound) {
 			t.Fatalf("expected ErrTenantNotFound for inactive tenant, got tenant=%v err=%v", got, err)
+		}
+	})
+
+	t.Run("soft-deleted tenant is excluded", func(t *testing.T) {
+		tn := createTestTenant(t, db, "td-del-"+suffix)
+		domain := "deleted-tenant-" + suffix + ".example.com"
+		createTestTenantDomain(t, db, tn.ID, domain)
+		require.NoError(t, db.Exec("UPDATE tenants SET deleted_at = NOW() WHERE id = ?", tn.ID).Error)
+
+		got, err := repo.FindTenantByDomain(c, domain)
+		if !errors.Is(err, domainerrors.ErrTenantNotFound) {
+			t.Fatalf("expected ErrTenantNotFound for soft-deleted tenant, got tenant=%v err=%v", got, err)
+		}
+	})
+
+	t.Run("soft-deleted domain row is excluded", func(t *testing.T) {
+		tn := createTestTenant(t, db, "td-ddel-"+suffix)
+		domain := "deleted-domain-" + suffix + ".example.com"
+		createTestTenantDomain(t, db, tn.ID, domain)
+		require.NoError(t, db.Exec("UPDATE tenant_domains SET deleted_at = NOW() WHERE domain = ?", domain).Error)
+
+		got, err := repo.FindTenantByDomain(c, domain)
+		if !errors.Is(err, domainerrors.ErrTenantNotFound) {
+			t.Fatalf("expected ErrTenantNotFound for soft-deleted domain, got tenant=%v err=%v", got, err)
 		}
 	})
 }
