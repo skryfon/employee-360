@@ -8,9 +8,10 @@ import (
 	invtypes "github.com/skryfon/employee360/backend/internal/types/invitation"
 )
 
-// InviteUserUseCase invites a user into the caller's tenant (from context only).
+// InviteUserUseCase invites a user into the caller's tenant. tenantID and
+// inviterID are resolved by the handler from the authenticated request.
 type InviteUserUseCase interface {
-	Execute(ctx context.Context, req invtypes.InviteUserRequest) (*entity.UserInvitation, error)
+	Execute(ctx context.Context, tenantID, inviterID uuid.UUID, req invtypes.InviteUserRequest) (*entity.UserInvitation, error)
 }
 
 // AcceptInvitationUseCase consumes an invitation token; every invitee must set a password.
@@ -20,17 +21,17 @@ type AcceptInvitationUseCase interface {
 
 // ResendInvitationUseCase reissues the token of a pending invitation.
 type ResendInvitationUseCase interface {
-	Execute(ctx context.Context, id uuid.UUID) (*entity.UserInvitation, error)
+	Execute(ctx context.Context, tenantID, actorID, id uuid.UUID) (*entity.UserInvitation, error)
 }
 
 // RevokeInvitationUseCase cancels a pending invitation.
 type RevokeInvitationUseCase interface {
-	Execute(ctx context.Context, id uuid.UUID) error
+	Execute(ctx context.Context, tenantID, actorID, id uuid.UUID) error
 }
 
 // ListInvitationsUseCase lists the caller's tenant invitations.
 type ListInvitationsUseCase interface {
-	Execute(ctx context.Context, limit, offset int) ([]*entity.UserInvitation, int64, error)
+	Execute(ctx context.Context, tenantID uuid.UUID, limit, offset int) ([]*entity.UserInvitation, int64, error)
 }
 
 // ValidateInvitationUseCase verifies that an invitation token exists, is pending, not expired, and ready for acceptance.

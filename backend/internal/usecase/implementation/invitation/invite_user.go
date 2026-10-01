@@ -7,7 +7,6 @@ import (
 	"time"
 
 	"github.com/google/uuid"
-	"github.com/skryfon/employee360/backend/internal/ctx"
 	"github.com/skryfon/employee360/backend/internal/domain/entity"
 	domainerrors "github.com/skryfon/employee360/backend/internal/domain/errors"
 	"github.com/skryfon/employee360/backend/internal/domain/event"
@@ -58,18 +57,9 @@ func NewInviteUserUseCase(
 }
 
 // Execute creates a pending user + invitation and publishes UserInvited in one transaction.
-func (u *InviteUserUseCaseImpl) Execute(c context.Context, req invtypes.InviteUserRequest) (*entity.UserInvitation, error) {
-	if err := requireAdmin(c); err != nil {
+func (u *InviteUserUseCaseImpl) Execute(c context.Context, tenantID, inviterID uuid.UUID, req invtypes.InviteUserRequest) (*entity.UserInvitation, error) {
+	if err := requireIdentity(tenantID, inviterID); err != nil {
 		return nil, err
-	}
-	tenantID, err := tenantFromContext(c)
-	if err != nil {
-		return nil, err
-	}
-	inviterRaw, _ := ctx.UserIDFromContext(c)
-	inviterID, err := uuid.Parse(inviterRaw)
-	if err != nil {
-		return nil, domainerrors.ErrUnauthorized
 	}
 
 	email := strings.ToLower(strings.TrimSpace(req.Email))
@@ -78,7 +68,7 @@ func (u *InviteUserUseCaseImpl) Execute(c context.Context, req invtypes.InviteUs
 	}
 
 	// The role must belong to the caller's tenant; super_admin is never invitable.
-	role, err := u.roleRepo.GetByID(c, req.RoleID)
+	role, err := u.roleRepo.GetByID(c, tenantID, req.RoleID)
 	if err != nil || role == nil || role.TenantID != tenantID {
 		return nil, domainerrors.ErrRoleNotFound
 	}
@@ -127,6 +117,8 @@ func (u *InviteUserUseCaseImpl) Execute(c context.Context, req invtypes.InviteUs
 		DepartmentID: req.DepartmentID,
 		PositionID:   req.PositionID,
 		InvitedBy:    inviterID,
+		CreatedBy:    &inviterID,
+		UpdatedBy:    &inviterID,
 		TokenHash:    u.hashService.HashToken(plainToken),
 		ExpiresAt:    now.Add(u.expiry),
 		CreatedAt:    now,
@@ -141,6 +133,8 @@ func (u *InviteUserUseCaseImpl) Execute(c context.Context, req invtypes.InviteUs
 		LastName:     strings.TrimSpace(req.LastName),
 		Email:        email,
 		IsActive:     false,
+		CreatedBy:    &inviterID,
+		UpdatedBy:    &inviterID,
 		CreatedAt:    now,
 		UpdatedAt:    now,
 	}
@@ -165,7 +159,7 @@ func (u *InviteUserUseCaseImpl) Execute(c context.Context, req invtypes.InviteUs
 		}
 		if err := u.userRoleRepo.AssignRole(txCtx, &entity.UserRole{
 			ID: uuid.New(), TenantID: tenantID, UserID: user.ID, RoleID: role.ID,
-			CreatedAt: now, UpdatedAt: now,
+			CreatedAt: now, UpdatedAt: now, CreatedBy: &inviterID, UpdatedBy: &inviterID,
 		}); err != nil {
 			return err
 		}

@@ -6,7 +6,6 @@ import (
 	"time"
 
 	"github.com/google/uuid"
-	"github.com/skryfon/employee360/backend/internal/ctx"
 	"github.com/skryfon/employee360/backend/internal/domain/entity"
 	domainerrors "github.com/skryfon/employee360/backend/internal/domain/errors"
 	"github.com/skryfon/employee360/backend/internal/domain/event"
@@ -115,7 +114,7 @@ func (s *fakeStore) Update(_ context.Context, t uuid.UUID, u *entity.User) error
 	s.users[u.ID] = u
 	return nil
 }
-func (s *fakeStore) Delete(_ context.Context, t, id uuid.UUID) error {
+func (s *fakeStore) Delete(_ context.Context, t, id, _ uuid.UUID) error {
 	if u, ok := s.users[id]; ok && u.TenantID == t {
 		delete(s.users, id)
 	}
@@ -129,18 +128,18 @@ func (s *fakeStore) List(context.Context, uuid.UUID, int, int) ([]*entity.User, 
 type fakeRoleRepo struct{ s *fakeStore }
 
 func (r fakeRoleRepo) Create(context.Context, *entity.Role) error { return nil }
-func (r fakeRoleRepo) GetByID(_ context.Context, id uuid.UUID) (*entity.Role, error) {
-	if ro, ok := r.s.roles[id]; ok {
+func (r fakeRoleRepo) GetByID(_ context.Context, t, id uuid.UUID) (*entity.Role, error) {
+	if ro, ok := r.s.roles[id]; ok && ro.TenantID == t {
 		return ro, nil
 	}
 	return nil, domainerrors.ErrRoleNotFound
 }
-func (r fakeRoleRepo) GetByName(context.Context, string) (*entity.Role, error) {
+func (r fakeRoleRepo) GetByName(context.Context, uuid.UUID, string) (*entity.Role, error) {
 	return nil, errors.New("unused")
 }
-func (r fakeRoleRepo) List(context.Context) ([]*entity.Role, error) { return nil, nil }
-func (r fakeRoleRepo) Update(context.Context, *entity.Role) error   { return nil }
-func (r fakeRoleRepo) Delete(context.Context, uuid.UUID) error      { return nil }
+func (r fakeRoleRepo) List(context.Context, uuid.UUID) ([]*entity.Role, error) { return nil, nil }
+func (r fakeRoleRepo) Update(context.Context, uuid.UUID, *entity.Role) error   { return nil }
+func (r fakeRoleRepo) Delete(context.Context, uuid.UUID, uuid.UUID) error      { return nil }
 
 // UserRoleRepository
 type fakeUserRoleRepo struct{ s *fakeStore }
@@ -149,14 +148,16 @@ func (r fakeUserRoleRepo) AssignRole(_ context.Context, ur *entity.UserRole) err
 	r.s.userRoles = append(r.s.userRoles, ur)
 	return nil
 }
-func (r fakeUserRoleRepo) RemoveRole(context.Context, uuid.UUID, uuid.UUID) error { return nil }
-func (r fakeUserRoleRepo) GetRolesByUserID(context.Context, uuid.UUID) ([]*entity.Role, error) {
+func (r fakeUserRoleRepo) RemoveRole(context.Context, uuid.UUID, uuid.UUID, uuid.UUID) error {
+	return nil
+}
+func (r fakeUserRoleRepo) GetRolesByUserID(context.Context, uuid.UUID, uuid.UUID) ([]*entity.Role, error) {
 	return nil, nil
 }
-func (r fakeUserRoleRepo) GetUserRolesByUserID(context.Context, uuid.UUID) ([]*entity.UserRole, error) {
+func (r fakeUserRoleRepo) GetUserRolesByUserID(context.Context, uuid.UUID, uuid.UUID) ([]*entity.UserRole, error) {
 	return nil, nil
 }
-func (r fakeUserRoleRepo) DeleteByUserID(_ context.Context, uid uuid.UUID) error {
+func (r fakeUserRoleRepo) DeleteByUserID(_ context.Context, _, uid uuid.UUID) error {
 	kept := r.s.userRoles[:0:0]
 	for _, ur := range r.s.userRoles {
 		if ur.UserID != uid {
@@ -174,10 +175,10 @@ func (r fakeAuditRepo) Create(_ context.Context, l *entity.AuditLog) error {
 	r.s.audits = append(r.s.audits, l)
 	return nil
 }
-func (r fakeAuditRepo) ListByTenantID(context.Context, int, int) ([]*entity.AuditLog, int64, error) {
+func (r fakeAuditRepo) ListByTenantID(context.Context, uuid.UUID, int, int) ([]*entity.AuditLog, int64, error) {
 	return nil, 0, nil
 }
-func (r fakeAuditRepo) ListByEntity(context.Context, string, uuid.UUID, int, int) ([]*entity.AuditLog, int64, error) {
+func (r fakeAuditRepo) ListByEntity(context.Context, uuid.UUID, string, uuid.UUID, int, int) ([]*entity.AuditLog, int64, error) {
 	return nil, 0, nil
 }
 
@@ -223,12 +224,13 @@ func (r fakeInvRepo) pending(t, id uuid.UUID) (*entity.UserInvitation, error) {
 	}
 	return i, nil
 }
-func (r fakeInvRepo) UpdateToken(_ context.Context, t, id uuid.UUID, h string, exp time.Time) error {
+func (r fakeInvRepo) UpdateToken(_ context.Context, t, id, actor uuid.UUID, h string, exp time.Time) error {
 	i, err := r.pending(t, id)
 	if err != nil {
 		return err
 	}
 	i.TokenHash, i.ExpiresAt = h, exp
+	i.UpdatedBy = &actor
 	return nil
 }
 func (r fakeInvRepo) MarkAccepted(_ context.Context, t, id uuid.UUID, at time.Time) error {
@@ -239,12 +241,13 @@ func (r fakeInvRepo) MarkAccepted(_ context.Context, t, id uuid.UUID, at time.Ti
 	i.AcceptedAt = &at
 	return nil
 }
-func (r fakeInvRepo) MarkRevoked(_ context.Context, t, id uuid.UUID, at time.Time) error {
+func (r fakeInvRepo) MarkRevoked(_ context.Context, t, id, actor uuid.UUID, at time.Time) error {
 	i, err := r.pending(t, id)
 	if err != nil {
 		return err
 	}
 	i.RevokedAt = &at
+	i.UpdatedBy = &actor
 	return nil
 }
 func (r fakeInvRepo) List(_ context.Context, t uuid.UUID, limit, offset int) ([]*entity.UserInvitation, int64, error) {
@@ -264,7 +267,6 @@ type fixture struct {
 	tenantB    uuid.UUID
 	adminID    uuid.UUID
 	employeeRl *entity.Role
-	adminCtx   context.Context
 	hash       domainservice.HashService
 }
 
@@ -272,12 +274,8 @@ func newFixture() *fixture {
 	f := &fixture{s: newFakeStore(), tenantA: uuid.New(), tenantB: uuid.New(), adminID: uuid.New(), hash: infraservice.NewHashService(4)}
 	f.employeeRl = &entity.Role{ID: uuid.New(), TenantID: f.tenantA, Name: "employee"}
 	f.s.roles[f.employeeRl.ID] = f.employeeRl
-	f.adminCtx = adminCtx(f.tenantA, f.adminID)
 	return f
 }
 
-func adminCtx(tenant, user uuid.UUID) context.Context {
-	c := ctx.WithTenantID(context.Background(), tenant.String())
-	c = ctx.WithUserID(c, user.String())
-	return ctx.WithRoles(c, []string{"admin"})
-}
+// bg is the plain background context; identity is passed to usecases as explicit params.
+var bg = context.Background()

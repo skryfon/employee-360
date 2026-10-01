@@ -70,8 +70,8 @@ func TestGormUserInvitationRepository_TenantIsolation(t *testing.T) {
 	require.Empty(t, list)
 	require.EqualValues(t, 0, total)
 
-	require.ErrorIs(t, f.repo.MarkRevoked(c, f.tenantB.ID, inv.ID, time.Now().UTC()), domainerrors.ErrInvitationNotPending)
-	require.ErrorIs(t, f.repo.UpdateToken(c, f.tenantB.ID, inv.ID, "x", time.Now().Add(time.Hour)), domainerrors.ErrInvitationNotPending)
+	require.ErrorIs(t, f.repo.MarkRevoked(c, f.tenantB.ID, inv.ID, uuid.New(), time.Now().UTC()), domainerrors.ErrInvitationNotPending)
+	require.ErrorIs(t, f.repo.UpdateToken(c, f.tenantB.ID, inv.ID, uuid.New(), "x", time.Now().Add(time.Hour)), domainerrors.ErrInvitationNotPending)
 	require.ErrorIs(t, f.repo.MarkAccepted(c, f.tenantB.ID, inv.ID, time.Now().UTC()), domainerrors.ErrInvitationNotPending)
 
 	// Row untouched under its own tenant.
@@ -95,25 +95,25 @@ func TestGormUserInvitationRepository_ConditionalUpdates(t *testing.T) {
 	t.Run("revoke after accept fails", func(t *testing.T) {
 		inv := f.mustCreate(t, now)
 		require.NoError(t, f.repo.MarkAccepted(c, f.tenantA.ID, inv.ID, now))
-		require.ErrorIs(t, f.repo.MarkRevoked(c, f.tenantA.ID, inv.ID, now), domainerrors.ErrInvitationNotPending)
+		require.ErrorIs(t, f.repo.MarkRevoked(c, f.tenantA.ID, inv.ID, uuid.New(), now), domainerrors.ErrInvitationNotPending)
 	})
 	t.Run("update token after revoke fails", func(t *testing.T) {
 		inv := f.mustCreate(t, now)
-		require.NoError(t, f.repo.MarkRevoked(c, f.tenantA.ID, inv.ID, now))
-		require.ErrorIs(t, f.repo.UpdateToken(c, f.tenantA.ID, inv.ID, "new", now.Add(time.Hour)), domainerrors.ErrInvitationNotPending)
+		require.NoError(t, f.repo.MarkRevoked(c, f.tenantA.ID, inv.ID, uuid.New(), now))
+		require.ErrorIs(t, f.repo.UpdateToken(c, f.tenantA.ID, inv.ID, uuid.New(), "new", now.Add(time.Hour)), domainerrors.ErrInvitationNotPending)
 		require.ErrorIs(t, f.repo.MarkAccepted(c, f.tenantA.ID, inv.ID, now), domainerrors.ErrInvitationNotPending)
 	})
 	t.Run("update token while pending", func(t *testing.T) {
 		inv := f.mustCreate(t, now)
 		exp := now.Add(48 * time.Hour)
-		require.NoError(t, f.repo.UpdateToken(c, f.tenantA.ID, inv.ID, "rotated-"+inv.ID.String(), exp))
+		require.NoError(t, f.repo.UpdateToken(c, f.tenantA.ID, inv.ID, uuid.New(), "rotated-"+inv.ID.String(), exp))
 		got, err := f.repo.GetByID(c, f.tenantA.ID, inv.ID)
 		require.NoError(t, err)
 		require.Equal(t, "rotated-"+inv.ID.String(), got.TokenHash)
 		require.WithinDuration(t, exp, got.ExpiresAt, time.Second)
 	})
 	t.Run("unknown id", func(t *testing.T) {
-		require.ErrorIs(t, f.repo.MarkRevoked(c, f.tenantA.ID, uuid.New(), now), domainerrors.ErrInvitationNotPending)
+		require.ErrorIs(t, f.repo.MarkRevoked(c, f.tenantA.ID, uuid.New(), uuid.New(), now), domainerrors.ErrInvitationNotPending)
 	})
 }
 

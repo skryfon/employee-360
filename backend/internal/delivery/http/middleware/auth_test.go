@@ -16,25 +16,35 @@ import (
 	infraservice "github.com/skryfon/employee360/backend/internal/infrastructure/service"
 )
 
+// setupTestJWTService returns a real JWT service wrapped so that tokens it mints
+// register a healthy identity in a fake verifier (see identity_fake_test.go).
 func setupTestJWTService(t *testing.T) domainservice.TokenService {
 	t.Helper()
 	svc, err := infraservice.NewJWTService("super-secret-test-key-32bytes-long!", 15*time.Minute, 7*24*time.Hour)
 	if err != nil {
 		t.Fatalf("failed to create JWT service: %v", err)
 	}
-	return svc
+	return &registeringTokenService{TokenService: svc, verifier: newFakeVerifier()}
+}
+
+// verifierFor returns the fake verifier attached to a service from setupTestJWTService.
+func verifierFor(tokenSvc domainservice.TokenService) *fakeVerifier {
+	if r, ok := tokenSvc.(*registeringTokenService); ok {
+		return r.verifier
+	}
+	return newFakeVerifier()
 }
 
 func setupAuthTestEngine(tokenSvc domainservice.TokenService) *gin.Engine {
 	gin.SetMode(gin.TestMode)
 	engine := gin.New()
 
-	authGroup := engine.Group("/protected", Auth(tokenSvc))
+	authGroup := engine.Group("/protected", Auth(tokenSvc, verifierFor(tokenSvc)))
 	{
 		authGroup.GET("/me", func(c *gin.Context) {
-			userID, _ := GetUserID(c)
-			roles := GetRoles(c)
-			claims, _ := GetClaims(c)
+			userID, _ := getUserID(c)
+			roles := getRoles(c)
+			claims, _ := getClaims(c)
 
 			ctxUserID, _ := ctx.UserIDFromContext(c.Request.Context())
 			ctxTenantID, _ := ctx.TenantIDFromContext(c.Request.Context())

@@ -3,7 +3,9 @@ package invitation
 import (
 	"context"
 
+	"github.com/google/uuid"
 	"github.com/skryfon/employee360/backend/internal/domain/entity"
+	domainerrors "github.com/skryfon/employee360/backend/internal/domain/errors"
 	"github.com/skryfon/employee360/backend/internal/domain/repository"
 	invusecase "github.com/skryfon/employee360/backend/internal/usecase/interface/invitation"
 )
@@ -21,13 +23,9 @@ func NewListInvitationsUseCase(invitationRepo repository.UserInvitationRepositor
 }
 
 // Execute lists invitations for the caller's tenant only.
-func (u *ListInvitationsUseCaseImpl) Execute(c context.Context, limit, offset int) ([]*entity.UserInvitation, int64, error) {
-	if err := requireAdmin(c); err != nil {
-		return nil, 0, err
-	}
-	tenantID, err := tenantFromContext(c)
-	if err != nil {
-		return nil, 0, err
+func (u *ListInvitationsUseCaseImpl) Execute(c context.Context, tenantID uuid.UUID, limit, offset int) ([]*entity.UserInvitation, int64, error) {
+	if tenantID == uuid.Nil {
+		return nil, 0, domainerrors.ErrUnauthorized
 	}
 	if limit <= 0 || limit > 100 {
 		limit = 20

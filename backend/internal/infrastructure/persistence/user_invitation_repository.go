@@ -80,11 +80,12 @@ func (r *gormUserInvitationRepository) conditionalUpdate(c context.Context, tena
 	return nil
 }
 
-func (r *gormUserInvitationRepository) UpdateToken(c context.Context, tenantID, id uuid.UUID, tokenHash string, expiresAt time.Time) error {
+func (r *gormUserInvitationRepository) UpdateToken(c context.Context, tenantID, id, actorID uuid.UUID, tokenHash string, expiresAt time.Time) error {
 	return r.conditionalUpdate(c, tenantID, id, map[string]any{
 		"token_hash": tokenHash,
 		"expires_at": expiresAt,
 		"updated_at": time.Now().UTC(),
+		"updated_by": actorID,
 	})
 }
 
@@ -92,8 +93,8 @@ func (r *gormUserInvitationRepository) MarkAccepted(c context.Context, tenantID,
 	return r.conditionalUpdate(c, tenantID, id, map[string]any{"accepted_at": at, "updated_at": at})
 }
 
-func (r *gormUserInvitationRepository) MarkRevoked(c context.Context, tenantID, id uuid.UUID, at time.Time) error {
-	return r.conditionalUpdate(c, tenantID, id, map[string]any{"revoked_at": at, "updated_at": at})
+func (r *gormUserInvitationRepository) MarkRevoked(c context.Context, tenantID, id, actorID uuid.UUID, at time.Time) error {
+	return r.conditionalUpdate(c, tenantID, id, map[string]any{"revoked_at": at, "updated_at": at, "updated_by": actorID})
 }
 
 func (r *gormUserInvitationRepository) List(c context.Context, tenantID uuid.UUID, limit, offset int) ([]*entity.UserInvitation, int64, error) {

@@ -1,4 +1,10 @@
 // Package ctx provides typed context accessors for request-scoped values.
+//
+// Identity flow: the Auth/Tenant middleware (wired only in routes.go) writes
+// tenant_id, user_id and roles with the With* functions; HTTP handlers are the
+// only readers (the *FromContext functions) and pass the values down to
+// usecases and repositories as explicit parameters. Usecases and repositories
+// must not read identity from context.Context.
 package ctx
 
 import "context"
@@ -18,7 +24,8 @@ func WithTenantID(parent context.Context, tenantID string) context.Context {
 	return context.WithValue(parent, tenantIDKey, tenantID)
 }
 
-// TenantIDFromContext extracts the tenant ID from the context.
+// TenantIDFromContext extracts the tenant ID injected by the auth/tenant
+// middleware. Read only in the delivery layer (handlers).
 func TenantIDFromContext(c context.Context) (string, bool) {
 	tenantID, ok := c.Value(tenantIDKey).(string)
 	return tenantID, ok
@@ -30,8 +37,8 @@ func WithUserID(parent context.Context, userID string) context.Context {
 	return context.WithValue(parent, userIDKey, userID)
 }
 
-// UserIDFromContext extracts the authenticated user id injected by the
-// (future) auth middleware.
+// UserIDFromContext extracts the authenticated user id injected by the auth
+// middleware. Read only in the delivery layer (handlers).
 func UserIDFromContext(c context.Context) (string, bool) {
 	userID, ok := c.Value(userIDKey).(string)
 	return userID, ok
@@ -43,7 +50,7 @@ func WithRoles(parent context.Context, roles []string) context.Context {
 }
 
 // RolesFromContext extracts the authenticated user's roles injected by
-// the (future) auth middleware.
+// the auth middleware. Read only in the delivery layer.
 func RolesFromContext(c context.Context) ([]string, bool) {
 	roles, ok := c.Value(rolesKey).([]string)
 	return roles, ok

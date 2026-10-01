@@ -4,7 +4,6 @@ import (
 	"context"
 	"time"
 
-	"github.com/skryfon/employee360/backend/internal/ctx"
 	domainerrors "github.com/skryfon/employee360/backend/internal/domain/errors"
 	"github.com/skryfon/employee360/backend/internal/domain/repository"
 	"github.com/skryfon/employee360/backend/internal/domain/service"
@@ -41,9 +40,8 @@ func (u *ValidateInvitationUseCaseImpl) Execute(c context.Context, token string)
 		return nil, err
 	}
 	// The endpoint is unauthenticated, so the tenant for the (tenant-scoped)
-	// role lookup is derived from the invitation row, as accept does.
-	roleCtx := ctx.WithTenantID(c, inv.TenantID.String())
-	role, err := u.roleRepo.GetByID(roleCtx, inv.RoleID)
+	// role lookup is taken from the invitation row, as accept does.
+	role, err := u.roleRepo.GetByID(c, inv.TenantID, inv.RoleID)
 	if err != nil || role == nil {
 		return nil, domainerrors.ErrRoleNotFound
 	}

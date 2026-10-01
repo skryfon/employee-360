@@ -8,10 +8,11 @@ import (
 )
 
 // UserRoleRepository defines the data access methods for user-role associations.
+// Reads and deletes take tenantID explicitly; AssignRole persists userRole.TenantID.
 type UserRoleRepository interface {
 	AssignRole(ctx context.Context, userRole *entity.UserRole) error
-	RemoveRole(ctx context.Context, userID, roleID uuid.UUID) error
-	GetRolesByUserID(ctx context.Context, userID uuid.UUID) ([]*entity.Role, error)
-	GetUserRolesByUserID(ctx context.Context, userID uuid.UUID) ([]*entity.UserRole, error)
-	DeleteByUserID(ctx context.Context, userID uuid.UUID) error
+	RemoveRole(ctx context.Context, tenantID, userID, roleID uuid.UUID) error
+	GetRolesByUserID(ctx context.Context, tenantID, userID uuid.UUID) ([]*entity.Role, error)
+	GetUserRolesByUserID(ctx context.Context, tenantID, userID uuid.UUID) ([]*entity.UserRole, error)
+	DeleteByUserID(ctx context.Context, tenantID, userID uuid.UUID) error
 }

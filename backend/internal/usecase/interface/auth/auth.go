@@ -45,3 +45,16 @@ type ForgotPasswordUseCase interface {
 type ResetPasswordUseCase interface {
 	Execute(ctx context.Context, req authtypes.ResetPasswordRequest) error
 }
+
+// VerifyIdentityUseCase defines the port used by the auth middleware to confirm
+// that the tenant_id and user_id from a validated access token still refer to a
+// usable tenant and user, and to load the user's current roles.
+//
+// Execute returns domainerrors.ErrUnauthorized when the identity is not usable
+// (tenant missing, soft-deleted or inactive; user missing in that tenant,
+// soft-deleted or inactive) -- deliberately one error so callers cannot leak
+// which check failed. Any other error is an infrastructure failure and callers
+// must fail closed.
+type VerifyIdentityUseCase interface {
+	Execute(ctx context.Context, tenantID, userID uuid.UUID) (*authtypes.VerifiedIdentity, error)
+}

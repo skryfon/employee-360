@@ -5,7 +5,6 @@ import (
 	"github.com/google/uuid"
 	"github.com/skryfon/employee360/backend/internal/ctx"
 	"github.com/skryfon/employee360/backend/internal/delivery/http/response"
-	domainerrors "github.com/skryfon/employee360/backend/internal/domain/errors"
 )
 
 // Tenant enforces strict multi-tenant isolation by resolving tenant_id
@@ -15,6 +14,10 @@ import (
 // Any client-supplied tenant identifier (such as X-Tenant-ID headers, query parameters,
 // or JSON payload fields) is strictly ignored. The context tenant_id is guaranteed to
 // originate solely from the validated access token claims.
+//
+// Database verification (tenant exists/active/not deleted, user belongs to it and
+// is active) happens once in Auth, which always runs before Tenant; Tenant only
+// consumes the already-verified value and so adds no query of its own.
 //
 // If tenant_id is missing or is not a valid non-nil UUID, Tenant aborts with 401 Unauthorized.
 func Tenant() gin.HandlerFunc {
@@ -37,7 +40,7 @@ func Tenant() gin.HandlerFunc {
 
 		// Or extract from claims if available
 		if tenantIDStr == "" {
-			if claims, ok := GetClaims(c); ok && claims != nil && claims.TenantID != uuid.Nil {
+			if claims, ok := getClaims(c); ok && claims != nil && claims.TenantID != uuid.Nil {
 				tenantIDStr = claims.TenantID.String()
 			}
 		}
@@ -62,23 +65,4 @@ func Tenant() gin.HandlerFunc {
 
 		c.Next()
 	}
-}
-
-// GetTenantID extracts and parses the tenant UUID from the request context or Gin context.
-// Returns an error if tenant_id is missing or not a valid UUID.
-func GetTenantID(c *gin.Context) (uuid.UUID, error) {
-	if val, ok := c.Get(ContextKeyTenantID); ok {
-		if strVal, ok := val.(string); ok && strVal != "" {
-			return uuid.Parse(strVal)
-		}
-		if uid, ok := val.(uuid.UUID); ok && uid != uuid.Nil {
-			return uid, nil
-		}
-	}
-
-	if strVal, ok := ctx.TenantIDFromContext(c.Request.Context()); ok && strVal != "" {
-		return uuid.Parse(strVal)
-	}
-
-	return uuid.Nil, domainerrors.ErrUnauthorized
 }

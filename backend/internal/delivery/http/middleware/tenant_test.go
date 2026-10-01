@@ -1,7 +1,6 @@
 package middleware
 
 import (
-	"context"
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
@@ -21,11 +20,11 @@ func setupTenantTestEngine(tokenSvc domainservice.TokenService) *gin.Engine {
 	gin.SetMode(gin.TestMode)
 	engine := gin.New()
 
-	tenantGroup := engine.Group("/tenant", Auth(tokenSvc), Tenant())
+	tenantGroup := engine.Group("/tenant", Auth(tokenSvc, verifierFor(tokenSvc)), Tenant())
 	{
 		tenantGroup.GET("/resources", func(c *gin.Context) {
-			tenantID, err := GetTenantID(c)
-			if err != nil {
+			tenantID := c.GetString(ContextKeyTenantID)
+			if tenantID == "" {
 				response.Unauthorized(c, "failed to get tenant ID")
 				return
 			}
@@ -33,14 +32,14 @@ func setupTenantTestEngine(tokenSvc domainservice.TokenService) *gin.Engine {
 			ctxTenantID, _ := ctx.TenantIDFromContext(c.Request.Context())
 
 			c.JSON(http.StatusOK, gin.H{
-				"tenant_id":     tenantID.String(),
+				"tenant_id":     tenantID,
 				"ctx_tenant_id": ctxTenantID,
 			})
 		})
 
 		tenantGroup.POST("/resources", func(c *gin.Context) {
-			tenantID, err := GetTenantID(c)
-			if err != nil {
+			tenantID := c.GetString(ContextKeyTenantID)
+			if tenantID == "" {
 				response.Unauthorized(c, "failed to get tenant ID")
 				return
 			}
@@ -48,7 +47,7 @@ func setupTenantTestEngine(tokenSvc domainservice.TokenService) *gin.Engine {
 			ctxTenantID, _ := ctx.TenantIDFromContext(c.Request.Context())
 
 			c.JSON(http.StatusCreated, gin.H{
-				"tenant_id":     tenantID.String(),
+				"tenant_id":     tenantID,
 				"ctx_tenant_id": ctxTenantID,
 			})
 		})
@@ -179,50 +178,4 @@ func TestTenant_MissingContext_Aborts(t *testing.T) {
 	if rec.Code != http.StatusUnauthorized {
 		t.Fatalf("expected status 401 when tenant context is missing, got %d", rec.Code)
 	}
-}
-
-func TestGetTenantID_Helper(t *testing.T) {
-	t.Run("Extracts from Gin Context", func(t *testing.T) {
-		expectedID := uuid.New()
-		w := httptest.NewRecorder()
-		c, _ := gin.CreateTestContext(w)
-		c.Request = httptest.NewRequest(http.MethodGet, "/", nil)
-		c.Set(ContextKeyTenantID, expectedID.String())
-
-		id, err := GetTenantID(c)
-		if err != nil {
-			t.Fatalf("unexpected error: %v", err)
-		}
-		if id != expectedID {
-			t.Errorf("expected %v, got %v", expectedID, id)
-		}
-	})
-
-	t.Run("Extracts from Request Context", func(t *testing.T) {
-		expectedID := uuid.New()
-		w := httptest.NewRecorder()
-		c, _ := gin.CreateTestContext(w)
-		req := httptest.NewRequest(http.MethodGet, "/", nil)
-		req = req.WithContext(ctx.WithTenantID(context.Background(), expectedID.String()))
-		c.Request = req
-
-		id, err := GetTenantID(c)
-		if err != nil {
-			t.Fatalf("unexpected error: %v", err)
-		}
-		if id != expectedID {
-			t.Errorf("expected %v, got %v", expectedID, id)
-		}
-	})
-
-	t.Run("Returns error when absent", func(t *testing.T) {
-		w := httptest.NewRecorder()
-		c, _ := gin.CreateTestContext(w)
-		c.Request = httptest.NewRequest(http.MethodGet, "/", nil)
-
-		_, err := GetTenantID(c)
-		if err == nil {
-			t.Fatal("expected error when tenant is absent")
-		}
-	})
 }

@@ -17,15 +17,27 @@ import (
 )
 
 type fakeListRolesUC struct {
-	roles []*entity.Role
-	err   error
+	roles     []*entity.Role
+	err       error
+	gotTenant *uuid.UUID
 }
 
-func (f fakeListRolesUC) Execute(context.Context) ([]*entity.Role, error) { return f.roles, f.err }
+func (f fakeListRolesUC) Execute(_ context.Context, tenantID uuid.UUID) ([]*entity.Role, error) {
+	*f.gotTenant = tenantID
+	return f.roles, f.err
+}
 
 func serveRoles(uc fakeListRolesUC) *httptest.ResponseRecorder {
+	return serveRolesWith(uc, withIdentity(uuid.New(), uuid.New()))
+}
+
+func serveRolesWith(uc fakeListRolesUC, mw ...gin.HandlerFunc) *httptest.ResponseRecorder {
+	if uc.gotTenant == nil {
+		uc.gotTenant = new(uuid.UUID)
+	}
 	gin.SetMode(gin.TestMode)
 	engine := gin.New()
+	engine.Use(mw...)
 	engine.GET("/roles", NewRoleHandler(uc).List)
 	rec := httptest.NewRecorder()
 	engine.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/roles", nil))
@@ -67,4 +79,19 @@ func TestRoleHandler_List_Errors(t *testing.T) {
 			assert.Equal(t, tc.code, serveRoles(fakeListRolesUC{err: tc.err}).Code)
 		})
 	}
+}
+
+func TestRoleHandler_List_PassesTenantFromContext(t *testing.T) {
+	tenant := uuid.New()
+	var got uuid.UUID
+	rec := serveRolesWith(fakeListRolesUC{gotTenant: &got}, withIdentity(tenant, uuid.New()))
+	require.Equal(t, http.StatusOK, rec.Code)
+	assert.Equal(t, tenant, got)
+}
+
+func TestRoleHandler_List_MissingTenantIs401(t *testing.T) {
+	var got uuid.UUID
+	rec := serveRolesWith(fakeListRolesUC{gotTenant: &got}) // no identity middleware
+	assert.Equal(t, http.StatusUnauthorized, rec.Code)
+	assert.Equal(t, uuid.Nil, got, "usecase must not be called")
 }

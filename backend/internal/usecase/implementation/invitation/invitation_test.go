@@ -7,7 +7,6 @@ import (
 	"time"
 
 	"github.com/google/uuid"
-	"github.com/skryfon/employee360/backend/internal/ctx"
 	"github.com/skryfon/employee360/backend/internal/domain/entity"
 	domainerrors "github.com/skryfon/employee360/backend/internal/domain/errors"
 	"github.com/skryfon/employee360/backend/internal/domain/event"
@@ -34,19 +33,19 @@ func (f *fixture) validate() *ValidateInvitationUseCaseImpl {
 
 func (f *fixture) doInvite(t *testing.T, email string) (*entity.UserInvitation, string) {
 	t.Helper()
-	inv, err := f.invite().Execute(f.adminCtx, invtypes.InviteUserRequest{Email: email, RoleID: f.employeeRl.ID})
+	inv, err := f.invite().Execute(bg, f.tenantA, f.adminID, invtypes.InviteUserRequest{Email: email, RoleID: f.employeeRl.ID})
 	require.NoError(t, err)
 	p := f.s.events[len(f.s.events)-1].Payload.(event.UserInvitedPayload)
 	return inv, p.PlainToken
 }
 
-// AC1: tenant comes from context only; foreign-tenant roles are rejected.
-func TestInvite_TenantFromContextOnly(t *testing.T) {
+// AC1: tenant comes from the explicit param only; foreign-tenant roles are rejected.
+func TestInvite_TenantFromParamOnly(t *testing.T) {
 	f := newFixture()
 	inv, _ := f.doInvite(t, "New@Acme.com")
 	assert.Equal(t, f.tenantA, inv.TenantID)
 	assert.Equal(t, "new@acme.com", inv.Email)
-	u, err := f.s.GetByTenantAndEmail(f.adminCtx, f.tenantA, "new@acme.com")
+	u, err := f.s.GetByTenantAndEmail(bg, f.tenantA, "new@acme.com")
 	require.NoError(t, err)
 	assert.False(t, u.IsActive)
 	assert.Nil(t, u.PasswordHash)
@@ -54,28 +53,23 @@ func TestInvite_TenantFromContextOnly(t *testing.T) {
 	assert.Equal(t, f.tenantA, f.s.events[0].TenantID)
 
 	// Admin of tenant B cannot use tenant A's role, so cannot target tenant A data.
-	ctxB := adminCtx(f.tenantB, uuid.New())
-	_, err = f.invite().Execute(ctxB, invtypes.InviteUserRequest{Email: "x@b.com", RoleID: f.employeeRl.ID})
+	_, err = f.invite().Execute(bg, f.tenantB, uuid.New(), invtypes.InviteUserRequest{Email: "x@b.com", RoleID: f.employeeRl.ID})
 	assert.ErrorIs(t, err, domainerrors.ErrRoleNotFound)
 
-	// No tenant in context is unauthorized (no fallback to payload).
-	_, err = f.invite().Execute(ctx.WithRoles(context.Background(), []string{"admin"}), invtypes.InviteUserRequest{Email: "x@b.com", RoleID: f.employeeRl.ID})
+	// A nil tenant is unauthorized (no fallback to payload).
+	_, err = f.invite().Execute(bg, uuid.Nil, f.adminID, invtypes.InviteUserRequest{Email: "x@b.com", RoleID: f.employeeRl.ID})
 	assert.ErrorIs(t, err, domainerrors.ErrUnauthorized)
 }
 
-func TestInvite_RejectsNonAdminSuperAdminRoleAndDuplicate(t *testing.T) {
+func TestInvite_RejectsSuperAdminRoleAndDuplicate(t *testing.T) {
 	f := newFixture()
-	c := ctx.WithRoles(f.adminCtx, []string{"employee"})
-	_, err := f.invite().Execute(c, invtypes.InviteUserRequest{Email: "a@acme.com", RoleID: f.employeeRl.ID})
-	assert.ErrorIs(t, err, domainerrors.ErrForbidden)
-
 	sa := &entity.Role{ID: uuid.New(), TenantID: f.tenantA, Name: "super_admin"}
 	f.s.roles[sa.ID] = sa
-	_, err = f.invite().Execute(f.adminCtx, invtypes.InviteUserRequest{Email: "a@acme.com", RoleID: sa.ID})
+	_, err := f.invite().Execute(bg, f.tenantA, f.adminID, invtypes.InviteUserRequest{Email: "a@acme.com", RoleID: sa.ID})
 	assert.ErrorIs(t, err, domainerrors.ErrInvalidRole)
 
 	f.doInvite(t, "dup@acme.com")
-	_, err = f.invite().Execute(f.adminCtx, invtypes.InviteUserRequest{Email: "dup@acme.com", RoleID: f.employeeRl.ID})
+	_, err = f.invite().Execute(bg, f.tenantA, f.adminID, invtypes.InviteUserRequest{Email: "dup@acme.com", RoleID: f.employeeRl.ID})
 	assert.ErrorIs(t, err, domainerrors.ErrEmailAlreadyExists)
 }
 
@@ -87,7 +81,7 @@ func TestTokensStoredOnlyAsHashes(t *testing.T) {
 	assert.NotEqual(t, plain, inv.TokenHash)
 	assert.Equal(t, f.hash.HashToken(plain), f.s.invitations[inv.ID].TokenHash)
 
-	_, err := f.resend().Execute(f.adminCtx, inv.ID)
+	_, err := f.resend().Execute(bg, f.tenantA, f.adminID, inv.ID)
 	require.NoError(t, err)
 	p2 := f.s.events[len(f.s.events)-1].Payload.(event.InvitationResentPayload).PlainToken
 	assert.NotEqual(t, plain, p2)
@@ -101,25 +95,24 @@ func TestResendRevoke_RejectNonPending(t *testing.T) {
 	accepted, tok := f.doInvite(t, "acc@acme.com")
 	require.NoError(t, f.accept().Execute(context.Background(), invtypes.AcceptInvitationRequest{Token: tok, Password: "password123"}))
 	revoked, _ := f.doInvite(t, "rev@acme.com")
-	require.NoError(t, f.revoke().Execute(f.adminCtx, revoked.ID))
+	require.NoError(t, f.revoke().Execute(bg, f.tenantA, f.adminID, revoked.ID))
 
 	for _, id := range []uuid.UUID{accepted.ID, revoked.ID} {
-		_, err := f.resend().Execute(f.adminCtx, id)
+		_, err := f.resend().Execute(bg, f.tenantA, f.adminID, id)
 		assert.ErrorIs(t, err, domainerrors.ErrInvitationNotPending)
-		assert.ErrorIs(t, f.revoke().Execute(f.adminCtx, id), domainerrors.ErrInvitationNotPending)
+		assert.ErrorIs(t, f.revoke().Execute(bg, f.tenantA, f.adminID, id), domainerrors.ErrInvitationNotPending)
 	}
 
 	// Cross-tenant lookups look like not-found.
-	other := adminCtx(f.tenantB, uuid.New())
-	assert.ErrorIs(t, f.revoke().Execute(other, revoked.ID), domainerrors.ErrInvitationNotFound)
-	_, err := f.resend().Execute(other, accepted.ID)
+	assert.ErrorIs(t, f.revoke().Execute(bg, f.tenantB, uuid.New(), revoked.ID), domainerrors.ErrInvitationNotFound)
+	_, err := f.resend().Execute(bg, f.tenantB, uuid.New(), accepted.ID)
 	assert.ErrorIs(t, err, domainerrors.ErrInvitationNotFound)
 }
 
 func TestResend_PendingPublishesEventAndInvalidatesOldToken(t *testing.T) {
 	f := newFixture()
 	inv, old := f.doInvite(t, "r@acme.com")
-	_, err := f.resend().Execute(f.adminCtx, inv.ID)
+	_, err := f.resend().Execute(bg, f.tenantA, f.adminID, inv.ID)
 	require.NoError(t, err)
 	assert.Equal(t, event.EventTypeInvitationResent, f.s.events[len(f.s.events)-1].EventType)
 	err = f.accept().Execute(context.Background(), invtypes.AcceptInvitationRequest{Token: old, Password: "password123"})
@@ -133,7 +126,7 @@ func TestAccept_RequiresPasswordForEveryRole(t *testing.T) {
 	f.s.roles[adminRole.ID] = adminRole
 
 	for _, role := range []*entity.Role{f.employeeRl, adminRole} {
-		inv, err := f.invite().Execute(f.adminCtx, invtypes.InviteUserRequest{Email: role.Name + "@acme.com", RoleID: role.ID})
+		inv, err := f.invite().Execute(bg, f.tenantA, f.adminID, invtypes.InviteUserRequest{Email: role.Name + "@acme.com", RoleID: role.ID})
 		require.NoError(t, err)
 		tok := f.s.events[len(f.s.events)-1].Payload.(event.UserInvitedPayload).PlainToken
 
@@ -168,7 +161,7 @@ func TestAccept_DistinctFailureStates(t *testing.T) {
 	assert.ErrorIs(t, f.accept().Execute(bg, invtypes.AcceptInvitationRequest{Token: "nope", Password: pw}), domainerrors.ErrInvalidToken)
 
 	f.s.invitations[inv.ID].ExpiresAt = time.Now().Add(time.Hour)
-	require.NoError(t, f.revoke().Execute(f.adminCtx, inv.ID))
+	require.NoError(t, f.revoke().Execute(bg, f.tenantA, f.adminID, inv.ID))
 	assert.ErrorIs(t, f.accept().Execute(bg, invtypes.AcceptInvitationRequest{Token: tok, Password: pw}), domainerrors.ErrInvitationRevoked)
 
 	_, tok2 := f.doInvite(t, "a@acme.com")
@@ -180,7 +173,7 @@ func TestAccept_DistinctFailureStates(t *testing.T) {
 func TestInviteAndResend_RollbackLeavesNothing(t *testing.T) {
 	f := newFixture()
 	f.s.publishErr = errors.New("enqueue failed")
-	_, err := f.invite().Execute(f.adminCtx, invtypes.InviteUserRequest{Email: "rb@acme.com", RoleID: f.employeeRl.ID})
+	_, err := f.invite().Execute(bg, f.tenantA, f.adminID, invtypes.InviteUserRequest{Email: "rb@acme.com", RoleID: f.employeeRl.ID})
 	require.Error(t, err)
 	assert.Empty(t, f.s.invitations)
 	assert.Empty(t, f.s.users)
@@ -191,7 +184,7 @@ func TestInviteAndResend_RollbackLeavesNothing(t *testing.T) {
 	inv, _ := f.doInvite(t, "rb2@acme.com")
 	nEvents := len(f.s.events)
 	f.s.publishErr = errors.New("enqueue failed")
-	_, err = f.resend().Execute(f.adminCtx, inv.ID)
+	_, err = f.resend().Execute(bg, f.tenantA, f.adminID, inv.ID)
 	require.Error(t, err)
 	assert.Equal(t, nEvents, len(f.s.events))
 }
@@ -202,7 +195,7 @@ func TestList_TenantScoped(t *testing.T) {
 	f.doInvite(t, "l2@acme.com")
 	f.s.invitations[uuid.New()] = &entity.UserInvitation{ID: uuid.New(), TenantID: f.tenantB}
 	uc := NewListInvitationsUseCase(fakeInvRepo{f.s})
-	list, total, err := uc.Execute(f.adminCtx, 10, 0)
+	list, total, err := uc.Execute(bg, f.tenantA, 10, 0)
 	require.NoError(t, err)
 	assert.Equal(t, int64(2), total)
 	for _, i := range list {
@@ -213,7 +206,7 @@ func TestList_TenantScoped(t *testing.T) {
 func TestInvite_MalformedEmailIsValidationError(t *testing.T) {
 	f := newFixture()
 	for _, e := range []string{"", "nope", "@x.com", "a@"} {
-		_, err := f.invite().Execute(f.adminCtx, invtypes.InviteUserRequest{Email: e, RoleID: f.employeeRl.ID})
+		_, err := f.invite().Execute(bg, f.tenantA, f.adminID, invtypes.InviteUserRequest{Email: e, RoleID: f.employeeRl.ID})
 		assert.ErrorIs(t, err, domainerrors.ErrInvalidEmail, e)
 	}
 }
@@ -225,15 +218,15 @@ func TestInvite_DepartmentPositionMustBelongToTenant(t *testing.T) {
 	f.s.depts[ownDept], f.s.positions[ownPos] = f.tenantA, f.tenantA
 	f.s.depts[foreignDept], f.s.positions[foreignPos] = f.tenantB, f.tenantB
 
-	_, err := f.invite().Execute(f.adminCtx, invtypes.InviteUserRequest{Email: "d@acme.com", RoleID: f.employeeRl.ID, DepartmentID: &foreignDept})
+	_, err := f.invite().Execute(bg, f.tenantA, f.adminID, invtypes.InviteUserRequest{Email: "d@acme.com", RoleID: f.employeeRl.ID, DepartmentID: &foreignDept})
 	assert.ErrorIs(t, err, domainerrors.ErrDepartmentNotFound)
-	_, err = f.invite().Execute(f.adminCtx, invtypes.InviteUserRequest{Email: "p@acme.com", RoleID: f.employeeRl.ID, PositionID: &foreignPos})
+	_, err = f.invite().Execute(bg, f.tenantA, f.adminID, invtypes.InviteUserRequest{Email: "p@acme.com", RoleID: f.employeeRl.ID, PositionID: &foreignPos})
 	assert.ErrorIs(t, err, domainerrors.ErrPositionNotFound)
 	assert.Empty(t, f.s.users)
 	assert.Empty(t, f.s.invitations)
 	assert.Empty(t, f.s.audits)
 
-	inv, err := f.invite().Execute(f.adminCtx, invtypes.InviteUserRequest{Email: "ok@acme.com", RoleID: f.employeeRl.ID, DepartmentID: &ownDept, PositionID: &ownPos})
+	inv, err := f.invite().Execute(bg, f.tenantA, f.adminID, invtypes.InviteUserRequest{Email: "ok@acme.com", RoleID: f.employeeRl.ID, DepartmentID: &ownDept, PositionID: &ownPos})
 	require.NoError(t, err)
 	assert.Equal(t, &ownDept, inv.DepartmentID)
 }
@@ -241,7 +234,7 @@ func TestInvite_DepartmentPositionMustBelongToTenant(t *testing.T) {
 func TestRevoke_RemovesPendingUserAndAllowsReinvite(t *testing.T) {
 	f := newFixture()
 	inv, _ := f.doInvite(t, "again@acme.com")
-	require.NoError(t, f.revoke().Execute(f.adminCtx, inv.ID))
+	require.NoError(t, f.revoke().Execute(bg, f.tenantA, f.adminID, inv.ID))
 	assert.Empty(t, f.s.users)
 	assert.Empty(t, f.s.userRoles)
 
@@ -252,9 +245,9 @@ func TestRevoke_RemovesPendingUserAndAllowsReinvite(t *testing.T) {
 func TestRevoke_KeepsActivatedUser(t *testing.T) {
 	f := newFixture()
 	inv, _ := f.doInvite(t, "act@acme.com")
-	u, _ := f.s.GetByTenantAndEmail(f.adminCtx, f.tenantA, "act@acme.com")
+	u, _ := f.s.GetByTenantAndEmail(bg, f.tenantA, "act@acme.com")
 	u.IsActive = true // activated out-of-band while invitation remained pending
-	require.NoError(t, f.revoke().Execute(f.adminCtx, inv.ID))
+	require.NoError(t, f.revoke().Execute(bg, f.tenantA, f.adminID, inv.ID))
 	assert.Len(t, f.s.users, 1)
 }
 
@@ -284,9 +277,9 @@ func TestAccept_AlreadyAcceptedBetweenCheckAndMark(t *testing.T) {
 func TestAudit_InviteResendRevoke(t *testing.T) {
 	f := newFixture()
 	inv, _ := f.doInvite(t, "aud@acme.com")
-	_, err := f.resend().Execute(f.adminCtx, inv.ID)
+	_, err := f.resend().Execute(bg, f.tenantA, f.adminID, inv.ID)
 	require.NoError(t, err)
-	require.NoError(t, f.revoke().Execute(f.adminCtx, inv.ID))
+	require.NoError(t, f.revoke().Execute(bg, f.tenantA, f.adminID, inv.ID))
 
 	require.Len(t, f.s.audits, 3)
 	want := []string{auditActionInvite, auditActionResend, auditActionRevoke}
@@ -302,7 +295,7 @@ func TestAudit_InviteResendRevoke(t *testing.T) {
 func TestAudit_RolledBackWithTransaction(t *testing.T) {
 	f := newFixture()
 	f.s.publishErr = errors.New("enqueue failed")
-	_, err := f.invite().Execute(f.adminCtx, invtypes.InviteUserRequest{Email: "rb@acme.com", RoleID: f.employeeRl.ID})
+	_, err := f.invite().Execute(bg, f.tenantA, f.adminID, invtypes.InviteUserRequest{Email: "rb@acme.com", RoleID: f.employeeRl.ID})
 	require.Error(t, err)
 	assert.Empty(t, f.s.audits)
 }
@@ -326,7 +319,7 @@ func TestValidate_TokenStatus(t *testing.T) {
 	assert.ErrorIs(t, err, domainerrors.ErrInvitationExpired)
 
 	f.s.invitations[inv.ID].ExpiresAt = time.Now().Add(time.Hour)
-	require.NoError(t, f.revoke().Execute(f.adminCtx, inv.ID))
+	require.NoError(t, f.revoke().Execute(bg, f.tenantA, f.adminID, inv.ID))
 	_, err = f.validate().Execute(bg, tok)
 	assert.ErrorIs(t, err, domainerrors.ErrInvitationRevoked)
 
@@ -346,7 +339,7 @@ func TestValidate_ReturnsInviteeRole(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, "employee", res.Role)
 
-	_, err = f.invite().Execute(f.adminCtx, invtypes.InviteUserRequest{Email: "adm@acme.com", RoleID: adminRole.ID})
+	_, err = f.invite().Execute(bg, f.tenantA, f.adminID, invtypes.InviteUserRequest{Email: "adm@acme.com", RoleID: adminRole.ID})
 	require.NoError(t, err)
 	admTok := f.s.events[len(f.s.events)-1].Payload.(event.UserInvitedPayload).PlainToken
 	res, err = f.validate().Execute(context.Background(), admTok)
@@ -359,7 +352,7 @@ func TestInviteLink_TargetsRoleApp(t *testing.T) {
 	adminRole := &entity.Role{ID: uuid.New(), TenantID: f.tenantA, Name: "admin"}
 	f.s.roles[adminRole.ID] = adminRole
 
-	_, err := f.invite().Execute(f.adminCtx, invtypes.InviteUserRequest{Email: "adm@acme.com", RoleID: adminRole.ID})
+	_, err := f.invite().Execute(bg, f.tenantA, f.adminID, invtypes.InviteUserRequest{Email: "adm@acme.com", RoleID: adminRole.ID})
 	require.NoError(t, err)
 	p := f.s.events[len(f.s.events)-1].Payload.(event.UserInvitedPayload)
 	assert.Equal(t, "http://admin.app/accept-invitation?token="+p.PlainToken, p.InviteURL)

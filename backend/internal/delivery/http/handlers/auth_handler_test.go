@@ -13,7 +13,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
-	"github.com/skryfon/employee360/backend/internal/delivery/http/middleware"
+	"github.com/skryfon/employee360/backend/internal/ctx"
 	"github.com/skryfon/employee360/backend/internal/delivery/http/response"
 	"github.com/skryfon/employee360/backend/internal/domain/entity"
 	domainerrors "github.com/skryfon/employee360/backend/internal/domain/errors"
@@ -329,11 +329,12 @@ func TestAuthHandler_Refresh(t *testing.T) {
 }
 
 // withCaller registers a stand-in for the auth+tenant middleware that places the
-// authenticated caller's identity on the Gin context.
+// authenticated caller's identity on the request context via the ctx package.
 func withCaller(tenantID, userID uuid.UUID) gin.HandlerFunc {
 	return func(c *gin.Context) {
-		c.Set(middleware.ContextKeyTenantID, tenantID.String())
-		c.Set(middleware.ContextKeyUserID, userID.String())
+		rc := ctx.WithTenantID(c.Request.Context(), tenantID.String())
+		rc = ctx.WithUserID(rc, userID.String())
+		c.Request = c.Request.WithContext(rc)
 		c.Next()
 	}
 }

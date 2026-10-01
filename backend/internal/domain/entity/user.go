@@ -21,6 +21,10 @@ type User struct {
 	IsActive        bool       `json:"is_active"`
 	CreatedAt       time.Time  `json:"created_at"`
 	UpdatedAt       time.Time  `json:"updated_at"`
+	CreatedBy       *uuid.UUID `json:"-"`
+	UpdatedBy       *uuid.UUID `json:"-"`
+	DeletedBy       *uuid.UUID `json:"-"`
+	DeletedAt       *time.Time `json:"-"`
 
 	// Associations (populated when loaded).
 	//

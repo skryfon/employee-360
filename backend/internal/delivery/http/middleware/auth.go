@@ -10,6 +10,7 @@ import (
 	"github.com/skryfon/employee360/backend/internal/delivery/http/response"
 	domainerrors "github.com/skryfon/employee360/backend/internal/domain/errors"
 	domainservice "github.com/skryfon/employee360/backend/internal/domain/service"
+	authusecase "github.com/skryfon/employee360/backend/internal/usecase/interface/auth"
 )
 
 // Gin context keys for authenticated user information.
@@ -27,7 +28,17 @@ const (
 //
 // Requests with missing, malformed, expired, or invalid tokens are aborted with
 // a 401 Unauthorized response before reaching downstream handlers.
-func Auth(tokenService domainservice.TokenService) gin.HandlerFunc {
+//
+// After the token validates, the verifier confirms against the database that the
+// token's tenant and user still exist and are usable (tenant active and not
+// soft-deleted; user in that tenant, active and not soft-deleted). An unusable
+// identity yields a uniform 401 that does not reveal which check failed; a
+// verifier/DB failure fails closed with 503. The roles placed in the context
+// are the user's current roles from the database, not the token's roles.
+func Auth(tokenService domainservice.TokenService, verifier authusecase.VerifyIdentityUseCase) gin.HandlerFunc {
+	if verifier == nil {
+		panic("middleware.Auth: identity verifier is required")
+	}
 	return func(c *gin.Context) {
 		authHeader := c.GetHeader("Authorization")
 		if authHeader == "" {
@@ -61,6 +72,19 @@ func Auth(tokenService domainservice.TokenService) gin.HandlerFunc {
 			return
 		}
 
+		identity, err := verifier.Execute(c.Request.Context(), claims.TenantID, claims.UserID)
+		if err != nil {
+			if errors.Is(err, domainerrors.ErrUnauthorized) {
+				response.Unauthorized(c, "invalid or expired token")
+			} else {
+				response.ServiceUnavailable(c, "unable to verify identity")
+			}
+			c.Abort()
+			return
+		}
+		// Do not trust the token's roles: use the current ones from the database.
+		claims.Roles = identity.Roles
+
 		userIDStr := claims.UserID.String()
 		tenantIDStr := claims.TenantID.String()
 
@@ -89,13 +113,13 @@ func Auth(tokenService domainservice.TokenService) gin.HandlerFunc {
 // assigned) roles is a 403, not a 401.
 func RequireRole(allowedRoles ...string) gin.HandlerFunc {
 	return func(c *gin.Context) {
-		if _, err := GetUserID(c); err != nil {
+		if _, err := getUserID(c); err != nil {
 			response.Unauthorized(c, "authentication required")
 			c.Abort()
 			return
 		}
 
-		roles := GetRoles(c)
+		roles := getRoles(c)
 
 		if HasAnyRole(roles, allowedRoles...) {
 			c.Next()
@@ -127,8 +151,8 @@ func HasAnyRole(userRoles []string, targetRoles ...string) bool {
 	return false
 }
 
-// GetUserID retrieves the authenticated user ID as a UUID from Gin context or request context.
-func GetUserID(c *gin.Context) (uuid.UUID, error) {
+// getUserID retrieves the authenticated user ID as a UUID from Gin context or request context.
+func getUserID(c *gin.Context) (uuid.UUID, error) {
 	if val, ok := c.Get(ContextKeyUserID); ok {
 		if strVal, ok := val.(string); ok && strVal != "" {
 			return uuid.Parse(strVal)
@@ -143,8 +167,8 @@ func GetUserID(c *gin.Context) (uuid.UUID, error) {
 	return uuid.Nil, domainerrors.ErrUnauthorized
 }
 
-// GetRoles retrieves the roles slice from Gin context or request context.
-func GetRoles(c *gin.Context) []string {
+// getRoles retrieves the roles slice from Gin context or request context.
+func getRoles(c *gin.Context) []string {
 	if val, ok := c.Get(ContextKeyRoles); ok {
 		if roles, ok := val.([]string); ok {
 			return roles
@@ -156,8 +180,8 @@ func GetRoles(c *gin.Context) []string {
 	return nil
 }
 
-// GetClaims retrieves the parsed AccessTokenClaims from Gin context.
-func GetClaims(c *gin.Context) (*domainservice.AccessTokenClaims, bool) {
+// getClaims retrieves the parsed AccessTokenClaims from Gin context.
+func getClaims(c *gin.Context) (*domainservice.AccessTokenClaims, bool) {
 	if val, ok := c.Get(ContextKeyClaims); ok {
 		if claims, ok := val.(*domainservice.AccessTokenClaims); ok {
 			return claims, true

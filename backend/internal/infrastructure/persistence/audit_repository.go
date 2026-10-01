@@ -12,8 +12,8 @@ import (
 )
 
 // gormAuditRepository implements repository.AuditRepository. Create persists
-// the entity's TenantID (set by the usecase from context); reads are scoped by
-// the tenant in context (a missing tenant matches nothing).
+// the entity's TenantID (set by the usecase); reads are scoped by the explicit
+// tenantID parameter.
 type gormAuditRepository struct {
 	db *gorm.DB
 }
@@ -49,18 +49,14 @@ func (r *gormAuditRepository) list(c context.Context, q *gorm.DB, limit, offset 
 	return out, total, nil
 }
 
-func (r *gormAuditRepository) tenantQuery(c context.Context) *gorm.DB {
-	tenantID, err := uuid.Parse(tenantString(c))
-	if err != nil {
-		tenantID = uuid.Nil
-	}
+func (r *gormAuditRepository) tenantQuery(c context.Context, tenantID uuid.UUID) *gorm.DB {
 	return database.DBFromContext(c, r.db).Where("tenant_id = ?", tenantID)
 }
 
-func (r *gormAuditRepository) ListByTenantID(c context.Context, limit, offset int) ([]*entity.AuditLog, int64, error) {
-	return r.list(c, r.tenantQuery(c), limit, offset)
+func (r *gormAuditRepository) ListByTenantID(c context.Context, tenantID uuid.UUID, limit, offset int) ([]*entity.AuditLog, int64, error) {
+	return r.list(c, r.tenantQuery(c, tenantID), limit, offset)
 }
 
-func (r *gormAuditRepository) ListByEntity(c context.Context, entityType string, entityID uuid.UUID, limit, offset int) ([]*entity.AuditLog, int64, error) {
-	return r.list(c, r.tenantQuery(c).Where("entity_type = ? AND entity_id = ?", entityType, entityID), limit, offset)
+func (r *gormAuditRepository) ListByEntity(c context.Context, tenantID uuid.UUID, entityType string, entityID uuid.UUID, limit, offset int) ([]*entity.AuditLog, int64, error) {
+	return r.list(c, r.tenantQuery(c, tenantID).Where("entity_type = ? AND entity_id = ?", entityType, entityID), limit, offset)
 }

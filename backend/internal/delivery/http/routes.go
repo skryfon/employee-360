@@ -71,7 +71,7 @@ func registerRoutes(engine *gin.Engine, c *container.Container) {
 				authGroup.POST("/forgot-password", c.Auth.Handler.ForgotPassword)
 				authGroup.POST("/reset-password", c.Auth.Handler.ResetPassword)
 
-				authProtected := authGroup.Group("", middleware.Auth(c.Auth.TokenService), middleware.Tenant())
+				authProtected := authGroup.Group("", middleware.Auth(c.Auth.TokenService, c.Auth.IdentityVerifier), middleware.Tenant())
 				{
 					authProtected.POST("/logout", c.Auth.Handler.Logout)
 				}
@@ -81,7 +81,7 @@ func registerRoutes(engine *gin.Engine, c *container.Container) {
 		// Admin-only role lookup (feeds the invitation form's role select).
 		if c.Auth != nil && c.Auth.RoleHandler != nil {
 			v1.GET("/roles",
-				middleware.Auth(c.Auth.TokenService),
+				middleware.Auth(c.Auth.TokenService, c.Auth.IdentityVerifier),
 				middleware.Tenant(),
 				middleware.RequireRole(entity.RoleAdmin, entity.RoleSuperAdmin),
 				c.Auth.RoleHandler.List,
@@ -97,7 +97,7 @@ func registerRoutes(engine *gin.Engine, c *container.Container) {
 
 			// Admin-only management routes: auth -> tenant -> role check.
 			invGroup := v1.Group("/users/invitations",
-				middleware.Auth(c.Auth.TokenService),
+				middleware.Auth(c.Auth.TokenService, c.Auth.IdentityVerifier),
 				middleware.Tenant(),
 				middleware.RequireRole(entity.RoleAdmin, entity.RoleSuperAdmin),
 			)

@@ -13,6 +13,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
+	"github.com/skryfon/employee360/backend/internal/ctx"
 	"github.com/skryfon/employee360/backend/internal/delivery/http/response"
 	"github.com/skryfon/employee360/backend/internal/domain/entity"
 	domainerrors "github.com/skryfon/employee360/backend/internal/domain/errors"
@@ -31,17 +32,20 @@ type fakeInvUC struct {
 	gotID     uuid.UUID
 	gotLimit  int
 	gotOffset int
+	gotTenant uuid.UUID
+	gotActor  uuid.UUID
 }
 
-func (f *fakeInvUC) invite(_ context.Context, req invtypes.InviteUserRequest) (*entity.UserInvitation, error) {
+func (f *fakeInvUC) invite(_ context.Context, tenantID, actorID uuid.UUID, req invtypes.InviteUserRequest) (*entity.UserInvitation, error) {
 	f.gotInvite = req
+	f.gotTenant, f.gotActor = tenantID, actorID
 	return f.inv, f.err
 }
 
 type fakeInviteUC struct{ *fakeInvUC }
 
-func (f fakeInviteUC) Execute(c context.Context, req invtypes.InviteUserRequest) (*entity.UserInvitation, error) {
-	return f.invite(c, req)
+func (f fakeInviteUC) Execute(c context.Context, tenantID, actorID uuid.UUID, req invtypes.InviteUserRequest) (*entity.UserInvitation, error) {
+	return f.invite(c, tenantID, actorID, req)
 }
 
 type fakeAcceptUC struct{ *fakeInvUC }
@@ -53,22 +57,25 @@ func (f fakeAcceptUC) Execute(_ context.Context, req invtypes.AcceptInvitationRe
 
 type fakeResendUC struct{ *fakeInvUC }
 
-func (f fakeResendUC) Execute(_ context.Context, id uuid.UUID) (*entity.UserInvitation, error) {
+func (f fakeResendUC) Execute(_ context.Context, tenantID, actorID, id uuid.UUID) (*entity.UserInvitation, error) {
 	f.gotID = id
+	f.gotTenant, f.gotActor = tenantID, actorID
 	return f.inv, f.err
 }
 
 type fakeRevokeUC struct{ *fakeInvUC }
 
-func (f fakeRevokeUC) Execute(_ context.Context, id uuid.UUID) error {
+func (f fakeRevokeUC) Execute(_ context.Context, tenantID, actorID, id uuid.UUID) error {
 	f.gotID = id
+	f.gotTenant, f.gotActor = tenantID, actorID
 	return f.err
 }
 
 type fakeListUC struct{ *fakeInvUC }
 
-func (f fakeListUC) Execute(_ context.Context, limit, offset int) ([]*entity.UserInvitation, int64, error) {
+func (f fakeListUC) Execute(_ context.Context, tenantID uuid.UUID, limit, offset int) ([]*entity.UserInvitation, int64, error) {
 	f.gotLimit, f.gotOffset = limit, offset
+	f.gotTenant = tenantID
 	return f.items, f.total, f.err
 }
 
@@ -82,11 +89,34 @@ func (f fakeValidateUC) Execute(_ context.Context, token string) (*invtypes.Vali
 	return &invtypes.ValidateInvitationResponse{Email: "new@acme.com", Role: "employee"}, nil
 }
 
+// Identity the fake auth middleware injects for authenticated invitation tests.
+var (
+	testTenantID = uuid.New()
+	testActorID  = uuid.New()
+)
+
+// withIdentity stands in for the Auth/Tenant middleware: it stores the caller's
+// identity on the request context via the ctx package.
+func withIdentity(tenantID, userID uuid.UUID) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		rc := ctx.WithTenantID(c.Request.Context(), tenantID.String())
+		rc = ctx.WithUserID(rc, userID.String())
+		c.Request = c.Request.WithContext(rc)
+		c.Next()
+	}
+}
+
 func setupInvitationHandlerTest() (*gin.Engine, *fakeInvUC) {
+	return setupInvitationHandlerTestWith(withIdentity(testTenantID, testActorID))
+}
+
+// setupInvitationHandlerTestWith builds the engine with an optional identity middleware.
+func setupInvitationHandlerTestWith(mw ...gin.HandlerFunc) (*gin.Engine, *fakeInvUC) {
 	gin.SetMode(gin.TestMode)
 	f := &fakeInvUC{inv: pendingInvitation()}
 	h := NewInvitationHandler(fakeInviteUC{f}, fakeAcceptUC{f}, fakeResendUC{f}, fakeRevokeUC{f}, fakeListUC{f}, fakeValidateUC{f})
 	engine := gin.New()
+	engine.Use(mw...)
 	engine.POST("/invitations", h.Invite)
 	engine.GET("/invitations", h.List)
 	engine.POST("/invitations/:id/resend", h.Resend)
@@ -443,5 +473,50 @@ func TestInvitationHandler_ValidateMissingTokenCode(t *testing.T) {
 	env := decodeEnvelope(t, doInv(engine, http.MethodGet, "/validate", ""))
 	if env.Error == nil || env.Error.Code != "INVALID_TOKEN" {
 		t.Errorf("want INVALID_TOKEN, got %+v", env.Error)
+	}
+}
+
+func TestInvitationHandler_PassesIdentityToUsecase(t *testing.T) {
+	engine, f := setupInvitationHandlerTest()
+	id := uuid.New().String()
+
+	rec := doInv(engine, http.MethodPost, "/invitations/"+id+"/resend", "")
+	if rec.Code != http.StatusOK {
+		t.Fatalf("resend: want 200, got %d: %s", rec.Code, rec.Body.String())
+	}
+	if f.gotTenant != testTenantID || f.gotActor != testActorID {
+		t.Errorf("resend: usecase got tenant %s actor %s", f.gotTenant, f.gotActor)
+	}
+	f.gotTenant, f.gotActor = uuid.Nil, uuid.Nil
+	doInv(engine, http.MethodDelete, "/invitations/"+id, "")
+	if f.gotTenant != testTenantID || f.gotActor != testActorID {
+		t.Errorf("revoke: usecase got tenant %s actor %s", f.gotTenant, f.gotActor)
+	}
+	f.gotTenant = uuid.Nil
+	doInv(engine, http.MethodGet, "/invitations", "")
+	if f.gotTenant != testTenantID {
+		t.Errorf("list: usecase got tenant %s", f.gotTenant)
+	}
+}
+
+func TestInvitationHandler_MissingIdentityIs401(t *testing.T) {
+	engine, f := setupInvitationHandlerTestWith() // no identity middleware
+	id := uuid.New().String()
+	body := `{"email":"new@acme.com","role_id":"` + uuid.New().String() + `"}`
+	for name, req := range map[string][3]string{
+		"invite": {http.MethodPost, "/invitations", body},
+		"list":   {http.MethodGet, "/invitations", ""},
+		"resend": {http.MethodPost, "/invitations/" + id + "/resend", ""},
+		"revoke": {http.MethodDelete, "/invitations/" + id, ""},
+	} {
+		t.Run(name, func(t *testing.T) {
+			rec := doInv(engine, req[0], req[1], req[2])
+			if rec.Code != http.StatusUnauthorized {
+				t.Fatalf("want 401, got %d: %s", rec.Code, rec.Body.String())
+			}
+		})
+	}
+	if f.gotTenant != uuid.Nil || f.gotActor != uuid.Nil || f.gotInvite.Email != "" {
+		t.Error("usecase must not be called without identity")
 	}
 }
