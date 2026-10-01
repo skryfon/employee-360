@@ -47,5 +47,5 @@ func (u *ValidateInvitationUseCaseImpl) Execute(c context.Context, token string)
 	if err != nil || role == nil {
 		return nil, domainerrors.ErrRoleNotFound
 	}
-	return &invtypes.ValidateInvitationResponse{Valid: true, Email: inv.Email, Role: role.Name}, nil
+	return &invtypes.ValidateInvitationResponse{Email: inv.Email, Role: role.Name}, nil
 }

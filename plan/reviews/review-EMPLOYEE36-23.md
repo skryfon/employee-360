@@ -1,6 +1,6 @@
 # Review: EMPLOYEE36-23 — D5 — Invitation-accept page
 
-> Branch: ebin/feat/EPIC-D/EMPLOYEE36-23 | Last reviewed: 2026-10-01 | Iteration: 2 | Verdict: 🟢 Merge
+> Branch: ebin/feat/EPIC-D/EMPLOYEE36-23 | Last reviewed: 2026-10-01 | Iteration: 3 | Verdict: 🟢 Merge
 
 ## Ticket
 **Identifier:** EMPLOYEE36-23
@@ -34,18 +34,18 @@ Scope note: branch is stacked on earlier unmerged tickets (EMPLOYEE36-19…22 et
 
 ### 🟢 Minor
 - [x] `packages/api-client/src/auth.ts` `validateInvitation` hand-rolls `apiRequest` with a dynamic import although a generated `getApiV1InvitationsValidate` hook was added in the same commit; inconsistent with `acceptInvitation`. (resolved in 0248419)
-- [ ] Backend `ValidateInvitationResponse.valid` is still always `true` (email now shown, client type dropped it); remove it.
+- [x] Backend `ValidateInvitationResponse.valid` is still always `true` (email now shown, client type dropped it); remove it. (resolved in 60053cd)
 - [x] `validate_invitation.go` duplicates the lookup/usability logic of `accept_invitation.go`; extract a shared helper. (resolved in 0248419)
-- [ ] Token travels in a query string (logged by proxies); acceptable for emailed link but consider `Referrer-Policy: no-referrer` on the page.
+- [x] Token travels in a query string (logged by proxies); acceptable for emailed link but consider `Referrer-Policy: no-referrer` on the page. (resolved in 60053cd)
 - [x] Stray trailing blank lines (resolved in 0248419)
 - [ ] Admin/employee `AcceptInvitationPage` + tests remain near-identical copies; consider extracting shared pieces.
-- [ ] On `INVITATION_ACCEPTED` the page's "Sign in" targets the current host's login (role unknown then); normally correct since links now target the invitee's app.
+- [x] On `INVITATION_ACCEPTED` the page's "Sign in" targets the current host's login (role unknown then); normally correct since links now target the invitee's app. (resolved in 60053cd)
 - [ ] Commit `0248419` bundles unrelated sonner toast work with the review fixes; prefer separate commits.
 
 ## Verdict
-- **Score:** 95/100
+- **Score:** 98/100
 - **Flag:** 🟢 Merge
-- **Notes:** All prior critical/major findings are resolved: distinct, code-based error states (validate and accept), role returned by validate with cross-app redirect and the host decision recorded in the cycle doc, route-level unauthenticated + rate-limit tests for validate, and the endpoint documented. `go build/test ./...`, `pnpm -r typecheck` and `pnpm -r test` all pass. Remaining items are minor nits (4 open, plus the open Referrer-Policy suggestion).
+- **Notes:** All prior critical/major findings are resolved: distinct, code-based error states (validate and accept), role returned by validate with cross-app redirect and the host decision recorded in the cycle doc, route-level unauthenticated + rate-limit tests for validate, and the endpoint documented. `go build/test ./...`, `pnpm -r typecheck` and `pnpm -r test` all pass. Remaining items are minor nits (2 open: duplicated admin/employee page, bundled commit).
 
 ## Re-review Log
 ### Iteration 2 — 2026-10-01 — sha `0248419`
@@ -53,4 +53,11 @@ Scope note: branch is stacked on earlier unmerged tickets (EMPLOYEE36-19…22 et
 - **Still open:** Referrer-Policy suggestion, `valid` field, duplicated admin/employee page.
 - **New issues:** minor — ACCEPTED sign-in host, bundled commit.
 - **Score:** n/a (hard gate) → 95 (Merge)
+- **Verdict:** 🟢 Merge
+
+### Iteration 3 — 2026-10-01 — sha `60053cd`
+- **Resolved:** Referrer-Policy meta tag (both apps), removed `valid` from validate response/swagger/cycle doc/generated client, ACCEPTED-state sign-in copy points to the other portal (tests assert it).
+- **Still open:** duplicated admin/employee accept page (needs `packages/ui` scaffolding), bundled sonner commit (history not rewritten).
+- **New issues:** none
+- **Score:** 95 → 98 (+3)
 - **Verdict:** 🟢 Merge

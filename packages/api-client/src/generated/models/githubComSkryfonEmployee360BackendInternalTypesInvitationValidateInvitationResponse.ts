@@ -13,5 +13,4 @@ export interface GithubComSkryfonEmployee360BackendInternalTypesInvitationValida
      * to send the invitee to the correct app.
      */
   role?: string;
-  valid?: boolean;
 }

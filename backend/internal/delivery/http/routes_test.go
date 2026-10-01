@@ -309,7 +309,7 @@ func (fakeList) Execute(context.Context, int, int) ([]*entity.UserInvitation, in
 type fakeValidate struct{}
 
 func (fakeValidate) Execute(context.Context, string) (*invtypes.ValidateInvitationResponse, error) {
-	return &invtypes.ValidateInvitationResponse{Valid: true, Email: "x@y.com", Role: "employee"}, nil
+	return &invtypes.ValidateInvitationResponse{Email: "x@y.com", Role: "employee"}, nil
 }
 
 func invitationEngine(t *testing.T, invite *fakeInvite, accept *fakeAccept, revoke fakeRevoke) (*gin.Engine, domainservice.TokenService) {

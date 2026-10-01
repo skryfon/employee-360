@@ -41,7 +41,8 @@ const INVITATION_PROBLEMS = {
   },
   ACCEPTED: {
     title: 'Invitation already accepted',
-    message: 'This invitation has already been accepted. You can sign in with your password.',
+    message:
+      'This invitation has already been accepted. You can sign in with your password. If you were invited to the Employee Portal, sign in there instead.',
     signIn: true,
   },
 } satisfies Record<string, InvitationProblem>

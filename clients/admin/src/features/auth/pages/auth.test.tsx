@@ -353,6 +353,7 @@ describe('accept invitation', () => {
     await userEvent.click(screen.getByRole('button', { name: /set password & accept/i }))
     expect(await screen.findByRole('alert')).toHaveTextContent(/already been accepted/i)
     expect(screen.getByRole('link', { name: /^sign in$/i })).toBeInTheDocument()
+    expect(screen.getByRole('alert')).toHaveTextContent(/invited to the employee portal, sign in there instead/i)
   })
 
   it('keeps the server message for password-validation errors on accept', async () => {

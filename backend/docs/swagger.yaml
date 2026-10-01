@@ -206,8 +206,6 @@ definitions:
           Role is the invitee's role name (e.g. "admin", "employee"); clients use it
           to send the invitee to the correct app.
         type: string
-      valid:
-        type: boolean
     type: object
   github_com_skryfon_employee360_backend_internal_types_role.RoleResponse:
     properties:

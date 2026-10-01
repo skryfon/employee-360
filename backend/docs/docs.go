@@ -1086,9 +1086,6 @@ const docTemplate = `{
                 "role": {
                     "description": "Role is the invitee's role name (e.g. \"admin\", \"employee\"); clients use it\nto send the invitee to the correct app.",
                     "type": "string"
-                },
-                "valid": {
-                    "type": "boolean"
                 }
             }
         },

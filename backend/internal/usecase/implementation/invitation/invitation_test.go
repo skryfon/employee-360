@@ -314,7 +314,6 @@ func TestValidate_TokenStatus(t *testing.T) {
 
 	res, err := f.validate().Execute(bg, tok)
 	require.NoError(t, err)
-	assert.True(t, res.Valid)
 	assert.Equal(t, "val@acme.com", res.Email)
 
 	_, err = f.validate().Execute(bg, "")

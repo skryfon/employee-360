@@ -79,7 +79,7 @@ func (f fakeValidateUC) Execute(_ context.Context, token string) (*invtypes.Vali
 	if f.err != nil {
 		return nil, f.err
 	}
-	return &invtypes.ValidateInvitationResponse{Valid: true, Email: "new@acme.com", Role: "employee"}, nil
+	return &invtypes.ValidateInvitationResponse{Email: "new@acme.com", Role: "employee"}, nil
 }
 
 func setupInvitationHandlerTest() (*gin.Engine, *fakeInvUC) {
@@ -375,7 +375,7 @@ func TestInvitationHandler_Validate(t *testing.T) {
 			t.Errorf("want token abc, got %q", f.gotToken)
 		}
 		data := decodeEnvelope(t, rec).Data.(map[string]any)
-		if data["valid"] != true || data["email"] != "new@acme.com" || data["role"] != "employee" {
+		if data["email"] != "new@acme.com" || data["role"] != "employee" {
 			t.Errorf("unexpected payload: %+v", data)
 		}
 	})
