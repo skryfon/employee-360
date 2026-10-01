@@ -134,6 +134,29 @@ export async function acceptInvitation(body: AcceptInvitationRequest): Promise<v
   await postApiV1InvitationsAccept(body);
 }
 
+export interface ValidateInvitationResponse {
+  valid: boolean;
+  email?: string;
+}
+
+/**
+ * `GET /api/v1/invitations/validate?token=...` — Unauthenticated; validates an
+ * invitation token before showing password setup fields.
+ */
+export async function validateInvitation(
+  token: string,
+  signal?: AbortSignal,
+): Promise<ValidateInvitationResponse> {
+  const { apiRequest } = await import('./client.ts');
+  const res = await apiRequest<{ success?: boolean; data?: ValidateInvitationResponse }>({
+    url: '/api/v1/invitations/validate',
+    method: 'GET',
+    params: { token },
+    signal,
+  });
+  return unwrapSingleEntity(res);
+}
+
 /**
  * `GET /api/v1/roles` — admin/super_admin only; super_admin is already excluded
  * server-side. Narrows the generated (all-optional) role shape to `RoleOption`.
@@ -142,3 +165,4 @@ export async function listRoles(signal?: AbortSignal): Promise<RoleOption[]> {
   const { data } = unwrapListResponse(await getApiV1Roles(signal));
   return data.flatMap((r) => (r.id && r.name ? [{ id: r.id, name: r.name }] : []));
 }
+

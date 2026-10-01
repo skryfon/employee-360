@@ -16,11 +16,12 @@ import (
 // Tenant and actor identity come exclusively from the request context populated
 // by the Auth/Tenant middleware; request bodies never carry a tenant ID.
 type InvitationHandler struct {
-	inviteUC invusecase.InviteUserUseCase
-	acceptUC invusecase.AcceptInvitationUseCase
-	resendUC invusecase.ResendInvitationUseCase
-	revokeUC invusecase.RevokeInvitationUseCase
-	listUC   invusecase.ListInvitationsUseCase
+	inviteUC   invusecase.InviteUserUseCase
+	acceptUC   invusecase.AcceptInvitationUseCase
+	resendUC   invusecase.ResendInvitationUseCase
+	revokeUC   invusecase.RevokeInvitationUseCase
+	listUC     invusecase.ListInvitationsUseCase
+	validateUC invusecase.ValidateInvitationUseCase
 }
 
 // NewInvitationHandler constructs an InvitationHandler.
@@ -30,8 +31,16 @@ func NewInvitationHandler(
 	resendUC invusecase.ResendInvitationUseCase,
 	revokeUC invusecase.RevokeInvitationUseCase,
 	listUC invusecase.ListInvitationsUseCase,
+	validateUC invusecase.ValidateInvitationUseCase,
 ) *InvitationHandler {
-	return &InvitationHandler{inviteUC: inviteUC, acceptUC: acceptUC, resendUC: resendUC, revokeUC: revokeUC, listUC: listUC}
+	return &InvitationHandler{
+		inviteUC:   inviteUC,
+		acceptUC:   acceptUC,
+		resendUC:   resendUC,
+		revokeUC:   revokeUC,
+		listUC:     listUC,
+		validateUC: validateUC,
+	}
 }
 
 // writeInvitationError maps domain errors to HTTP responses.
@@ -191,4 +200,27 @@ func (h *InvitationHandler) Accept(c *gin.Context) {
 		return
 	}
 	response.Success(c, gin.H{"message": "invitation accepted"})
+}
+
+// Validate checks if an invitation token is valid, pending, and unexpired (unauthenticated).
+//
+// @Summary      Validate invitation token
+// @Tags         invitations
+// @Produce      json
+// @Param        token  query     string  true  "Invitation token"
+// @Success      200    {object}  response.Envelope{data=invtypes.ValidateInvitationResponse}
+// @Failure      400    {object}  response.Envelope
+// @Router       /api/v1/invitations/validate [get]
+func (h *InvitationHandler) Validate(c *gin.Context) {
+	token := c.Query("token")
+	if token == "" {
+		response.BadRequest(c, "invalid or expired invitation token")
+		return
+	}
+	res, err := h.validateUC.Execute(c.Request.Context(), token)
+	if err != nil {
+		writeInvitationError(c, err)
+		return
+	}
+	response.Success(c, res)
 }

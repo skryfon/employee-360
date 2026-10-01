@@ -29,9 +29,10 @@ export default function LoginPage() {
     formState: { errors },
   } = useForm<LoginFormValues>({ resolver: zodResolver(loginSchema) })
 
-  const state = location.state as { from?: string; passwordReset?: boolean } | null
+  const state = location.state as { from?: string; passwordReset?: boolean; invitationAccepted?: boolean } | null
   const from = state?.from ?? '/'
   const passwordReset = Boolean(state?.passwordReset)
+  const invitationAccepted = Boolean(state?.invitationAccepted)
   if (authed && !mutation.isPending) return <Navigate to={from} replace />
 
   const onSubmit = (values: LoginFormValues) =>
@@ -43,6 +44,9 @@ export default function LoginPage() {
         {mutation.isError && <InlineAlert tone="error">{loginErrorMessage(mutation.error)}</InlineAlert>}
         {!mutation.isError && passwordReset && (
           <InlineAlert tone="neutral">Your password has been reset. You can now sign in.</InlineAlert>
+        )}
+        {!mutation.isError && invitationAccepted && (
+          <InlineAlert tone="neutral">Your invitation was accepted. You can now sign in.</InlineAlert>
         )}
         <FormField
           label="Email"

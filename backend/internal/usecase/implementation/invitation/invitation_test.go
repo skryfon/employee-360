@@ -28,6 +28,9 @@ func (f *fixture) revoke() *RevokeInvitationUseCaseImpl {
 func (f *fixture) accept() *AcceptInvitationUseCaseImpl {
 	return NewAcceptInvitationUseCase(f.s, fakeInvRepo{f.s}, f.hash, f.s)
 }
+func (f *fixture) validate() *ValidateInvitationUseCaseImpl {
+	return NewValidateInvitationUseCase(f.s, fakeInvRepo{f.s}, f.hash)
+}
 
 func (f *fixture) doInvite(t *testing.T, email string) (*entity.UserInvitation, string) {
 	t.Helper()
@@ -296,4 +299,34 @@ func TestAudit_RolledBackWithTransaction(t *testing.T) {
 	_, err := f.invite().Execute(f.adminCtx, invtypes.InviteUserRequest{Email: "rb@acme.com", RoleID: f.employeeRl.ID})
 	require.Error(t, err)
 	assert.Empty(t, f.s.audits)
+}
+
+func TestValidate_TokenStatus(t *testing.T) {
+	f := newFixture()
+	inv, tok := f.doInvite(t, "val@acme.com")
+
+	// Valid pending token
+	res, err := f.validate().Execute(context.Background(), tok)
+	require.NoError(t, err)
+	assert.True(t, res.Valid)
+	assert.Equal(t, "val@acme.com", res.Email)
+
+	// Empty token
+	_, err = f.validate().Execute(context.Background(), "")
+	assert.ErrorIs(t, err, domainerrors.ErrInvalidToken)
+
+	// Non-existent token
+	_, err = f.validate().Execute(context.Background(), "unknown-token")
+	assert.ErrorIs(t, err, domainerrors.ErrInvalidToken)
+
+	// Expired token
+	f.s.invitations[inv.ID].ExpiresAt = time.Now().Add(-time.Minute)
+	_, err = f.validate().Execute(context.Background(), tok)
+	assert.ErrorIs(t, err, domainerrors.ErrInvalidToken)
+
+	// Revoked token
+	f.s.invitations[inv.ID].ExpiresAt = time.Now().Add(time.Hour)
+	require.NoError(t, f.revoke().Execute(f.adminCtx, inv.ID))
+	_, err = f.validate().Execute(context.Background(), tok)
+	assert.ErrorIs(t, err, domainerrors.ErrInvalidToken)
 }

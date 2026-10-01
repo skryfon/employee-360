@@ -30,6 +30,7 @@ export {
   resendInvitation,
   revokeInvitation,
   acceptInvitation,
+  validateInvitation,
 } from './auth.ts';
 export type {
   LoginRequest,
@@ -38,11 +39,13 @@ export type {
   ResetPasswordRequest,
   InviteUserRequest,
   AcceptInvitationRequest,
+  ValidateInvitationResponse,
   Invitation,
   PageMeta,
   ListInvitationsParams,
   RoleOption,
 } from './auth.ts';
+
 
 export { fetchHealth, useHealth } from './health.ts';
 export type { HealthResponse } from './health.ts';

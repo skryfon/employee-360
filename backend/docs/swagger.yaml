@@ -197,6 +197,13 @@ definitions:
       role_id:
         type: string
     type: object
+  github_com_skryfon_employee360_backend_internal_types_invitation.ValidateInvitationResponse:
+    properties:
+      email:
+        type: string
+      valid:
+        type: boolean
+    type: object
   github_com_skryfon_employee360_backend_internal_types_role.RoleResponse:
     properties:
       id:
@@ -445,6 +452,33 @@ paths:
           schema:
             $ref: '#/definitions/github_com_skryfon_employee360_backend_internal_delivery_http_response.Envelope'
       summary: Accept invitation
+      tags:
+      - invitations
+  /api/v1/invitations/validate:
+    get:
+      parameters:
+      - description: Invitation token
+        in: query
+        name: token
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            allOf:
+            - $ref: '#/definitions/github_com_skryfon_employee360_backend_internal_delivery_http_response.Envelope'
+            - properties:
+                data:
+                  $ref: '#/definitions/github_com_skryfon_employee360_backend_internal_types_invitation.ValidateInvitationResponse'
+              type: object
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/github_com_skryfon_employee360_backend_internal_delivery_http_response.Envelope'
+      summary: Validate invitation token
       tags:
       - invitations
   /api/v1/roles:

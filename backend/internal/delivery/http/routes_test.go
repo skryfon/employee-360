@@ -306,6 +306,12 @@ func (fakeList) Execute(context.Context, int, int) ([]*entity.UserInvitation, in
 	return []*entity.UserInvitation{{ID: uuid.New(), ExpiresAt: time.Now().Add(time.Hour)}}, 1, nil
 }
 
+type fakeValidate struct{}
+
+func (fakeValidate) Execute(context.Context, string) (*invtypes.ValidateInvitationResponse, error) {
+	return &invtypes.ValidateInvitationResponse{Valid: true, Email: "x@y.com"}, nil
+}
+
 func invitationEngine(t *testing.T, invite *fakeInvite, accept *fakeAccept, revoke fakeRevoke) (*gin.Engine, domainservice.TokenService) {
 	t.Helper()
 	gin.SetMode(gin.TestMode)
@@ -314,7 +320,7 @@ func invitationEngine(t *testing.T, invite *fakeInvite, accept *fakeAccept, revo
 	ctr := testContainer(t, cfg, nil, nil)
 	ctr.Auth = &container.AuthContainer{
 		TokenService:      jwtSvc,
-		InvitationHandler: handlers.NewInvitationHandler(invite, accept, fakeResend{}, revoke, fakeList{}),
+		InvitationHandler: handlers.NewInvitationHandler(invite, accept, fakeResend{}, revoke, fakeList{}, fakeValidate{}),
 	}
 	return SetupRouter(cfg, zerolog.Nop(), ctr), jwtSvc
 }
@@ -423,7 +429,7 @@ func TestInvitationRoutes_AcceptRateLimited(t *testing.T) {
 	ctr := testContainer(t, cfg, nil, nil)
 	ctr.Auth = &container.AuthContainer{
 		TokenService:      setupTestTokenService(t),
-		InvitationHandler: handlers.NewInvitationHandler(&fakeInvite{}, &fakeAccept{}, fakeResend{}, fakeRevoke{}, fakeList{}),
+		InvitationHandler: handlers.NewInvitationHandler(&fakeInvite{}, &fakeAccept{}, fakeResend{}, fakeRevoke{}, fakeList{}, fakeValidate{}),
 	}
 	engine := SetupRouter(cfg, zerolog.Nop(), ctr)
 

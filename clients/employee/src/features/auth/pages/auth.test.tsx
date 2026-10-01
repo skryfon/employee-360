@@ -285,3 +285,98 @@ describe('reset password', () => {
     expect(useAuthStore.getState().user).toBeNull()
   })
 })
+
+describe('accept invitation', () => {
+  it('shows invalid-link state without a token', () => {
+    renderAt('/accept-invitation')
+    expect(screen.getByRole('alert')).toHaveTextContent(/invalid or missing a token/i)
+    expect(screen.getByRole('link', { name: /return to sign in/i })).toBeInTheDocument()
+  })
+
+  it('validates token on load before showing password fields and completes acceptance', async () => {
+    mock.onGet('/api/v1/invitations/validate', { params: { token: 'inv-emp-token-123' } }).reply(200, {
+      success: true,
+      data: { valid: true, email: 'emp@acme.com' },
+    })
+    mock.onPost('/api/v1/invitations/accept').reply(200, { success: true, data: { message: 'invitation accepted' } })
+    renderAt('/accept-invitation?token=inv-emp-token-123')
+
+    // Password fields appear once token is validated
+    expect(await screen.findByRole('heading', { name: /set your password/i })).toBeInTheDocument()
+
+    // Password length validation
+    await userEvent.type(screen.getByLabelText(/^password$/i), 'short')
+    await userEvent.type(screen.getByLabelText(/^confirm password$/i), 'short')
+    await userEvent.click(screen.getByRole('button', { name: /set password & accept/i }))
+    expect(await screen.findByText('Password must be at least 8 characters')).toBeInTheDocument()
+
+    // Password mismatch validation
+    await userEvent.clear(screen.getByLabelText(/^password$/i))
+    await userEvent.type(screen.getByLabelText(/^password$/i), 'employeeSecret123')
+    await userEvent.clear(screen.getByLabelText(/^confirm password$/i))
+    await userEvent.type(screen.getByLabelText(/^confirm password$/i), 'differentPassword')
+    await userEvent.click(screen.getByRole('button', { name: /set password & accept/i }))
+    expect(await screen.findByText('Passwords do not match')).toBeInTheDocument()
+
+    // Valid submission
+    await userEvent.clear(screen.getByLabelText(/^confirm password$/i))
+    await userEvent.type(screen.getByLabelText(/^confirm password$/i), 'employeeSecret123')
+    await userEvent.click(screen.getByRole('button', { name: /set password & accept/i }))
+
+    expect(await screen.findByRole('heading', { name: /invitation accepted/i })).toBeInTheDocument()
+    expect(screen.getByText(/your invitation has been accepted/i)).toBeInTheDocument()
+    expect(JSON.parse(mock.history.post[0].data)).toEqual({ token: 'inv-emp-token-123', password: 'employeeSecret123' })
+
+    // Clicking sign in lands on login page with acceptance alert
+    await userEvent.click(screen.getByRole('link', { name: /sign in to employee portal/i }))
+    expect(screen.getByRole('heading', { name: /sign in to employee portal/i })).toBeInTheDocument()
+    expect(screen.getByText(/your invitation was accepted\. you can now sign in\./i)).toBeInTheDocument()
+  })
+
+  it('shows distinct actionable error immediately on load if token is expired or invalid without showing password fields', async () => {
+    mock.onGet('/api/v1/invitations/validate', { params: { token: 'expired-token' } }).reply(400, {
+      error: { code: 'BAD_REQUEST', message: 'invalid or expired invitation token' },
+    })
+    renderAt('/accept-invitation?token=expired-token')
+
+    const alert = await screen.findByRole('alert')
+    expect(alert).toHaveTextContent(/this invitation link is invalid, has expired, or has already been accepted/i)
+    expect(screen.queryByLabelText(/^password$/i)).toBeNull()
+    expect(screen.queryByRole('button', { name: /set password & accept/i })).toBeNull()
+    expect(screen.getByRole('link', { name: /return to sign in/i })).toBeInTheDocument()
+  })
+
+  it('shows a distinct actionable error if token is revoked / not pending on load', async () => {
+    mock.onGet('/api/v1/invitations/validate', { params: { token: 'revoked-token' } }).reply(409, {
+      error: { code: 'CONFLICT', message: 'invitation is no longer pending' },
+    })
+    renderAt('/accept-invitation?token=revoked-token')
+
+    const alert = await screen.findByRole('alert')
+    expect(alert).toHaveTextContent(/this invitation link is invalid, has expired, or has already been accepted/i)
+    expect(screen.queryByLabelText(/^password$/i)).toBeNull()
+  })
+
+  it('clears active session state on successful acceptance', async () => {
+    mock.onGet('/api/v1/invitations/validate', { params: { token: 'valid-tok' } }).reply(200, {
+      success: true,
+      data: { valid: true, email: 'emp@acme.com' },
+    })
+    mock.onPost('/api/v1/invitations/accept').reply(200, { success: true, data: { message: 'invitation accepted' } })
+    setSession({ accessToken: 'old-access', refreshToken: 'old-refresh', tenantId: 'old-tenant' })
+    useAuthStore.setState({ user: { id: 'old-u', email: 'old@x.com', roles: ['employee'] } })
+
+    renderAt('/accept-invitation?token=valid-tok')
+    expect(await screen.findByRole('heading', { name: /set your password/i })).toBeInTheDocument()
+
+    await userEvent.type(screen.getByLabelText(/^password$/i), 'employeeSecret123')
+    await userEvent.type(screen.getByLabelText(/^confirm password$/i), 'employeeSecret123')
+    await userEvent.click(screen.getByRole('button', { name: /set password & accept/i }))
+
+    expect(await screen.findByRole('heading', { name: /invitation accepted/i })).toBeInTheDocument()
+    expect(getSession()).toBeNull()
+    expect(useAuthStore.getState().user).toBeNull()
+  })
+})
+
+

@@ -93,6 +93,7 @@ func registerRoutes(engine *gin.Engine, c *container.Container) {
 
 			// Unauthenticated: the invitee proves possession of the emailed token.
 			v1.POST("/invitations/accept", ih.Accept)
+			v1.GET("/invitations/validate", ih.Validate)
 
 			// Admin-only management routes: auth -> tenant -> role check.
 			invGroup := v1.Group("/users/invitations",

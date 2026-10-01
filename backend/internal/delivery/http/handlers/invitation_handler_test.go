@@ -27,6 +27,7 @@ type fakeInvUC struct {
 	err       error
 	gotInvite invtypes.InviteUserRequest
 	gotAccept invtypes.AcceptInvitationRequest
+	gotToken  string
 	gotID     uuid.UUID
 	gotLimit  int
 	gotOffset int
@@ -71,16 +72,27 @@ func (f fakeListUC) Execute(_ context.Context, limit, offset int) ([]*entity.Use
 	return f.items, f.total, f.err
 }
 
+type fakeValidateUC struct{ *fakeInvUC }
+
+func (f fakeValidateUC) Execute(_ context.Context, token string) (*invtypes.ValidateInvitationResponse, error) {
+	f.gotToken = token
+	if f.err != nil {
+		return nil, f.err
+	}
+	return &invtypes.ValidateInvitationResponse{Valid: true, Email: "new@acme.com"}, nil
+}
+
 func setupInvitationHandlerTest() (*gin.Engine, *fakeInvUC) {
 	gin.SetMode(gin.TestMode)
 	f := &fakeInvUC{inv: pendingInvitation()}
-	h := NewInvitationHandler(fakeInviteUC{f}, fakeAcceptUC{f}, fakeResendUC{f}, fakeRevokeUC{f}, fakeListUC{f})
+	h := NewInvitationHandler(fakeInviteUC{f}, fakeAcceptUC{f}, fakeResendUC{f}, fakeRevokeUC{f}, fakeListUC{f}, fakeValidateUC{f})
 	engine := gin.New()
 	engine.POST("/invitations", h.Invite)
 	engine.GET("/invitations", h.List)
 	engine.POST("/invitations/:id/resend", h.Resend)
 	engine.DELETE("/invitations/:id", h.Revoke)
 	engine.POST("/accept", h.Accept)
+	engine.GET("/validate", h.Validate)
 	return engine, f
 }
 
@@ -350,4 +362,38 @@ func TestWriteInvitationError_Mapping(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestInvitationHandler_Validate(t *testing.T) {
+	t.Run("success", func(t *testing.T) {
+		engine, f := setupInvitationHandlerTest()
+		rec := doInv(engine, http.MethodGet, "/validate?token=abc", "")
+		if rec.Code != http.StatusOK {
+			t.Fatalf("want 200, got %d: %s", rec.Code, rec.Body.String())
+		}
+		if f.gotToken != "abc" {
+			t.Errorf("want token abc, got %q", f.gotToken)
+		}
+		data := decodeEnvelope(t, rec).Data.(map[string]any)
+		if data["valid"] != true || data["email"] != "new@acme.com" {
+			t.Errorf("unexpected payload: %+v", data)
+		}
+	})
+
+	t.Run("missing token query param", func(t *testing.T) {
+		engine, _ := setupInvitationHandlerTest()
+		rec := doInv(engine, http.MethodGet, "/validate", "")
+		if rec.Code != http.StatusBadRequest {
+			t.Errorf("want 400, got %d", rec.Code)
+		}
+	})
+
+	t.Run("invalid or expired token error", func(t *testing.T) {
+		engine, f := setupInvitationHandlerTest()
+		f.err = domainerrors.ErrInvalidToken
+		rec := doInv(engine, http.MethodGet, "/validate?token=expired", "")
+		if rec.Code != http.StatusBadRequest {
+			t.Errorf("want 400, got %d", rec.Code)
+		}
+	})
 }

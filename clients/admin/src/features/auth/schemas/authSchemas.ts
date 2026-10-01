@@ -21,3 +21,15 @@ export const resetPasswordSchema = z
     message: 'Passwords do not match',
   })
 export type ResetPasswordFormValues = z.infer<typeof resetPasswordSchema>
+
+export const acceptInvitationSchema = z
+  .object({
+    password: z.string().min(8, 'Password must be at least 8 characters'),
+    confirmPassword: z.string().min(1, 'Confirm your password'),
+  })
+  .refine((v) => v.password === v.confirmPassword, {
+    path: ['confirmPassword'],
+    message: 'Passwords do not match',
+  })
+export type AcceptInvitationFormValues = z.infer<typeof acceptInvitationSchema>
+

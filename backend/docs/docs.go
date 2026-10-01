@@ -369,6 +369,52 @@ const docTemplate = `{
                 }
             }
         },
+        "/api/v1/invitations/validate": {
+            "get": {
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "invitations"
+                ],
+                "summary": "Validate invitation token",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Invitation token",
+                        "name": "token",
+                        "in": "query",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/github_com_skryfon_employee360_backend_internal_delivery_http_response.Envelope"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/github_com_skryfon_employee360_backend_internal_types_invitation.ValidateInvitationResponse"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/github_com_skryfon_employee360_backend_internal_delivery_http_response.Envelope"
+                        }
+                    }
+                }
+            }
+        },
         "/api/v1/roles": {
             "get": {
                 "security": [
@@ -992,6 +1038,17 @@ const docTemplate = `{
                 },
                 "role_id": {
                     "type": "string"
+                }
+            }
+        },
+        "github_com_skryfon_employee360_backend_internal_types_invitation.ValidateInvitationResponse": {
+            "type": "object",
+            "properties": {
+                "email": {
+                    "type": "string"
+                },
+                "valid": {
+                    "type": "boolean"
                 }
             }
         },

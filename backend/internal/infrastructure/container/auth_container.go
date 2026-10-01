@@ -55,11 +55,12 @@ type AuthContainer struct {
 	ResetPasswordUseCase  authusecase.ResetPasswordUseCase
 
 	// Invitation usecases (served by InvitationHandler)
-	InviteUserUseCase       invusecase.InviteUserUseCase
-	AcceptInvitationUseCase invusecase.AcceptInvitationUseCase
-	ResendInvitationUseCase invusecase.ResendInvitationUseCase
-	RevokeInvitationUseCase invusecase.RevokeInvitationUseCase
-	ListInvitationsUseCase  invusecase.ListInvitationsUseCase
+	InviteUserUseCase         invusecase.InviteUserUseCase
+	AcceptInvitationUseCase   invusecase.AcceptInvitationUseCase
+	ResendInvitationUseCase   invusecase.ResendInvitationUseCase
+	RevokeInvitationUseCase   invusecase.RevokeInvitationUseCase
+	ListInvitationsUseCase    invusecase.ListInvitationsUseCase
+	ValidateInvitationUseCase invusecase.ValidateInvitationUseCase
 
 	// Repositories
 	UserInvitationRepo repository.UserInvitationRepository
@@ -130,6 +131,7 @@ func NewAuthContainer(
 	resendInvUC := invusecaseimpl.NewResendInvitationUseCase(roleRepo, invitationRepo, auditRepo, hashService, eventPublisher, transactor, cfg.App.FrontendURL)
 	revokeInvUC := invusecaseimpl.NewRevokeInvitationUseCase(invitationRepo, userRepo, userRoleRepo, auditRepo, transactor)
 	listInvUC := invusecaseimpl.NewListInvitationsUseCase(invitationRepo)
+	validateInvUC := invusecaseimpl.NewValidateInvitationUseCase(userRepo, invitationRepo, hashService)
 
 	handler := handlers.NewAuthHandler(
 		loginUC,
@@ -139,7 +141,7 @@ func NewAuthContainer(
 		resetPasswordUC,
 	)
 
-	invitationHandler := handlers.NewInvitationHandler(inviteUC, acceptInvUC, resendInvUC, revokeInvUC, listInvUC)
+	invitationHandler := handlers.NewInvitationHandler(inviteUC, acceptInvUC, resendInvUC, revokeInvUC, listInvUC, validateInvUC)
 
 	listRolesUC := roleusecaseimpl.NewListAssignableRolesUseCase(roleRepo)
 	roleHandler := handlers.NewRoleHandler(listRolesUC)
@@ -161,6 +163,7 @@ func NewAuthContainer(
 		ResendInvitationUseCase:    resendInvUC,
 		RevokeInvitationUseCase:    revokeInvUC,
 		ListInvitationsUseCase:     listInvUC,
+		ValidateInvitationUseCase:  validateInvUC,
 		UserInvitationRepo:         invitationRepo,
 		OrgReferenceRepo:           orgRefRepo,
 		RoleRepo:                   roleRepo,
