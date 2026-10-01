@@ -91,12 +91,12 @@ function ProblemView({ problem }: { problem: InvitationProblem }) {
         {problem.signIn ? (
           <Link
             to="/login"
-            className="inline-flex h-9 items-center justify-center gap-2 rounded-sm bg-slate-900 px-4 text-sm font-semibold text-white hover:bg-slate-800 active:bg-slate-950"
+            className="inline-flex h-11 md:h-9 items-center justify-center gap-2 rounded-sm bg-slate-900 px-4 text-sm font-semibold text-white hover:bg-slate-800 active:bg-slate-950"
           >
             Sign in
           </Link>
         ) : (
-          <Link to="/login" className="text-sm text-slate-900 underline hover:text-slate-700">
+          <Link to="/login" className="inline-flex min-h-11 w-fit items-center text-sm text-slate-900 underline hover:text-slate-700">
             Return to sign in
           </Link>
         )}
@@ -179,7 +179,7 @@ export function AcceptInvitationPage({
           <InlineAlert tone="error">
             {getErrorMessage(validateQuery.error, 'Unable to verify this invitation. Please try again.')}
           </InlineAlert>
-          <Link to="/login" className="text-sm text-slate-900 underline hover:text-slate-700">
+          <Link to="/login" className="inline-flex min-h-11 w-fit items-center text-sm text-slate-900 underline hover:text-slate-700">
             Return to sign in
           </Link>
         </div>
@@ -218,7 +218,7 @@ export function AcceptInvitationPage({
             <Link
               to="/login"
               state={{ invitationAccepted: true }}
-              className="inline-flex h-9 items-center justify-center gap-2 rounded-sm bg-slate-900 px-4 text-sm font-semibold text-white hover:bg-slate-800 active:bg-slate-950"
+              className="inline-flex h-11 md:h-9 items-center justify-center gap-2 rounded-sm bg-slate-900 px-4 text-sm font-semibold text-white hover:bg-slate-800 active:bg-slate-950"
             >
               {signInLabel}
             </Link>
@@ -276,7 +276,7 @@ export function AcceptInvitationPage({
           {...register('confirmPassword')}
         />
         <SubmitButton loading={mutation.isPending}>Set password & accept</SubmitButton>
-        <Link to="/login" className="text-sm text-slate-900 underline hover:text-slate-700">
+        <Link to="/login" className="inline-flex min-h-11 w-fit items-center text-sm text-slate-900 underline hover:text-slate-700">
           Already accepted? Sign in
         </Link>
       </form>

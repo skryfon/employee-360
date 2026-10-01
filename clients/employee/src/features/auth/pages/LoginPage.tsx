@@ -59,7 +59,7 @@ export default function LoginPage() {
           {...register('password')}
         />
         <SubmitButton loading={mutation.isPending}>Sign in</SubmitButton>
-        <Link to="/forgot-password" className="text-sm text-slate-900 underline hover:text-slate-700">
+        <Link to="/forgot-password" className="inline-flex min-h-11 w-fit items-center text-sm text-slate-900 underline hover:text-slate-700">
           Forgot password?
         </Link>
       </form>

@@ -130,12 +130,39 @@ the neutral surface (`bg-slate-100 border-slate-300 text-slate-900`), not blue.
   `bg-slate-900/50` (flat, not a gradient); title `text-base font-semibold`; actions
   right-aligned, secondary then primary, `gap-2`.
 
+## 4. Theme aliases & shared layout (packages/ui)
+
+Aliases live in `packages/ui/src/theme.css` (`@theme inline`, imported by both clients after
+`@import "tailwindcss"`). Use them in new shared components; raw `slate-*` stays valid.
+
+| Alias | Maps to | Utility examples |
+|---|---|---|
+| `canvas` | slate-50 | `bg-canvas` |
+| `surface` / `surface-subtle` / `surface-selected` | white / slate-100 / slate-200 | `bg-surface` |
+| `line` / `line-strong` | slate-200 / slate-300 | `border-line` |
+| `ink` / `ink-muted` | slate-900 / slate-600 | `text-ink` |
+| `accent` / `accent-hover` | slate-900 / slate-800 | `bg-accent` |
+
+Shared layout components (import from `@employee360/ui`), use them instead of bespoke markup:
+- `BrandMark` - logo tile + product name/subtitle (sidebar, headers, auth pages).
+- `PageHeader` - page title, optional description, right-aligned `actions` (stacks on mobile).
+- `Card` - `rounded-sm border border-line bg-surface`, padded `p-4 sm:p-6`.
+- `UserBadge` - initial chip + email (email hidden below `sm`).
+- `AuthLayout` - centered brand + card for all auth pages.
+
+Layout conventions:
+- Header `h-14`, sticky (`sticky top-0 z-20`), `border-b border-slate-200 bg-white`.
+- Page gutters `px-4 sm:px-6 lg:px-8`, content `max-w-6xl`, vertical gap `gap-6`.
+- Active nav item: `border-l-2 border-slate-900 bg-slate-200 font-semibold`; inactive items use
+  `border-transparent` to avoid layout shift.
+- No shadows and no `rounded-lg/md`; muted text never lighter than `slate-600`.
+
 ## Rules
 - Wrap these in shared React components (`packages/ui` or the feature's `components/`) rather
   than repeating class strings; props select the variant.
 - Color is never the only signal — pair it with text, and an icon or dot.
 - Prefer theme aliases over raw `slate-*`/`green-*` classes once defined in the Tailwind
   config (e.g. `surface`, `border-strong`, `status-mandatory`), so palette changes and
-  per-tenant theming stay a one-file change. If aliases don't exist yet, use the raw classes
-  above and don't invent new colors.
+  per-tenant theming stay a one-file change. Core aliases now exist (section 4); for status/category
+  colors without aliases yet, use the raw classes above and don't invent new colors.
 - Propose additions to this skill rather than diverging silently.

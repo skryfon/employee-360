@@ -3,7 +3,7 @@ import { Link } from 'react-router-dom'
 import { getErrorMessage } from '@employee360/api-client'
 import { useInvitationsQuery } from '../queries/invitationQueries'
 import { InvitationsTable } from '../components/InvitationsTable'
-import { InlineAlert } from '@employee360/ui'
+import { Card, InlineAlert, PageHeader } from '@employee360/ui'
 
 export default function InvitationsPage() {
   const [page, setPage] = useState(1)
@@ -12,16 +12,19 @@ export default function InvitationsPage() {
 
   return (
     <div className="mx-auto flex w-full max-w-6xl flex-col gap-6">
-      <div className="flex items-center justify-between gap-4">
-        <h1 className="text-xl font-semibold text-slate-900">Invitations</h1>
-        <Link
-          to="/invitations/new"
-          className="inline-flex h-9 items-center rounded-sm bg-slate-900 px-4 text-sm font-semibold text-white hover:bg-slate-800 active:bg-slate-950 focus:outline-none focus-visible:ring-2 focus-visible:ring-slate-900 focus-visible:ring-offset-2"
-        >
-          Create invitation
-        </Link>
-      </div>
-      <section className="rounded-sm border border-slate-200 bg-white" aria-label="Invitations list">
+      <PageHeader
+        title="Invitations"
+        description="Invite people to your organization and track their status."
+        actions={
+          <Link
+            to="/invitations/new"
+            className="inline-flex h-11 md:h-9 items-center rounded-sm bg-slate-900 px-4 text-sm font-semibold text-white hover:bg-slate-800 active:bg-slate-950 focus:outline-none focus-visible:ring-2 focus-visible:ring-slate-900 focus-visible:ring-offset-2"
+          >
+            Create invitation
+          </Link>
+        }
+      />
+      <Card padded={false} aria-label="Invitations list" role="region" className="overflow-hidden">
         {isPending && <p className="p-4 text-sm text-slate-600">Loading invitations...</p>}
         {isError && (
           <div className="p-4">
@@ -30,12 +33,12 @@ export default function InvitationsPage() {
         )}
         {data && <InvitationsTable invitations={data.data} />}
         {totalPages > 1 && (
-          <div className="flex items-center justify-end gap-2 border-t border-slate-200 p-2 text-xs text-slate-600">
+          <div className="flex items-center justify-end gap-2 border-t border-slate-200 bg-slate-100 px-4 py-2 text-xs text-slate-600">
             <button
               type="button"
               disabled={page <= 1}
               onClick={() => setPage((p) => p - 1)}
-              className="h-8 rounded-sm border border-slate-300 bg-white px-3 font-medium text-slate-800 hover:bg-slate-100 disabled:cursor-not-allowed disabled:bg-slate-100 disabled:text-slate-500"
+              className="h-11 md:h-8 rounded-sm border border-slate-300 bg-white px-3 font-medium text-slate-800 hover:bg-slate-100 disabled:cursor-not-allowed disabled:bg-slate-100 disabled:text-slate-500"
             >
               Previous
             </button>
@@ -46,13 +49,13 @@ export default function InvitationsPage() {
               type="button"
               disabled={page >= totalPages}
               onClick={() => setPage((p) => p + 1)}
-              className="h-8 rounded-sm border border-slate-300 bg-white px-3 font-medium text-slate-800 hover:bg-slate-100 disabled:cursor-not-allowed disabled:bg-slate-100 disabled:text-slate-500"
+              className="h-11 md:h-8 rounded-sm border border-slate-300 bg-white px-3 font-medium text-slate-800 hover:bg-slate-100 disabled:cursor-not-allowed disabled:bg-slate-100 disabled:text-slate-500"
             >
               Next
             </button>
           </div>
         )}
-      </section>
+      </Card>
     </div>
   )
 }
