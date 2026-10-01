@@ -141,8 +141,10 @@ func TestInvitationFlow_InviteDeliverAccept(t *testing.T) {
 	require.NotEmpty(t, *after.PasswordHash)
 
 	// Token is single-use and the new credentials log in.
-	code, _, _ = e.doJSON(t, http.MethodPost, "/api/v1/invitations/accept", map[string]string{"token": token, "password": "another-passw0rd"}, "")
-	require.Equal(t, http.StatusBadRequest, code)
+	// Re-using an accepted token is a distinct 409 INVITATION_ACCEPTED, not a generic 400.
+	code, _, raw = e.doJSON(t, http.MethodPost, "/api/v1/invitations/accept", map[string]string{"token": token, "password": "another-passw0rd"}, "")
+	require.Equal(t, http.StatusConflict, code, string(raw))
+	require.Contains(t, string(raw), "INVITATION_ACCEPTED")
 	code, _, raw = e.post(t, "/login", map[string]string{"email": inviteeEmail, "password": inviteePassword}, "")
 	require.Equal(t, http.StatusOK, code, string(raw))
 }
