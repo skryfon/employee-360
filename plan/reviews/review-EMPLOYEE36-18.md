@@ -73,3 +73,10 @@ Epic Definition of Done:
 - **New issues:** none. Typecheck, lint and tests pass: api-client 83, ui 1, admin 55, employee 42. The apps' `auth.test.tsx` are unchanged. The new shared page has only one smoke test, but the full accept flow is still covered by the apps' tests.
 - **Score:** 97 → 98 (+1)
 - **Verdict:** 🟢 Merge
+
+### Iteration 3 — 2026-10-01 — test-only follow-up
+- **Resolved:** the weak spot noted in iteration 2. The shared accept page now has 12 tests in `packages/ui` (was 1). They cover: no token, the happy path, and the password mismatch. Four error codes are mapped by code and not by message text (INVALID_TOKEN, EXPIRED, REVOKED, ACCEPTED), plus an unknown code and the validate-then-accept race. They also cover four cross-app redirect cases: employee role in admin, admin role in employee, an unconfigured URL, and the same-portal role.
+- **Still open:** UUID inputs for department/position (deferred to an upcoming ticket); history hygiene nit.
+- **New issues:** none. Typecheck, lint and tests pass: api-client 83, ui 12, admin 55, employee 42.
+- **Score:** 98 → 98 (0)
+- **Verdict:** 🟢 Merge
