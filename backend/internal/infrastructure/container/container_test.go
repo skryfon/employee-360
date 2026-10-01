@@ -29,4 +29,7 @@ func TestNew_ConstructsWithoutTouchingDB(t *testing.T) {
 	if c.Auth == nil || c.Auth.Handler == nil {
 		t.Fatal("expected Auth sub-container and its handler to be wired")
 	}
+	if c.Department == nil || c.Department.Handler == nil {
+		t.Fatal("expected Department sub-container and its handler to be wired")
+	}
 }
