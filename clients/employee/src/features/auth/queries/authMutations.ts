@@ -1,13 +1,10 @@
-import { useMutation, useQuery } from '@tanstack/react-query'
+import { useMutation } from '@tanstack/react-query'
 import {
-  acceptInvitation,
   clearSession,
   forgotPassword,
   login,
   logout,
   resetPassword,
-  validateInvitation,
-  type AcceptInvitationRequest,
   type ForgotPasswordRequest,
   type LoginRequest,
   type ResetPasswordRequest,
@@ -64,17 +61,4 @@ export function useForgotPasswordMutation() {
 
 export function useResetPasswordMutation() {
   return useMutation({ mutationFn: (body: ResetPasswordRequest) => resetPassword(body) })
-}
-
-export function useAcceptInvitationMutation() {
-  return useMutation({ mutationFn: (body: AcceptInvitationRequest) => acceptInvitation(body) })
-}
-
-export function useValidateInvitationQuery(token: string | null) {
-  return useQuery({
-    queryKey: ['invitations', 'validate', token],
-    queryFn: ({ signal }) => validateInvitation(token!, signal),
-    enabled: Boolean(token),
-    retry: false,
-  })
 }

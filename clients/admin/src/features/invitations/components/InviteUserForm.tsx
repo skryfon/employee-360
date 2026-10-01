@@ -3,8 +3,7 @@ import { zodResolver } from '@hookform/resolvers/zod'
 import { getErrorMessage } from '@employee360/api-client'
 import { inviteUserSchema, type InviteUserFormValues } from '../schemas/invitationSchemas'
 import { useInviteUserMutation, useRolesQuery } from '../queries/invitationQueries'
-import { FormField } from '../../auth/components/FormField'
-import { SubmitButton } from '../../auth/components/SubmitButton'
+import { FormField, SubmitButton } from '@employee360/ui'
 import { useToast } from '../../../hooks/useToast'
 
 const EMPTY: InviteUserFormValues = {

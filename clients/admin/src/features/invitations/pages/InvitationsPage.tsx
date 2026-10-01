@@ -3,7 +3,7 @@ import { Link } from 'react-router-dom'
 import { getErrorMessage } from '@employee360/api-client'
 import { useInvitationsQuery } from '../queries/invitationQueries'
 import { InvitationsTable } from '../components/InvitationsTable'
-import { InlineAlert } from '../../auth/components/InlineAlert'
+import { InlineAlert } from '@employee360/ui'
 
 export default function InvitationsPage() {
   const [page, setPage] = useState(1)

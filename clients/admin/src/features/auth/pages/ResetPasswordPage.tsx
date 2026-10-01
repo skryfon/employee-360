@@ -1,14 +1,10 @@
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { Link, useNavigate, useSearchParams } from 'react-router-dom'
-import { resetPasswordSchema, type ResetPasswordFormValues } from '../schemas/authSchemas'
+import { resetPasswordSchema, type ResetPasswordFormValues, AuthLayout, FormField, SubmitButton, InlineAlert } from '@employee360/ui'
 import { useResetPasswordMutation } from '../queries/authMutations'
 import { clearSession } from '@employee360/api-client'
 import { useAuthStore } from '../../../stores/authStore'
-import { AuthLayout } from '../components/AuthLayout'
-import { FormField } from '../components/FormField'
-import { SubmitButton } from '../components/SubmitButton'
-import { InlineAlert } from '../components/InlineAlert'
 
 export default function ResetPasswordPage() {
   const [params] = useSearchParams()

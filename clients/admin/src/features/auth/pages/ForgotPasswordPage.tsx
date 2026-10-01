@@ -2,12 +2,8 @@ import { useState } from 'react'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { Link } from 'react-router-dom'
-import { forgotPasswordSchema, type ForgotPasswordFormValues } from '../schemas/authSchemas'
+import { forgotPasswordSchema, type ForgotPasswordFormValues, AuthLayout, FormField, SubmitButton, InlineAlert } from '@employee360/ui'
 import { useForgotPasswordMutation } from '../queries/authMutations'
-import { AuthLayout } from '../components/AuthLayout'
-import { FormField } from '../components/FormField'
-import { SubmitButton } from '../components/SubmitButton'
-import { InlineAlert } from '../components/InlineAlert'
 
 export const FORGOT_SUCCESS_MESSAGE =
   'If an account exists for that email, we have sent password reset instructions.'
