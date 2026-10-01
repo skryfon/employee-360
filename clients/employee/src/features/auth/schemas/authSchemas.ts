@@ -32,4 +32,3 @@ export const acceptInvitationSchema = z
     message: 'Passwords do not match',
   })
 export type AcceptInvitationFormValues = z.infer<typeof acceptInvitationSchema>
-

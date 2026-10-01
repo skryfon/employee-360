@@ -33,8 +33,13 @@ var (
 	// Invitation errors
 	ErrInvitationNotFound   = errors.New("invitation not found")
 	ErrInvitationNotPending = errors.New("invitation is no longer pending")
-	ErrInvalidRole          = errors.New("role cannot be assigned by invitation")
-	ErrInvalidEmail         = errors.New("invalid email address")
-	ErrDepartmentNotFound   = errors.New("department not found")
-	ErrPositionNotFound     = errors.New("position not found")
+	// Distinct token-state errors returned by validate/accept when the token
+	// hash matches a row but the invitation cannot be used.
+	ErrInvitationExpired  = errors.New("invitation has expired")
+	ErrInvitationRevoked  = errors.New("invitation has been revoked")
+	ErrInvitationAccepted = errors.New("invitation has already been accepted")
+	ErrInvalidRole        = errors.New("role cannot be assigned by invitation")
+	ErrInvalidEmail       = errors.New("invalid email address")
+	ErrDepartmentNotFound = errors.New("department not found")
+	ErrPositionNotFound   = errors.New("position not found")
 )

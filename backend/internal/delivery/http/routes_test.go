@@ -309,7 +309,7 @@ func (fakeList) Execute(context.Context, int, int) ([]*entity.UserInvitation, in
 type fakeValidate struct{}
 
 func (fakeValidate) Execute(context.Context, string) (*invtypes.ValidateInvitationResponse, error) {
-	return &invtypes.ValidateInvitationResponse{Valid: true, Email: "x@y.com"}, nil
+	return &invtypes.ValidateInvitationResponse{Valid: true, Email: "x@y.com", Role: "employee"}, nil
 }
 
 func invitationEngine(t *testing.T, invite *fakeInvite, accept *fakeAccept, revoke fakeRevoke) (*gin.Engine, domainservice.TokenService) {
@@ -401,6 +401,14 @@ func TestInvitationRoutes_AcceptIsUnauthenticated(t *testing.T) {
 	}
 }
 
+func TestInvitationRoutes_ValidateIsUnauthenticated(t *testing.T) {
+	engine, _ := invitationEngine(t, &fakeInvite{}, &fakeAccept{}, fakeRevoke{})
+	rec := do(engine, http.MethodGet, "/api/v1/invitations/validate?token=abc", "", "")
+	if rec.Code != http.StatusOK {
+		t.Fatalf("want 200 without token, got %d: %s", rec.Code, rec.Body.String())
+	}
+}
+
 func TestInvitationRoutes_AllRegistered(t *testing.T) {
 	engine, _ := invitationEngine(t, &fakeInvite{}, &fakeAccept{}, fakeRevoke{})
 	registered := map[string]bool{}
@@ -409,6 +417,7 @@ func TestInvitationRoutes_AllRegistered(t *testing.T) {
 	}
 	for _, want := range []string{
 		"POST /api/v1/invitations/accept",
+		"GET /api/v1/invitations/validate",
 		"POST /api/v1/users/invitations",
 		"GET /api/v1/users/invitations",
 		"POST /api/v1/users/invitations/:id/resend",
@@ -485,5 +494,32 @@ func TestRoleRoutes_ListRequiresAdminToken(t *testing.T) {
 				t.Fatalf("want %d, got %d: %s", tc.want, rec.Code, rec.Body.String())
 			}
 		})
+	}
+}
+
+func TestInvitationRoutes_ValidateRateLimited(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	cfg := &config.Config{
+		CORS:      config.CORSConfig{AllowedOrigins: []string{"*"}},
+		RateLimit: config.RateLimitConfig{Enabled: true, RequestsPerSecond: 0.001, Burst: 2},
+	}
+	ctr := testContainer(t, cfg, nil, nil)
+	ctr.Auth = &container.AuthContainer{
+		TokenService:      setupTestTokenService(t),
+		InvitationHandler: handlers.NewInvitationHandler(&fakeInvite{}, &fakeAccept{}, fakeResend{}, fakeRevoke{}, fakeList{}, fakeValidate{}),
+	}
+	engine := SetupRouter(cfg, zerolog.Nop(), ctr)
+
+	for i := 0; i < 2; i++ {
+		if rec := do(engine, http.MethodGet, "/api/v1/invitations/validate?token=t", "", ""); rec.Code != http.StatusOK {
+			t.Fatalf("request %d: expected 200, got %d: %s", i, rec.Code, rec.Body.String())
+		}
+	}
+	rec := do(engine, http.MethodGet, "/api/v1/invitations/validate?token=t", "", "")
+	if rec.Code != http.StatusTooManyRequests {
+		t.Fatalf("expected 429, got %d", rec.Code)
+	}
+	if rec.Header().Get("Retry-After") == "" {
+		t.Fatal("expected Retry-After header")
 	}
 }

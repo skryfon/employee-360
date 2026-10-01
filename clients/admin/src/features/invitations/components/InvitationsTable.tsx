@@ -3,7 +3,7 @@ import { getErrorMessage, type Invitation } from '@employee360/api-client'
 import { useResendInvitationMutation, useRevokeInvitationMutation } from '../queries/invitationQueries'
 import { StatusBadge } from './StatusBadge'
 import { ConfirmRevokeModal } from './ConfirmRevokeModal'
-import { InlineAlert } from '../../auth/components/InlineAlert'
+import { useToast } from '../../../hooks/useToast'
 
 const fmt = (iso?: string) => (iso ? new Date(iso).toLocaleDateString() : '-')
 
@@ -13,6 +13,7 @@ const dangerBtn =
   'h-8 rounded-sm border border-red-300 bg-white px-3 text-xs font-medium text-red-600 hover:bg-red-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-red-600 focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:text-slate-500 disabled:border-slate-200'
 
 export function InvitationsTable({ invitations }: { invitations: Invitation[] }) {
+  const toast = useToast()
   const resend = useResendInvitationMutation()
   const revoke = useRevokeInvitationMutation()
   const [revoking, setRevoking] = useState<Invitation | null>(null)
@@ -23,11 +24,6 @@ export function InvitationsTable({ invitations }: { invitations: Invitation[] })
 
   return (
     <>
-      {resend.isError && (
-        <div className="p-4">
-          <InlineAlert tone="error">{getErrorMessage(resend.error, 'Could not resend invitation.')}</InlineAlert>
-        </div>
-      )}
       <table className="w-full text-left">
         <thead className="bg-slate-100 text-xs font-medium text-slate-600">
           <tr>
@@ -56,7 +52,12 @@ export function InvitationsTable({ invitations }: { invitations: Invitation[] })
                         type="button"
                         className={secondaryBtn}
                         disabled={resend.isPending}
-                        onClick={() => resend.mutate(inv.id as string)}
+                        onClick={() =>
+                          resend.mutate(inv.id as string, {
+                            onSuccess: () => toast.success(`Invitation resent to ${inv.email}.`),
+                            onError: (err) => toast.error(getErrorMessage(err, 'Could not resend invitation.')),
+                          })
+                        }
                         aria-label={`Resend invitation to ${inv.email}`}
                       >
                         Resend
@@ -86,7 +87,15 @@ export function InvitationsTable({ invitations }: { invitations: Invitation[] })
           loading={revoke.isPending}
           error={revoke.isError ? getErrorMessage(revoke.error, 'Could not revoke invitation.') : undefined}
           onCancel={() => setRevoking(null)}
-          onConfirm={() => revoke.mutate(revoking.id as string, { onSuccess: () => setRevoking(null) })}
+          onConfirm={() =>
+            revoke.mutate(revoking.id as string, {
+              onSuccess: () => {
+                toast.success(`Invitation for ${revoking.email} revoked.`)
+                setRevoking(null)
+              },
+              onError: (err) => toast.error(getErrorMessage(err, 'Could not revoke invitation.')),
+            })
+          }
         />
       )}
     </>

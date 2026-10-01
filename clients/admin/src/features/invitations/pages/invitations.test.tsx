@@ -7,6 +7,7 @@ import MockAdapter from 'axios-mock-adapter'
 import { apiClient, clearSession, setSession } from '@employee360/api-client'
 import App from '../../../App'
 import { useAuthStore } from '../../../stores/authStore'
+import { toast } from 'sonner'
 
 let mock: MockAdapter
 const ROLE_ID = '11111111-1111-4111-8111-111111111111'
@@ -41,6 +42,7 @@ beforeEach(() => {
   clearSession()
   useAuthStore.getState().clear()
   localStorage.clear()
+  toast.dismiss()
 })
 afterEach(() => mock.restore())
 
@@ -72,6 +74,7 @@ describe('invitations', () => {
     await userEvent.click(within(dialog).getByRole('button', { name: 'Revoke' }))
     await waitForRevokeDone()
     expect(mock.history.delete).toHaveLength(1)
+    expect(await screen.findByText('Invitation for p@x.com revoked.')).toBeInTheDocument()
   })
 
   it('resends and invalidates the list', async () => {
@@ -81,6 +84,7 @@ describe('invitations', () => {
     await userEvent.click(await screen.findByRole('button', { name: /Resend invitation to p@x.com/ }))
     await waitForCondition(() => mock.history.get.filter((r) => r.url === '/api/v1/users/invitations').length >= 2)
     expect(mock.history.post).toHaveLength(1)
+    expect(await screen.findByText('Invitation resent to p@x.com.')).toBeInTheDocument()
   })
 
   it('list page has a Create invitation button that navigates and no inline form', async () => {
@@ -121,6 +125,7 @@ describe('invitations', () => {
     await userEvent.click(screen.getByRole('button', { name: 'Send invitation' }))
     expect(await screen.findByRole('link', { name: 'Create invitation' })).toBeInTheDocument()
     expect(await screen.findByText('p@x.com')).toBeInTheDocument()
+    expect(await screen.findByText('Invitation sent to new@x.com.')).toBeInTheDocument()
     expect(JSON.parse(mock.history.post[0].data)).toEqual({ email: 'new@x.com', role_id: ROLE_ID })
   })
 
@@ -147,6 +152,7 @@ describe('invitations', () => {
     const dialog = screen.getByRole('dialog')
     await userEvent.click(within(dialog).getByRole('button', { name: 'Revoke' }))
     expect(await within(dialog).findByText('Revoke exploded')).toBeInTheDocument()
+    expect(screen.getAllByText('Revoke exploded')).toHaveLength(2)
     expect(screen.getByRole('dialog')).toBeInTheDocument()
   })
 

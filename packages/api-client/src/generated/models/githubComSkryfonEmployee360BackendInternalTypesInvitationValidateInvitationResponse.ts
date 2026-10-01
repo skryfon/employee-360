@@ -8,5 +8,10 @@
 
 export interface GithubComSkryfonEmployee360BackendInternalTypesInvitationValidateInvitationResponse {
   email?: string;
+  /**
+     * Role is the invitee's role name (e.g. "admin", "employee"); clients use it
+     * to send the invitee to the correct app.
+     */
+  role?: string;
   valid?: boolean;
 }

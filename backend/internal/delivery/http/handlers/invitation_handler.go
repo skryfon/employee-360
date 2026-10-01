@@ -2,6 +2,7 @@ package handlers
 
 import (
 	"errors"
+	"net/http"
 	"strconv"
 
 	"github.com/gin-gonic/gin"
@@ -56,8 +57,14 @@ func writeInvitationError(c *gin.Context, err error) {
 		response.Error(c, 409, "CONFLICT", "invitation is no longer pending")
 	case errors.Is(err, domainerrors.ErrEmailAlreadyExists):
 		response.Error(c, 409, "CONFLICT", "a user with that email already exists")
+	case errors.Is(err, domainerrors.ErrInvitationExpired):
+		response.Error(c, http.StatusGone, "INVITATION_EXPIRED", "this invitation has expired; ask your administrator to resend it")
+	case errors.Is(err, domainerrors.ErrInvitationRevoked):
+		response.Error(c, http.StatusForbidden, "INVITATION_REVOKED", "this invitation has been revoked; contact your administrator")
+	case errors.Is(err, domainerrors.ErrInvitationAccepted):
+		response.Error(c, http.StatusConflict, "INVITATION_ACCEPTED", "this invitation has already been accepted; sign in instead")
 	case errors.Is(err, domainerrors.ErrInvalidToken):
-		response.BadRequest(c, "invalid or expired invitation token")
+		response.Error(c, http.StatusBadRequest, "INVALID_TOKEN", "invalid invitation token")
 	case errors.Is(err, domainerrors.ErrRoleNotFound),
 		errors.Is(err, domainerrors.ErrDepartmentNotFound),
 		errors.Is(err, domainerrors.ErrPositionNotFound),
@@ -187,7 +194,10 @@ func (h *InvitationHandler) List(c *gin.Context) {
 // @Produce      json
 // @Param        request  body      invtypes.AcceptInvitationRequest  true  "Token and new password"
 // @Success      200      {object}  response.Envelope
-// @Failure      400      {object}  response.Envelope
+// @Failure      400      {object}  response.Envelope  "INVALID_TOKEN or validation error"
+// @Failure      403      {object}  response.Envelope  "INVITATION_REVOKED"
+// @Failure      409      {object}  response.Envelope  "INVITATION_ACCEPTED"
+// @Failure      410      {object}  response.Envelope  "INVITATION_EXPIRED"
 // @Router       /api/v1/invitations/accept [post]
 func (h *InvitationHandler) Accept(c *gin.Context) {
 	var req invtypes.AcceptInvitationRequest
@@ -202,19 +212,22 @@ func (h *InvitationHandler) Accept(c *gin.Context) {
 	response.Success(c, gin.H{"message": "invitation accepted"})
 }
 
-// Validate checks if an invitation token is valid, pending, and unexpired (unauthenticated).
+// Validate checks an invitation token and returns the invitee email and role (unauthenticated).
 //
 // @Summary      Validate invitation token
 // @Tags         invitations
 // @Produce      json
 // @Param        token  query     string  true  "Invitation token"
 // @Success      200    {object}  response.Envelope{data=invtypes.ValidateInvitationResponse}
-// @Failure      400    {object}  response.Envelope
+// @Failure      400    {object}  response.Envelope  "INVALID_TOKEN"
+// @Failure      403    {object}  response.Envelope  "INVITATION_REVOKED"
+// @Failure      409    {object}  response.Envelope  "INVITATION_ACCEPTED"
+// @Failure      410    {object}  response.Envelope  "INVITATION_EXPIRED"
 // @Router       /api/v1/invitations/validate [get]
 func (h *InvitationHandler) Validate(c *gin.Context) {
 	token := c.Query("token")
 	if token == "" {
-		response.BadRequest(c, "invalid or expired invitation token")
+		response.Error(c, http.StatusBadRequest, "INVALID_TOKEN", "invalid invitation token")
 		return
 	}
 	res, err := h.validateUC.Execute(c.Request.Context(), token)

@@ -1,5 +1,5 @@
-import { afterEach, beforeEach, describe, expect, it } from 'vitest'
-import { render, screen } from '@testing-library/react'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { MemoryRouter } from 'react-router-dom'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
@@ -191,14 +191,14 @@ describe('reset password', () => {
 describe('accept invitation', () => {
   it('shows invalid-link state without a token', () => {
     renderAt('/accept-invitation')
-    expect(screen.getByRole('alert')).toHaveTextContent(/invalid or missing a token/i)
+    expect(screen.getByRole('alert')).toHaveTextContent(/this invitation link is invalid/i)
     expect(screen.getByRole('link', { name: /return to sign in/i })).toBeInTheDocument()
   })
 
   it('validates token on load before showing password fields and completes acceptance', async () => {
     mock.onGet('/api/v1/invitations/validate', { params: { token: 'inv-token-123' } }).reply(200, {
       success: true,
-      data: { valid: true, email: 'new@acme.com' },
+      data: { valid: true, email: 'new@acme.com', role: 'admin' },
     })
     mock.onPost('/api/v1/invitations/accept').reply(200, { success: true, data: { message: 'invitation accepted' } })
     renderAt('/accept-invitation?token=inv-token-123')
@@ -233,36 +233,144 @@ describe('accept invitation', () => {
     await userEvent.click(screen.getByRole('link', { name: /sign in to admin/i }))
     expect(screen.getByRole('heading', { name: /sign in/i })).toBeInTheDocument()
     expect(screen.getByText(/your invitation was accepted\. you can now sign in\./i)).toBeInTheDocument()
+
+    // AC: the invitee can then actually log in with the role-appropriate login
+    mock.onPost('/api/v1/auth/login').reply(200, loginOk('admin'))
+    await userEvent.type(screen.getByLabelText('Email'), 'a@x.com')
+    await userEvent.type(screen.getByLabelText('Password'), 'securePassword123')
+    await userEvent.click(screen.getByRole('button', { name: 'Sign in' }))
+    expect(await screen.findByRole('button', { name: 'Sign out' })).toBeInTheDocument()
+    expect(useAuthStore.getState().user?.roles).toEqual(['admin'])
+    expect(JSON.parse(mock.history.post.find((r) => r.url === '/api/v1/auth/login')!.data)).toMatchObject({
+      email: 'a@x.com',
+      password: 'securePassword123',
+    })
   })
 
-  it('shows distinct actionable error immediately on load if token is expired or invalid without showing password fields', async () => {
-    mock.onGet('/api/v1/invitations/validate', { params: { token: 'expired-token' } }).reply(400, {
-      error: { code: 'BAD_REQUEST', message: 'invalid or expired invitation token' },
-    })
-    renderAt('/accept-invitation?token=expired-token')
+  it.each([
+    ['INVALID_TOKEN', 400, /this invitation link is invalid/i],
+    ['INVITATION_EXPIRED', 410, /ask your administrator to resend/i],
+    ['INVITATION_REVOKED', 403, /invitation has been revoked.*contact your administrator/i],
+    ['INVITATION_ACCEPTED', 409, /already been accepted/i],
+  ])('renders a distinct state for validate error %s', async (code, status, text) => {
+    mock.onGet('/api/v1/invitations/validate').reply(status, { success: false, error: { code, message: 'server text' } })
+    renderAt('/accept-invitation?token=bad-token')
 
-    const alert = await screen.findByRole('alert')
-    expect(alert).toHaveTextContent(/this invitation link is invalid, has expired, or has already been accepted/i)
+    expect(await screen.findByRole('alert')).toHaveTextContent(text)
     expect(screen.queryByLabelText(/^password$/i)).toBeNull()
     expect(screen.queryByRole('button', { name: /set password & accept/i })).toBeNull()
-    expect(screen.getByRole('link', { name: /return to sign in/i })).toBeInTheDocument()
+    // Only the accepted state offers a primary Sign in button; expired offers no sign-in CTA.
+    const signInButton = screen.queryByRole('link', { name: /^sign in$/i })
+    if (code === 'INVITATION_ACCEPTED') expect(signInButton).toBeInTheDocument()
+    else expect(signInButton).toBeNull()
   })
 
-  it('shows a distinct actionable error if token is revoked / not pending on load', async () => {
-    mock.onGet('/api/v1/invitations/validate', { params: { token: 'revoked-token' } }).reply(409, {
-      error: { code: 'CONFLICT', message: 'invitation is no longer pending' },
-    })
-    renderAt('/accept-invitation?token=revoked-token')
+  it('uses distinct headings per error code', async () => {
+    const headings: string[] = []
+    for (const [code, status] of [
+      ['INVITATION_EXPIRED', 410],
+      ['INVITATION_REVOKED', 403],
+      ['INVITATION_ACCEPTED', 409],
+      ['INVALID_TOKEN', 400],
+    ] as const) {
+      mock.reset()
+      mock.onGet('/api/v1/invitations/validate').reply(status, { error: { code, message: 'm' } })
+      const { unmount } = renderAt(`/accept-invitation?token=${code}`)
+      await screen.findByRole('alert')
+      headings.push(screen.getByRole('heading', { level: 1 }).textContent ?? '')
+      unmount()
+    }
+    expect(new Set(headings).size).toBe(4)
+  })
 
-    const alert = await screen.findByRole('alert')
-    expect(alert).toHaveTextContent(/this invitation link is invalid, has expired, or has already been accepted/i)
-    expect(screen.queryByLabelText(/^password$/i)).toBeNull()
+  it('does not classify by message text when the code is unknown', async () => {
+    mock.onGet('/api/v1/invitations/validate').reply(500, { error: { code: 'INTERNAL', message: 'token expired conflict' } })
+    renderAt('/accept-invitation?token=t')
+    expect(await screen.findByRole('alert')).toHaveTextContent('token expired conflict')
+    expect(screen.queryByText(/ask your administrator to resend/i)).toBeNull()
+  })
+
+  it('shows the invitee email on the set-password form', async () => {
+    mock.onGet('/api/v1/invitations/validate').reply(200, {
+      success: true,
+      data: { valid: true, email: 'new@acme.com', role: 'admin' },
+    })
+    renderAt('/accept-invitation?token=ok')
+    expect(await screen.findByText('new@acme.com')).toBeInTheDocument()
+    expect(screen.getByText(/setting a password for/i)).toBeInTheDocument()
+  })
+
+  it('keeps unknown roles on the current app', async () => {
+    mock.onGet('/api/v1/invitations/validate').reply(200, { success: true, data: { email: 'x@y.com', role: 'manager' } })
+    renderAt('/accept-invitation?token=ok')
+    expect(await screen.findByRole('heading', { name: /set your password/i })).toBeInTheDocument()
+  })
+
+  describe('role-based host switching', () => {
+    const replace = vi.fn()
+    beforeEach(() => {
+      replace.mockClear()
+      vi.stubGlobal('location', { ...window.location, replace })
+    })
+    afterEach(() => {
+      vi.unstubAllGlobals()
+      vi.unstubAllEnvs()
+    })
+
+    it('redirects a employee invitation to the employee app preserving the token', async () => {
+      vi.stubEnv('VITE_EMPLOYEE_APP_URL', 'http://employee.test/')
+      mock.onGet('/api/v1/invitations/validate').reply(200, { success: true, data: { email: 'x@y.com', role: 'employee' } })
+      renderAt('/accept-invitation?token=tok%201')
+      await waitFor(() => expect(replace).toHaveBeenCalledWith('http://employee.test/accept-invitation?token=tok%201'))
+      expect(screen.queryByLabelText(/^password$/i)).toBeNull()
+    })
+
+    it('shows a clear message instead of redirecting when the target URL is not configured', async () => {
+      vi.stubEnv('VITE_EMPLOYEE_APP_URL', '')
+      mock.onGet('/api/v1/invitations/validate').reply(200, { success: true, data: { email: 'x@y.com', role: 'employee' } })
+      renderAt('/accept-invitation?token=tok')
+      expect(await screen.findByText(/this invitation is for the Employee Portal/i)).toBeInTheDocument()
+      expect(replace).not.toHaveBeenCalled()
+      expect(screen.queryByLabelText(/^password$/i)).toBeNull()
+    })
+
+    it('does not redirect when the role belongs to this app', async () => {
+      vi.stubEnv('VITE_EMPLOYEE_APP_URL', 'http://employee.test')
+      mock.onGet('/api/v1/invitations/validate').reply(200, { success: true, data: { email: 'x@y.com', role: 'admin' } })
+      renderAt('/accept-invitation?token=tok')
+      expect(await screen.findByRole('heading', { name: /set your password/i })).toBeInTheDocument()
+      expect(replace).not.toHaveBeenCalled()
+    })
+  })
+
+  it('handles INVITATION_ACCEPTED returned by accept (race after validate)', async () => {
+    mock.onGet('/api/v1/invitations/validate').reply(200, { success: true, data: { email: 'new@acme.com', role: 'admin' } })
+    mock.onPost('/api/v1/invitations/accept').reply(409, { error: { code: 'INVITATION_ACCEPTED', message: 'x' } })
+    renderAt('/accept-invitation?token=race')
+    await screen.findByRole('heading', { name: /set your password/i })
+    await userEvent.type(screen.getByLabelText(/^password$/i), 'securePassword123')
+    await userEvent.type(screen.getByLabelText(/^confirm password$/i), 'securePassword123')
+    await userEvent.click(screen.getByRole('button', { name: /set password & accept/i }))
+    expect(await screen.findByRole('alert')).toHaveTextContent(/already been accepted/i)
+    expect(screen.getByRole('link', { name: /^sign in$/i })).toBeInTheDocument()
+  })
+
+  it('keeps the server message for password-validation errors on accept', async () => {
+    mock.onGet('/api/v1/invitations/validate').reply(200, { success: true, data: { email: 'new@acme.com', role: 'admin' } })
+    mock.onPost('/api/v1/invitations/accept').reply(400, { error: { code: 'BAD_REQUEST', message: 'password is too common' } })
+    renderAt('/accept-invitation?token=pw')
+    await screen.findByRole('heading', { name: /set your password/i })
+    await userEvent.type(screen.getByLabelText(/^password$/i), 'securePassword123')
+    await userEvent.type(screen.getByLabelText(/^confirm password$/i), 'securePassword123')
+    await userEvent.click(screen.getByRole('button', { name: /set password & accept/i }))
+    expect(await screen.findByRole('alert')).toHaveTextContent('password is too common')
+    expect(screen.getByRole('heading', { name: /set your password/i })).toBeInTheDocument()
   })
 
   it('clears active session state on successful acceptance', async () => {
     mock.onGet('/api/v1/invitations/validate', { params: { token: 'valid-tok' } }).reply(200, {
       success: true,
-      data: { valid: true, email: 'new@acme.com' },
+      data: { valid: true, email: 'new@acme.com', role: 'admin' },
     })
     mock.onPost('/api/v1/invitations/accept').reply(200, { success: true, data: { message: 'invitation accepted' } })
     setSession({ accessToken: 'old-access', refreshToken: 'old-refresh', tenantId: 'old-tenant' })
@@ -280,5 +388,3 @@ describe('accept invitation', () => {
     expect(useAuthStore.getState().user).toBeNull()
   })
 })
-
-

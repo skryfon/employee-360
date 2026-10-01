@@ -12,3 +12,22 @@ export function getErrorMessage(err: unknown, fallback = 'Something went wrong')
   if (err instanceof Error && err.message) return err.message;
   return fallback;
 }
+
+/**
+ * Stable error codes returned by the invitation validate/accept endpoints.
+ * Features must branch on these, never on message text.
+ */
+export const INVITATION_ERROR_CODES = {
+  INVALID_TOKEN: 'INVALID_TOKEN',
+  EXPIRED: 'INVITATION_EXPIRED',
+  REVOKED: 'INVITATION_REVOKED',
+  ACCEPTED: 'INVITATION_ACCEPTED',
+} as const;
+
+/** Read the backend's `{ error: { code } }` from an AxiosError, else `undefined`. */
+export function getErrorCode(err: unknown): string | undefined {
+  if (axios.isAxiosError<{ error?: { code?: string } }>(err)) {
+    return err.response?.data?.error?.code || undefined;
+  }
+  return undefined;
+}

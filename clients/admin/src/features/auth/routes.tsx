@@ -13,4 +13,3 @@ export const authRoutes = (
     <Route path="/accept-invitation" element={<AcceptInvitationPage />} />
   </>
 )
-

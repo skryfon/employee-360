@@ -115,6 +115,11 @@ type AppConfig struct {
 	// FrontendURL is the public base URL of the web client, used to build links
 	// in emails (e.g. password reset). No trailing slash.
 	FrontendURL string `mapstructure:"frontend_url"`
+	// AdminURL / EmployeeURL are optional per-app base URLs (admin and
+	// employee clients are separate apps); invitation links target the invited
+	// role's app. Each falls back to FrontendURL when unset.
+	AdminURL    string `mapstructure:"admin_url"`
+	EmployeeURL string `mapstructure:"employee_url"`
 }
 
 // CORSConfig contains cross-origin resource sharing configuration.
@@ -261,6 +266,8 @@ func setDefaults(v *viper.Viper) {
 	v.SetDefault("app.environment", "development")
 	v.SetDefault("app.log_level", "debug")
 	v.SetDefault("app.frontend_url", DefaultFrontendURL)
+	v.SetDefault("app.admin_url", "")
+	v.SetDefault("app.employee_url", "")
 
 	// CORS defaults
 	v.SetDefault("cors.allowed_origins", []string{"*"})
@@ -367,6 +374,8 @@ func bindEnvAliases(v *viper.Viper) {
 	_ = v.BindEnv("app.environment", "APP_ENV", "ENVIRONMENT", "ENV")
 	_ = v.BindEnv("app.log_level", "LOG_LEVEL", "APP_LOG_LEVEL")
 	_ = v.BindEnv("app.frontend_url", "APP_FRONTEND_URL", "FRONTEND_URL")
+	_ = v.BindEnv("app.admin_url", "APP_ADMIN_URL", "ADMIN_URL")
+	_ = v.BindEnv("app.employee_url", "APP_EMPLOYEE_URL", "EMPLOYEE_URL")
 
 	_ = v.BindEnv("bootstrap.system_tenant_name", "BOOTSTRAP_SYSTEM_TENANT_NAME")
 	_ = v.BindEnv("bootstrap.super_admin_email", "BOOTSTRAP_SUPER_ADMIN_EMAIL")

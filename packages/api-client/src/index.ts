@@ -16,7 +16,9 @@ export {
 
 export { unwrapSingleEntity, unwrapListResponse } from './unwrap.ts';
 export type { ApiEnvelope } from './unwrap.ts';
-export { getErrorMessage } from './errors.ts';
+export { getErrorMessage, getErrorCode, INVITATION_ERROR_CODES } from './errors.ts';
+export { resolveInvitationRedirect, invitationAppForRole } from './invitationRouting.ts';
+export type { InvitationApp, InvitationRedirect } from './invitationRouting.ts';
 
 export {
   login,
@@ -45,7 +47,6 @@ export type {
   ListInvitationsParams,
   RoleOption,
 } from './auth.ts';
-
 
 export { fetchHealth, useHealth } from './health.ts';
 export type { HealthResponse } from './health.ts';

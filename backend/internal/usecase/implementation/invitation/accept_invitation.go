@@ -49,30 +49,20 @@ func (u *AcceptInvitationUseCaseImpl) Execute(c context.Context, req invtypes.Ac
 	if err != nil {
 		return err
 	}
-	tokenHash := u.hashService.HashToken(token)
 
 	// Lookup, usability check and the conditional MarkAccepted all run in one
 	// transaction, so concurrent accepts (or an accept racing a revoke) cannot
 	// both succeed.
 	return u.transactor.WithinTransaction(c, func(txCtx context.Context) error {
 		now := time.Now().UTC()
-		inv, err := u.invitationRepo.GetByTokenHash(txCtx, tokenHash)
-		if err != nil || inv == nil || !inv.IsUsable(now) {
-			return domainerrors.ErrInvalidToken
-		}
-		user, err := u.userRepo.GetByTenantAndEmail(txCtx, inv.TenantID, inv.Email)
+		inv, user, err := lookupUsableInvitation(txCtx, u.invitationRepo, u.userRepo, u.hashService, token, now)
 		if err != nil {
-			if errors.Is(err, domainerrors.ErrNotFound) || errors.Is(err, domainerrors.ErrUserNotFound) {
-				return domainerrors.ErrInvalidToken
-			}
 			return err
-		}
-		if user == nil || user.IsActive {
-			return domainerrors.ErrInvalidToken
 		}
 		if err := u.invitationRepo.MarkAccepted(txCtx, inv.TenantID, inv.ID, now); err != nil {
 			if errors.Is(err, domainerrors.ErrInvitationNotPending) {
-				return domainerrors.ErrInvalidToken
+				// Lost a race with a concurrent accept or revoke.
+				return domainerrors.ErrInvitationAccepted
 			}
 			return err
 		}

@@ -55,4 +55,7 @@ func ToInvitationResponse(i *entity.UserInvitation) InvitationResponse {
 type ValidateInvitationResponse struct {
 	Valid bool   `json:"valid"`
 	Email string `json:"email"`
+	// Role is the invitee's role name (e.g. "admin", "employee"); clients use it
+	// to send the invitee to the correct app.
+	Role string `json:"role"`
 }

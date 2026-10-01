@@ -126,12 +126,13 @@ func NewAuthContainer(
 	forgotPasswordUC := authusecaseimpl.NewForgotPasswordUseCase(userRepo, tenantDomainRepo, passwordResetRepo, hashService, eventPublisher, transactor, loggerAdapter, cfg.App.FrontendURL)
 	resetPasswordUC := authusecaseimpl.NewResetPasswordUseCase(userRepo, passwordResetRepo, refreshTokenRepo, hashService, transactor)
 
-	inviteUC := invusecaseimpl.NewInviteUserUseCase(userRepo, userRoleRepo, roleRepo, invitationRepo, orgRefRepo, auditRepo, hashService, eventPublisher, transactor, cfg.App.FrontendURL)
+	inviteAppURLs := invusecaseimpl.AppURLs{Default: cfg.App.FrontendURL, Admin: cfg.App.AdminURL, Employee: cfg.App.EmployeeURL}
+	inviteUC := invusecaseimpl.NewInviteUserUseCase(userRepo, userRoleRepo, roleRepo, invitationRepo, orgRefRepo, auditRepo, hashService, eventPublisher, transactor, inviteAppURLs)
 	acceptInvUC := invusecaseimpl.NewAcceptInvitationUseCase(userRepo, invitationRepo, hashService, transactor)
-	resendInvUC := invusecaseimpl.NewResendInvitationUseCase(roleRepo, invitationRepo, auditRepo, hashService, eventPublisher, transactor, cfg.App.FrontendURL)
+	resendInvUC := invusecaseimpl.NewResendInvitationUseCase(roleRepo, invitationRepo, auditRepo, hashService, eventPublisher, transactor, inviteAppURLs)
 	revokeInvUC := invusecaseimpl.NewRevokeInvitationUseCase(invitationRepo, userRepo, userRoleRepo, auditRepo, transactor)
 	listInvUC := invusecaseimpl.NewListInvitationsUseCase(invitationRepo)
-	validateInvUC := invusecaseimpl.NewValidateInvitationUseCase(userRepo, invitationRepo, hashService)
+	validateInvUC := invusecaseimpl.NewValidateInvitationUseCase(userRepo, invitationRepo, roleRepo, hashService)
 
 	handler := handlers.NewAuthHandler(
 		loginUC,

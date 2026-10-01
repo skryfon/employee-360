@@ -3,19 +3,23 @@ import { authRoutes } from './features/auth/routes'
 import { RequireAuth } from './components/layout/RequireAuth'
 import { AdminShell } from './components/layout/AdminShell'
 import { invitationRoutes } from './features/invitations/routes'
+import { AppToaster } from './components/feedback/AppToaster'
 import DashboardPage from './pages/DashboardPage'
 
 export default function App() {
   return (
-    <Routes>
-      {authRoutes}
-      <Route element={<RequireAuth />}>
-        <Route element={<AdminShell />}>
-          <Route path="/" element={<DashboardPage />} />
-          {invitationRoutes}
+    <>
+      <Routes>
+        {authRoutes}
+        <Route element={<RequireAuth />}>
+          <Route element={<AdminShell />}>
+            <Route path="/" element={<DashboardPage />} />
+            {invitationRoutes}
+          </Route>
         </Route>
-      </Route>
-      <Route path="*" element={<Navigate to="/" replace />} />
-    </Routes>
+        <Route path="*" element={<Navigate to="/" replace />} />
+      </Routes>
+      <AppToaster />
+    </>
   )
 }

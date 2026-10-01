@@ -5,7 +5,7 @@ import { inviteUserSchema, type InviteUserFormValues } from '../schemas/invitati
 import { useInviteUserMutation, useRolesQuery } from '../queries/invitationQueries'
 import { FormField } from '../../auth/components/FormField'
 import { SubmitButton } from '../../auth/components/SubmitButton'
-import { InlineAlert } from '../../auth/components/InlineAlert'
+import { useToast } from '../../../hooks/useToast'
 
 const EMPTY: InviteUserFormValues = {
   email: '',
@@ -17,6 +17,7 @@ const EMPTY: InviteUserFormValues = {
 }
 
 export function InviteUserForm({ onSuccess, onCancel }: { onSuccess?: () => void; onCancel?: () => void }) {
+  const toast = useToast()
   const mutation = useInviteUserMutation()
   const roles = useRolesQuery()
   const roleOptions = roles.data ?? []
@@ -39,9 +40,11 @@ export function InviteUserForm({ onSuccess, onCancel }: { onSuccess?: () => void
       },
       {
         onSuccess: () => {
+          toast.success(`Invitation sent to ${v.email}.`)
           reset(EMPTY)
           onSuccess?.()
         },
+        onError: (err) => toast.error(getErrorMessage(err, 'Could not send invitation.')),
       },
     )
 
@@ -53,7 +56,6 @@ export function InviteUserForm({ onSuccess, onCancel }: { onSuccess?: () => void
       className="flex flex-col gap-4 rounded-sm border border-slate-200 bg-white p-4"
     >
       <h2 className="text-base font-semibold text-slate-900">Invite a user</h2>
-      {mutation.isError && <InlineAlert tone="error">{getErrorMessage(mutation.error, 'Could not send invitation.')}</InlineAlert>}
       <div className="grid gap-4 sm:grid-cols-2">
         <FormField label="Email" type="email" error={errors.email?.message} {...register('email')} />
         <div className="flex flex-col gap-1">

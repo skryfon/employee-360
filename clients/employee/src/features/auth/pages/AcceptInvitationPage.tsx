@@ -1,30 +1,95 @@
+import { useEffect, type ReactNode } from 'react'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { Link, useSearchParams } from 'react-router-dom'
 import { acceptInvitationSchema, type AcceptInvitationFormValues } from '../schemas/authSchemas'
 import { useAcceptInvitationMutation, useValidateInvitationQuery } from '../queries/authMutations'
-import { clearSession, getErrorMessage } from '@employee360/api-client'
+import {
+  INVITATION_ERROR_CODES,
+  clearSession,
+  getErrorCode,
+  getErrorMessage,
+  resolveInvitationRedirect,
+} from '@employee360/api-client'
 import { useAuthStore } from '../../../stores/authStore'
 import { AuthLayout } from '../components/AuthLayout'
 import { FormField } from '../components/FormField'
 import { SubmitButton } from '../components/SubmitButton'
 import { InlineAlert } from '../components/InlineAlert'
 
-function formatAcceptInvitationError(error: unknown): string {
-  const message = getErrorMessage(error)
-  const lower = message.toLowerCase()
-  if (
-    lower.includes('token') ||
-    lower.includes('invitation') ||
-    lower.includes('expire') ||
-    lower.includes('revoked') ||
-    lower.includes('pending') ||
-    lower.includes('not found') ||
-    lower.includes('conflict')
-  ) {
-    return 'This invitation link is invalid, has expired, or has already been accepted. Please contact your organization administrator for a new invitation.'
+const SIGN_IN_LABEL = 'Sign in to Employee Portal'
+
+type InvitationProblem = {
+  title: string
+  message: string
+  /** Show a primary "Sign in" button (invitation already accepted). */
+  signIn?: boolean
+}
+
+const INVITATION_PROBLEMS = {
+  INVALID_TOKEN: {
+    title: 'Invalid invitation link',
+    message: 'This invitation link is invalid. Please check the link in your invitation email and try again.',
+  },
+  EXPIRED: {
+    title: 'Invitation expired',
+    message: 'This invitation has expired. Ask your administrator to resend the invitation.',
+  },
+  REVOKED: {
+    title: 'Invitation revoked',
+    message: 'This invitation has been revoked. Please contact your administrator.',
+  },
+  ACCEPTED: {
+    title: 'Invitation already accepted',
+    message: 'This invitation has already been accepted. You can sign in with your password.',
+    signIn: true,
+  },
+} satisfies Record<string, InvitationProblem>
+
+/** Map a backend error code to a distinct invitation problem state (never by message text). */
+function problemForError(error: unknown): InvitationProblem | null {
+  switch (getErrorCode(error)) {
+    case INVITATION_ERROR_CODES.INVALID_TOKEN:
+      return INVITATION_PROBLEMS.INVALID_TOKEN
+    case INVITATION_ERROR_CODES.EXPIRED:
+      return INVITATION_PROBLEMS.EXPIRED
+    case INVITATION_ERROR_CODES.REVOKED:
+      return INVITATION_PROBLEMS.REVOKED
+    case INVITATION_ERROR_CODES.ACCEPTED:
+      return INVITATION_PROBLEMS.ACCEPTED
+    default:
+      return null
   }
-  return message || 'Unable to accept invitation. Please try again.'
+}
+
+function ProblemView({ problem }: { problem: InvitationProblem }) {
+  return (
+    <AuthLayout title={problem.title}>
+      <div className="flex flex-col gap-4">
+        <InlineAlert tone="error">{problem.message}</InlineAlert>
+        {problem.signIn ? (
+          <Link
+            to="/login"
+            className="inline-flex h-9 items-center justify-center gap-2 rounded-sm bg-slate-900 px-4 text-sm font-semibold text-white hover:bg-slate-800 active:bg-slate-950"
+          >
+            Sign in
+          </Link>
+        ) : (
+          <Link to="/login" className="text-sm text-slate-900 underline hover:text-slate-700">
+            Return to sign in
+          </Link>
+        )}
+      </div>
+    </AuthLayout>
+  )
+}
+
+function Notice({ title, children }: { title: string; children: ReactNode }) {
+  return (
+    <AuthLayout title={title}>
+      <InlineAlert tone="neutral">{children}</InlineAlert>
+    </AuthLayout>
+  )
 }
 
 export default function AcceptInvitationPage() {
@@ -38,20 +103,23 @@ export default function AcceptInvitationPage() {
     formState: { errors },
   } = useForm<AcceptInvitationFormValues>({ resolver: zodResolver(acceptInvitationSchema) })
 
-  if (!token) {
-    return (
-      <AuthLayout title="Accept invitation">
-        <div className="flex flex-col gap-4">
-          <InlineAlert tone="error">
-            This invitation link is invalid or missing a token. Please check your invitation email.
-          </InlineAlert>
-          <Link to="/login" className="text-sm text-slate-900 underline hover:text-slate-700">
-            Return to sign in
-          </Link>
-        </div>
-      </AuthLayout>
-    )
-  }
+  const invitation = validateQuery.data
+  const redirect =
+    token && invitation
+      ? resolveInvitationRedirect({
+          role: invitation.role,
+          currentApp: 'employee',
+          token,
+          adminAppUrl: import.meta.env.VITE_ADMIN_APP_URL,
+        })
+      : null
+  const redirectUrl = redirect?.kind === 'redirect' ? redirect.url : null
+
+  useEffect(() => {
+    if (redirectUrl) window.location.replace(redirectUrl)
+  }, [redirectUrl])
+
+  if (!token) return <ProblemView problem={INVITATION_PROBLEMS.INVALID_TOKEN} />
 
   if (validateQuery.isLoading) {
     return (
@@ -68,17 +136,39 @@ export default function AcceptInvitationPage() {
   }
 
   if (validateQuery.isError) {
+    const problem = problemForError(validateQuery.error)
+    if (problem) return <ProblemView problem={problem} />
     return (
       <AuthLayout title="Accept invitation">
         <div className="flex flex-col gap-4">
           <InlineAlert tone="error">
-            {formatAcceptInvitationError(validateQuery.error)}
+            {getErrorMessage(validateQuery.error, 'Unable to verify this invitation. Please try again.')}
           </InlineAlert>
           <Link to="/login" className="text-sm text-slate-900 underline hover:text-slate-700">
             Return to sign in
           </Link>
         </div>
       </AuthLayout>
+    )
+  }
+
+  if (redirect?.kind === 'redirect') {
+    return (
+      <Notice title="Redirecting">
+        This invitation is for the Admin Portal. Redirecting you now...{' '}
+        <a href={redirect.url} className="underline">
+          Continue
+        </a>
+      </Notice>
+    )
+  }
+
+  if (redirect?.kind === 'unconfigured') {
+    return (
+      <Notice title="Open the Admin Portal">
+        This invitation is for the Admin Portal; open the link from your invitation email in that app
+        (the Admin Portal address is not configured here).
+      </Notice>
     )
   }
 
@@ -95,13 +185,17 @@ export default function AcceptInvitationPage() {
               state={{ invitationAccepted: true }}
               className="inline-flex h-9 items-center justify-center gap-2 rounded-sm bg-slate-900 px-4 text-sm font-semibold text-white hover:bg-slate-800 active:bg-slate-950"
             >
-              Sign in to Employee Portal
+              {SIGN_IN_LABEL}
             </Link>
           </div>
         </div>
       </AuthLayout>
     )
   }
+
+  // A race (e.g. accepted/revoked/expired between validate and submit) gets the same distinct state.
+  const acceptProblem = mutation.isError ? problemForError(mutation.error) : null
+  if (acceptProblem) return <ProblemView problem={acceptProblem} />
 
   const onSubmit = (v: AcceptInvitationFormValues) => {
     mutation.mutate(
@@ -120,11 +214,17 @@ export default function AcceptInvitationPage() {
       <form onSubmit={handleSubmit(onSubmit)} noValidate className="flex flex-col gap-4">
         {mutation.isError && (
           <InlineAlert tone="error">
-            {formatAcceptInvitationError(mutation.error)}
+            {getErrorMessage(mutation.error, 'Unable to accept invitation. Please try again.')}
           </InlineAlert>
         )}
         <p className="text-xs text-slate-600">
-          Set a password to complete your account setup and accept the invitation.
+          {invitation?.email ? (
+            <>
+              Setting a password for <span className="font-semibold text-slate-900">{invitation.email}</span>
+            </>
+          ) : (
+            'Set a password to complete your account setup and accept the invitation.'
+          )}
         </p>
         <FormField
           label="Password"

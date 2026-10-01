@@ -17,10 +17,10 @@ import (
 )
 
 func (f *fixture) invite() *InviteUserUseCaseImpl {
-	return NewInviteUserUseCase(f.s, fakeUserRoleRepo{f.s}, fakeRoleRepo{f.s}, fakeInvRepo{f.s}, fakeOrgRepo{f.s}, fakeAuditRepo{f.s}, f.hash, f.s, f.s, "http://app/")
+	return NewInviteUserUseCase(f.s, fakeUserRoleRepo{f.s}, fakeRoleRepo{f.s}, fakeInvRepo{f.s}, fakeOrgRepo{f.s}, fakeAuditRepo{f.s}, f.hash, f.s, f.s, AppURLs{Default: "http://app/", Admin: "http://admin.app/"})
 }
 func (f *fixture) resend() *ResendInvitationUseCaseImpl {
-	return NewResendInvitationUseCase(fakeRoleRepo{f.s}, fakeInvRepo{f.s}, fakeAuditRepo{f.s}, f.hash, f.s, f.s, "http://app")
+	return NewResendInvitationUseCase(fakeRoleRepo{f.s}, fakeInvRepo{f.s}, fakeAuditRepo{f.s}, f.hash, f.s, f.s, AppURLs{Default: "http://app"})
 }
 func (f *fixture) revoke() *RevokeInvitationUseCaseImpl {
 	return NewRevokeInvitationUseCase(fakeInvRepo{f.s}, f.s, fakeUserRoleRepo{f.s}, fakeAuditRepo{f.s}, f.s)
@@ -29,7 +29,7 @@ func (f *fixture) accept() *AcceptInvitationUseCaseImpl {
 	return NewAcceptInvitationUseCase(f.s, fakeInvRepo{f.s}, f.hash, f.s)
 }
 func (f *fixture) validate() *ValidateInvitationUseCaseImpl {
-	return NewValidateInvitationUseCase(f.s, fakeInvRepo{f.s}, f.hash)
+	return NewValidateInvitationUseCase(f.s, fakeInvRepo{f.s}, fakeRoleRepo{f.s}, f.hash)
 }
 
 func (f *fixture) doInvite(t *testing.T, email string) (*entity.UserInvitation, string) {
@@ -153,21 +153,27 @@ func TestAccept_RequiresPasswordForEveryRole(t *testing.T) {
 
 		// Token is single-use.
 		err = f.accept().Execute(context.Background(), invtypes.AcceptInvitationRequest{Token: tok, Password: "password123"})
-		assert.ErrorIs(t, err, domainerrors.ErrInvalidToken)
+		assert.ErrorIs(t, err, domainerrors.ErrInvitationAccepted)
 	}
 }
 
-func TestAccept_RejectsExpiredRevokedAndUnknown(t *testing.T) {
+func TestAccept_DistinctFailureStates(t *testing.T) {
 	f := newFixture()
+	bg := context.Background()
+	pw := "password123"
+
 	inv, tok := f.doInvite(t, "e@acme.com")
 	f.s.invitations[inv.ID].ExpiresAt = time.Now().Add(-time.Minute)
-	req := invtypes.AcceptInvitationRequest{Token: tok, Password: "password123"}
-	assert.ErrorIs(t, f.accept().Execute(context.Background(), req), domainerrors.ErrInvalidToken)
-	assert.ErrorIs(t, f.accept().Execute(context.Background(), invtypes.AcceptInvitationRequest{Token: "nope", Password: "password123"}), domainerrors.ErrInvalidToken)
+	assert.ErrorIs(t, f.accept().Execute(bg, invtypes.AcceptInvitationRequest{Token: tok, Password: pw}), domainerrors.ErrInvitationExpired)
+	assert.ErrorIs(t, f.accept().Execute(bg, invtypes.AcceptInvitationRequest{Token: "nope", Password: pw}), domainerrors.ErrInvalidToken)
 
 	f.s.invitations[inv.ID].ExpiresAt = time.Now().Add(time.Hour)
 	require.NoError(t, f.revoke().Execute(f.adminCtx, inv.ID))
-	assert.ErrorIs(t, f.accept().Execute(context.Background(), req), domainerrors.ErrInvalidToken)
+	assert.ErrorIs(t, f.accept().Execute(bg, invtypes.AcceptInvitationRequest{Token: tok, Password: pw}), domainerrors.ErrInvitationRevoked)
+
+	_, tok2 := f.doInvite(t, "a@acme.com")
+	require.NoError(t, f.accept().Execute(bg, invtypes.AcceptInvitationRequest{Token: tok2, Password: pw}))
+	assert.ErrorIs(t, f.accept().Execute(bg, invtypes.AcceptInvitationRequest{Token: tok2, Password: pw}), domainerrors.ErrInvitationAccepted)
 }
 
 // AC5: rollback leaves neither rows nor queued events; usecases depend only on the EventPublisher port.
@@ -270,7 +276,7 @@ func TestAccept_AlreadyAcceptedBetweenCheckAndMark(t *testing.T) {
 	inv, tok := f.doInvite(t, "race@acme.com")
 	uc := NewAcceptInvitationUseCase(f.s, racyInvRepo{fakeInvRepo{f.s}}, f.hash, f.s)
 	err := uc.Execute(context.Background(), invtypes.AcceptInvitationRequest{Token: tok, Password: "password123"})
-	assert.ErrorIs(t, err, domainerrors.ErrInvalidToken)
+	assert.ErrorIs(t, err, domainerrors.ErrInvitationAccepted)
 	u, _ := f.s.GetByTenantAndEmail(context.Background(), f.tenantA, inv.Email)
 	assert.False(t, u.IsActive)
 }
@@ -303,30 +309,64 @@ func TestAudit_RolledBackWithTransaction(t *testing.T) {
 
 func TestValidate_TokenStatus(t *testing.T) {
 	f := newFixture()
+	bg := context.Background()
 	inv, tok := f.doInvite(t, "val@acme.com")
 
-	// Valid pending token
-	res, err := f.validate().Execute(context.Background(), tok)
+	res, err := f.validate().Execute(bg, tok)
 	require.NoError(t, err)
 	assert.True(t, res.Valid)
 	assert.Equal(t, "val@acme.com", res.Email)
 
-	// Empty token
-	_, err = f.validate().Execute(context.Background(), "")
+	_, err = f.validate().Execute(bg, "")
+	assert.ErrorIs(t, err, domainerrors.ErrInvalidToken)
+	_, err = f.validate().Execute(bg, "unknown-token")
 	assert.ErrorIs(t, err, domainerrors.ErrInvalidToken)
 
-	// Non-existent token
-	_, err = f.validate().Execute(context.Background(), "unknown-token")
-	assert.ErrorIs(t, err, domainerrors.ErrInvalidToken)
-
-	// Expired token
 	f.s.invitations[inv.ID].ExpiresAt = time.Now().Add(-time.Minute)
-	_, err = f.validate().Execute(context.Background(), tok)
-	assert.ErrorIs(t, err, domainerrors.ErrInvalidToken)
+	_, err = f.validate().Execute(bg, tok)
+	assert.ErrorIs(t, err, domainerrors.ErrInvitationExpired)
 
-	// Revoked token
 	f.s.invitations[inv.ID].ExpiresAt = time.Now().Add(time.Hour)
 	require.NoError(t, f.revoke().Execute(f.adminCtx, inv.ID))
-	_, err = f.validate().Execute(context.Background(), tok)
-	assert.ErrorIs(t, err, domainerrors.ErrInvalidToken)
+	_, err = f.validate().Execute(bg, tok)
+	assert.ErrorIs(t, err, domainerrors.ErrInvitationRevoked)
+
+	_, tok2 := f.doInvite(t, "done@acme.com")
+	require.NoError(t, f.accept().Execute(bg, invtypes.AcceptInvitationRequest{Token: tok2, Password: "password123"}))
+	_, err = f.validate().Execute(bg, tok2)
+	assert.ErrorIs(t, err, domainerrors.ErrInvitationAccepted)
+}
+
+func TestValidate_ReturnsInviteeRole(t *testing.T) {
+	f := newFixture()
+	adminRole := &entity.Role{ID: uuid.New(), TenantID: f.tenantA, Name: "admin"}
+	f.s.roles[adminRole.ID] = adminRole
+
+	_, empTok := f.doInvite(t, "emp@acme.com")
+	res, err := f.validate().Execute(context.Background(), empTok)
+	require.NoError(t, err)
+	assert.Equal(t, "employee", res.Role)
+
+	_, err = f.invite().Execute(f.adminCtx, invtypes.InviteUserRequest{Email: "adm@acme.com", RoleID: adminRole.ID})
+	require.NoError(t, err)
+	admTok := f.s.events[len(f.s.events)-1].Payload.(event.UserInvitedPayload).PlainToken
+	res, err = f.validate().Execute(context.Background(), admTok)
+	require.NoError(t, err)
+	assert.Equal(t, "admin", res.Role)
+}
+
+func TestInviteLink_TargetsRoleApp(t *testing.T) {
+	f := newFixture()
+	adminRole := &entity.Role{ID: uuid.New(), TenantID: f.tenantA, Name: "admin"}
+	f.s.roles[adminRole.ID] = adminRole
+
+	_, err := f.invite().Execute(f.adminCtx, invtypes.InviteUserRequest{Email: "adm@acme.com", RoleID: adminRole.ID})
+	require.NoError(t, err)
+	p := f.s.events[len(f.s.events)-1].Payload.(event.UserInvitedPayload)
+	assert.Equal(t, "http://admin.app/accept-invitation?token="+p.PlainToken, p.InviteURL)
+
+	// Employee has no override configured: falls back to the default URL.
+	_, tok := f.doInvite(t, "emp@acme.com")
+	p = f.s.events[len(f.s.events)-1].Payload.(event.UserInvitedPayload)
+	assert.Equal(t, "http://app/accept-invitation?token="+tok, p.InviteURL)
 }

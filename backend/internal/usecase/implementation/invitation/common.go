@@ -6,6 +6,8 @@ import (
 	"crypto/rand"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
+	"strings"
 	"time"
 
 	"github.com/google/uuid"
@@ -13,6 +15,7 @@ import (
 	"github.com/skryfon/employee360/backend/internal/domain/entity"
 	domainerrors "github.com/skryfon/employee360/backend/internal/domain/errors"
 	"github.com/skryfon/employee360/backend/internal/domain/repository"
+	"github.com/skryfon/employee360/backend/internal/domain/service"
 )
 
 const (
@@ -85,4 +88,78 @@ func newPlainToken() (string, error) {
 		return "", err
 	}
 	return hex.EncodeToString(b), nil
+}
+
+// AppURLs holds the public base URLs used to build invitation links. Admin and
+// Employee are optional and fall back to Default when empty.
+type AppURLs struct {
+	Default  string
+	Admin    string
+	Employee string
+}
+
+// ForRole returns the base URL (no trailing slash) of the app the given role
+// signs in to: admin/super_admin -> Admin, employee -> Employee, anything else
+// (or an unset override) -> Default.
+func (a AppURLs) ForRole(role string) string {
+	u := ""
+	switch role {
+	case roleSuperAdmin, roleAdmin:
+		u = a.Admin
+	case "employee":
+		u = a.Employee
+	}
+	if u == "" {
+		u = a.Default
+	}
+	return strings.TrimRight(u, "/")
+}
+
+// acceptLink builds the invitation-accept link for the invited role's app.
+func (a AppURLs) acceptLink(role, plainToken string) string {
+	return a.ForRole(role) + "/accept-invitation?token=" + plainToken
+}
+
+// lookupUsableInvitation resolves a plaintext token to its invitation and the
+// pending user it activates. An unknown token yields ErrInvalidToken; a known
+// but unusable one yields the specific ErrInvitationExpired / Revoked /
+// Accepted. The tenant is taken from the invitation row, never from input.
+func lookupUsableInvitation(
+	c context.Context,
+	invRepo repository.UserInvitationRepository,
+	userRepo repository.UserRepository,
+	hashService service.HashService,
+	token string,
+	now time.Time,
+) (*entity.UserInvitation, *entity.User, error) {
+	token = strings.TrimSpace(token)
+	if token == "" {
+		return nil, nil, domainerrors.ErrInvalidToken
+	}
+	inv, err := invRepo.GetByTokenHash(c, hashService.HashToken(token))
+	if err != nil || inv == nil {
+		return nil, nil, domainerrors.ErrInvalidToken
+	}
+	switch {
+	case inv.AcceptedAt != nil:
+		return nil, nil, domainerrors.ErrInvitationAccepted
+	case inv.RevokedAt != nil:
+		return nil, nil, domainerrors.ErrInvitationRevoked
+	case !inv.IsUsable(now):
+		return nil, nil, domainerrors.ErrInvitationExpired
+	}
+	user, err := userRepo.GetByTenantAndEmail(c, inv.TenantID, inv.Email)
+	if err != nil {
+		if errors.Is(err, domainerrors.ErrNotFound) || errors.Is(err, domainerrors.ErrUserNotFound) {
+			return nil, nil, domainerrors.ErrInvalidToken
+		}
+		return nil, nil, err
+	}
+	if user == nil {
+		return nil, nil, domainerrors.ErrInvalidToken
+	}
+	if user.IsActive {
+		return nil, nil, domainerrors.ErrInvitationAccepted
+	}
+	return inv, user, nil
 }

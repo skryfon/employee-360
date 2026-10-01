@@ -10,6 +10,7 @@ import {
 } from './generated/hooks/auth/auth.ts';
 import {
   deleteApiV1UsersInvitationsId,
+  getApiV1InvitationsValidate,
   getApiV1UsersInvitations,
   postApiV1InvitationsAccept,
   postApiV1UsersInvitations,
@@ -135,26 +136,21 @@ export async function acceptInvitation(body: AcceptInvitationRequest): Promise<v
 }
 
 export interface ValidateInvitationResponse {
-  valid: boolean;
   email?: string;
+  /** Invitee's role name ("admin", "super_admin", "employee", or another). */
+  role?: string;
 }
 
 /**
  * `GET /api/v1/invitations/validate?token=...` — Unauthenticated; validates an
- * invitation token before showing password setup fields.
+ * invitation token before showing password setup fields. Failures reject with
+ * an Axios error carrying a stable `error.code` (see `getErrorCode`).
  */
 export async function validateInvitation(
   token: string,
   signal?: AbortSignal,
 ): Promise<ValidateInvitationResponse> {
-  const { apiRequest } = await import('./client.ts');
-  const res = await apiRequest<{ success?: boolean; data?: ValidateInvitationResponse }>({
-    url: '/api/v1/invitations/validate',
-    method: 'GET',
-    params: { token },
-    signal,
-  });
-  return unwrapSingleEntity(res);
+  return unwrapSingleEntity(await getApiV1InvitationsValidate({ token }, signal));
 }
 
 /**
@@ -165,4 +161,3 @@ export async function listRoles(signal?: AbortSignal): Promise<RoleOption[]> {
   const { data } = unwrapListResponse(await getApiV1Roles(signal));
   return data.flatMap((r) => (r.id && r.name ? [{ id: r.id, name: r.name }] : []));
 }
-

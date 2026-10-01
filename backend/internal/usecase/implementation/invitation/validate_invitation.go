@@ -2,10 +2,9 @@ package invitation
 
 import (
 	"context"
-	"errors"
-	"strings"
 	"time"
 
+	"github.com/skryfon/employee360/backend/internal/ctx"
 	domainerrors "github.com/skryfon/employee360/backend/internal/domain/errors"
 	"github.com/skryfon/employee360/backend/internal/domain/repository"
 	"github.com/skryfon/employee360/backend/internal/domain/service"
@@ -17,6 +16,7 @@ import (
 type ValidateInvitationUseCaseImpl struct {
 	userRepo       repository.UserRepository
 	invitationRepo repository.UserInvitationRepository
+	roleRepo       repository.RoleRepository
 	hashService    service.HashService
 }
 
@@ -26,38 +26,26 @@ var _ invusecase.ValidateInvitationUseCase = (*ValidateInvitationUseCaseImpl)(ni
 func NewValidateInvitationUseCase(
 	userRepo repository.UserRepository,
 	invitationRepo repository.UserInvitationRepository,
+	roleRepo repository.RoleRepository,
 	hashService service.HashService,
 ) *ValidateInvitationUseCaseImpl {
-	return &ValidateInvitationUseCaseImpl{userRepo: userRepo, invitationRepo: invitationRepo, hashService: hashService}
+	return &ValidateInvitationUseCaseImpl{userRepo: userRepo, invitationRepo: invitationRepo, roleRepo: roleRepo, hashService: hashService}
 }
 
-// Execute checks if the invitation token is valid, pending, and unexpired.
-func (u *ValidateInvitationUseCaseImpl) Execute(ctx context.Context, token string) (*invtypes.ValidateInvitationResponse, error) {
-	trimmed := strings.TrimSpace(token)
-	if trimmed == "" {
-		return nil, domainerrors.ErrInvalidToken
-	}
-	tokenHash := u.hashService.HashToken(trimmed)
-	now := time.Now().UTC()
-
-	inv, err := u.invitationRepo.GetByTokenHash(ctx, tokenHash)
-	if err != nil || inv == nil || !inv.IsUsable(now) {
-		return nil, domainerrors.ErrInvalidToken
-	}
-
-	user, err := u.userRepo.GetByTenantAndEmail(ctx, inv.TenantID, inv.Email)
+// Execute checks the invitation token is usable and returns the invitee's email
+// and role. Unknown tokens yield ErrInvalidToken; known-but-unusable ones yield
+// ErrInvitationExpired / ErrInvitationRevoked / ErrInvitationAccepted.
+func (u *ValidateInvitationUseCaseImpl) Execute(c context.Context, token string) (*invtypes.ValidateInvitationResponse, error) {
+	inv, _, err := lookupUsableInvitation(c, u.invitationRepo, u.userRepo, u.hashService, token, time.Now().UTC())
 	if err != nil {
-		if errors.Is(err, domainerrors.ErrNotFound) || errors.Is(err, domainerrors.ErrUserNotFound) {
-			return nil, domainerrors.ErrInvalidToken
-		}
 		return nil, err
 	}
-	if user == nil || user.IsActive {
-		return nil, domainerrors.ErrInvalidToken
+	// The endpoint is unauthenticated, so the tenant for the (tenant-scoped)
+	// role lookup is derived from the invitation row, as accept does.
+	roleCtx := ctx.WithTenantID(c, inv.TenantID.String())
+	role, err := u.roleRepo.GetByID(roleCtx, inv.RoleID)
+	if err != nil || role == nil {
+		return nil, domainerrors.ErrRoleNotFound
 	}
-
-	return &invtypes.ValidateInvitationResponse{
-		Valid: true,
-		Email: inv.Email,
-	}, nil
+	return &invtypes.ValidateInvitationResponse{Valid: true, Email: inv.Email, Role: role.Name}, nil
 }

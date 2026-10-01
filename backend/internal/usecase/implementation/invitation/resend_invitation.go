@@ -2,7 +2,6 @@ package invitation
 
 import (
 	"context"
-	"strings"
 	"time"
 
 	"github.com/google/uuid"
@@ -24,7 +23,7 @@ type ResendInvitationUseCaseImpl struct {
 	eventPublisher service.EventPublisher
 	transactor     ucshared.Transactor
 	expiry         time.Duration
-	frontendURL    string
+	appURLs        AppURLs
 }
 
 var _ invusecase.ResendInvitationUseCase = (*ResendInvitationUseCaseImpl)(nil)
@@ -37,12 +36,12 @@ func NewResendInvitationUseCase(
 	hashService service.HashService,
 	eventPublisher service.EventPublisher,
 	transactor ucshared.Transactor,
-	frontendBaseURL string,
+	appURLs AppURLs,
 ) *ResendInvitationUseCaseImpl {
 	return &ResendInvitationUseCaseImpl{
 		roleRepo: roleRepo, invitationRepo: invitationRepo, auditRepo: auditRepo, hashService: hashService,
 		eventPublisher: eventPublisher, transactor: transactor,
-		expiry: defaultInvitationExpiry, frontendURL: strings.TrimRight(frontendBaseURL, "/"),
+		expiry: defaultInvitationExpiry, appURLs: appURLs,
 	}
 }
 
@@ -89,7 +88,7 @@ func (u *ResendInvitationUseCaseImpl) Execute(c context.Context, id uuid.UUID) (
 		Payload: event.InvitationResentPayload{
 			InvitationID: inv.ID, TenantID: tenantID, Email: inv.Email,
 			RoleName: role.Name, PlainToken: plainToken,
-			InviteURL: u.frontendURL + "/accept-invitation?token=" + plainToken,
+			InviteURL: u.appURLs.acceptLink(role.Name, plainToken),
 			ExpiresAt: inv.ExpiresAt,
 		},
 		OccurredAt: now,

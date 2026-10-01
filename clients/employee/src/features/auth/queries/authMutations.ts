@@ -78,5 +78,3 @@ export function useValidateInvitationQuery(token: string | null) {
     retry: false,
   })
 }
-
-
