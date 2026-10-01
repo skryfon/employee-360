@@ -41,6 +41,8 @@ subscribeSession((session: Session | null) => {
   else useAuthStore.getState().clear()
 })
 
+// admin/super_admin are intentionally allowed into the employee portal: login is
+// one mechanism for every role (cycle-02).
 export const EMPLOYEE_ROLES = ['employee', 'admin', 'super_admin']
 
 export function isAuthenticated(s: Pick<AuthState, 'accessToken' | 'user'>): boolean {

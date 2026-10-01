@@ -108,6 +108,30 @@ describe('employee login', () => {
     await userEvent.click(screen.getByRole('button', { name: 'Sign in' }))
     expect(await screen.findByRole('alert')).toHaveTextContent('Invalid email or password.')
     expect(useAuthStore.getState().user).toBeNull()
+    expect(getSession()).toBeNull()
+  })
+
+  it.each([
+    ['500', (m: MockAdapter) => m.onPost('/api/v1/auth/logout').reply(500, {})],
+    ['network error', (m: MockAdapter) => m.onPost('/api/v1/auth/logout').networkError()],
+  ])('clears the session for non-employee roles even when logout fails (%s)', async (_label, failLogout) => {
+    mock.onPost('/api/v1/auth/login').reply(200, {
+      success: true,
+      data: {
+        access_token: 'a',
+        refresh_token: 'r',
+        user: { id: 'u1', email: 'emp@x.com', roles: [{ name: 'guest' }] },
+      },
+    })
+    failLogout(mock)
+    renderAt('/login')
+    await userEvent.type(screen.getByLabelText('Email'), 'emp@x.com')
+    await userEvent.type(screen.getByLabelText('Password'), 'pw')
+    await userEvent.click(screen.getByRole('button', { name: 'Sign in' }))
+    expect(await screen.findByRole('alert')).toHaveTextContent('Invalid email or password.')
+    expect(getSession()).toBeNull()
+    expect(useAuthStore.getState().user).toBeNull()
+    expect(useAuthStore.getState().accessToken).toBeNull()
   })
 })
 
@@ -144,6 +168,29 @@ describe('reload persistence', () => {
       JSON.stringify({ state: { user: employeeUser }, version: 0 }),
     )
     await useAuthStore.persist.rehydrate()
+    renderAt('/')
+    expect(screen.getByRole('button', { name: 'Sign out' })).toBeInTheDocument()
+    expect(screen.getByText(/welcome, Jane Doe/i)).toBeInTheDocument()
+  })
+
+  it('persists a real UI login across a simulated reload', async () => {
+    mock.onPost('/api/v1/auth/login').reply(200, loginOk('employee'))
+    const first = renderAt('/login')
+    await userEvent.type(screen.getByLabelText('Email'), 'emp@x.com')
+    await userEvent.type(screen.getByLabelText('Password'), 'secret123')
+    await userEvent.click(screen.getByRole('button', { name: 'Sign in' }))
+    expect(await screen.findByRole('button', { name: 'Sign out' })).toBeInTheDocument()
+    first.unmount()
+
+    // Simulate reload: wipe in-memory store state, keep localStorage, rehydrate.
+    // (setState re-persists, so snapshot the stored value and restore it before rehydrating)
+    const persisted = localStorage.getItem('employee360.employee.auth')
+    expect(persisted).not.toBeNull()
+    useAuthStore.setState({ user: null, accessToken: null })
+    localStorage.setItem('employee360.employee.auth', persisted as string)
+    await useAuthStore.persist.rehydrate()
+    useAuthStore.setState({ accessToken: getSession()?.accessToken ?? null })
+
     renderAt('/')
     expect(screen.getByRole('button', { name: 'Sign out' })).toBeInTheDocument()
     expect(screen.getByText(/welcome, Jane Doe/i)).toBeInTheDocument()

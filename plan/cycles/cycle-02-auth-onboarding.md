@@ -228,6 +228,8 @@ frontend item before its backend endpoint is callable.
 - [ ] `clients/employee/src/features/auth/` — login page (email + password), forgot-password
   page, reset-password page; Zustand store for auth state — same shape as the admin auth
   feature, since login is one mechanism for every role
+  - `admin`/`super_admin` accounts are intentionally allowed into the employee portal
+    (only roles outside `employee`/`admin`/`super_admin` are rejected)
 - [ ] Invitation-accept page — a token-in-URL route (unauthenticated) that calls
   `POST /api/v1/invitations/accept`; invitee (admin or employee) sets a password to
   activate. Lives wherever `plan/architecture/frontend.md` places shared/public routes —

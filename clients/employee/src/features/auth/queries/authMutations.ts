@@ -1,5 +1,6 @@
 import { useMutation } from '@tanstack/react-query'
 import {
+  clearSession,
   forgotPassword,
   login,
   logout,
@@ -24,7 +25,14 @@ export function useLoginMutation() {
       const u = res.user
       const roles = (u?.roles ?? []).map((r) => r.name).filter((n): n is string => Boolean(n))
       if (!u?.id || !roles.some((r) => EMPLOYEE_ROLES.includes(r))) {
-        await logout().catch(() => undefined)
+        try {
+          await logout()
+        } catch {
+          // best-effort server-side logout; local cleanup below always runs
+        } finally {
+          clearSession()
+          useAuthStore.getState().clear()
+        }
         throw new NotEmployeeError()
       }
       const user: AuthUser = {
