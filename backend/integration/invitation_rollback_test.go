@@ -10,7 +10,6 @@ import (
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/require"
 
-	"github.com/skryfon/employee360/backend/internal/ctx"
 	"github.com/skryfon/employee360/backend/internal/domain/entity"
 	"github.com/skryfon/employee360/backend/internal/domain/event"
 	"github.com/skryfon/employee360/backend/internal/infrastructure/database"
@@ -46,7 +45,7 @@ func TestInviteUser_RollbackLeavesNothing(t *testing.T) {
 			persistence.NewGormOrgReferenceRepository(db), persistence.NewGormAuditRepository(db),
 			infraservice.NewHashService(), pub, database.NewGormTransactor(db), invimpl.AppURLs{Default: "http://frontend.test"})
 	}
-	adminCtx := ctx.WithRoles(ctx.WithUserID(ctx.WithTenantID(context.Background(), tenantID.String()), adminID.String()), []string{entity.RoleAdmin})
+	bg := context.Background()
 
 	count := func(table, email string) int64 {
 		var n int64
@@ -65,7 +64,7 @@ func TestInviteUser_RollbackLeavesNothing(t *testing.T) {
 	tables := []string{"users", "user_roles", "user_invitations", "audit_logs"}
 
 	failEmail := "rollback-" + uuid.NewString()[:8] + "@invrb.test"
-	_, err := build(stubPublisher{err: errors.New("publish failed")}).Execute(adminCtx, invtypes.InviteUserRequest{Email: failEmail, RoleID: roleID})
+	_, err := build(stubPublisher{err: errors.New("publish failed")}).Execute(bg, tenantID, adminID, invtypes.InviteUserRequest{Email: failEmail, RoleID: roleID})
 	require.Error(t, err)
 	for _, tb := range tables {
 		require.EqualValues(t, 0, count(tb, failEmail), "%s must be rolled back", tb)
@@ -73,7 +72,7 @@ func TestInviteUser_RollbackLeavesNothing(t *testing.T) {
 
 	// Control: the same setup commits when publishing succeeds.
 	okEmail := "commit-" + uuid.NewString()[:8] + "@invrb.test"
-	_, err = build(stubPublisher{}).Execute(adminCtx, invtypes.InviteUserRequest{Email: okEmail, RoleID: roleID})
+	_, err = build(stubPublisher{}).Execute(bg, tenantID, adminID, invtypes.InviteUserRequest{Email: okEmail, RoleID: roleID})
 	require.NoError(t, err)
 	for _, tb := range tables {
 		require.EqualValues(t, 1, count(tb, okEmail), "%s must be committed", tb)

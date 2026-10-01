@@ -29,7 +29,7 @@ func NewGormUserInvitationRepository(db *gorm.DB) repository.UserInvitationRepos
 var _ repository.UserInvitationRepository = (*gormUserInvitationRepository)(nil)
 
 // pendingWhere restricts an update to a still-pending invitation in a tenant.
-const pendingWhere = "id = ? AND tenant_id = ? AND accepted_at IS NULL AND revoked_at IS NULL"
+const pendingWhere = "id = ? AND tenant_id = ? AND deleted_at IS NULL AND accepted_at IS NULL AND revoked_at IS NULL"
 
 func (r *gormUserInvitationRepository) Create(c context.Context, inv *entity.UserInvitation) error {
 	return database.DBFromContext(c, r.db).Create(inv).Error
@@ -38,7 +38,7 @@ func (r *gormUserInvitationRepository) Create(c context.Context, inv *entity.Use
 func (r *gormUserInvitationRepository) GetByID(c context.Context, tenantID, id uuid.UUID) (*entity.UserInvitation, error) {
 	var inv entity.UserInvitation
 	if err := database.DBFromContext(c, r.db).
-		Where("id = ? AND tenant_id = ?", id, tenantID).
+		Where("id = ? AND tenant_id = ? AND deleted_at IS NULL", id, tenantID).
 		First(&inv).Error; err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
 			return nil, domainerrors.ErrInvitationNotFound
@@ -53,7 +53,7 @@ func (r *gormUserInvitationRepository) GetByID(c context.Context, tenantID, id u
 func (r *gormUserInvitationRepository) GetByTokenHash(c context.Context, tokenHash string) (*entity.UserInvitation, error) {
 	var inv entity.UserInvitation
 	if err := database.DBFromContext(c, r.db).
-		Where("token_hash = ?", tokenHash).
+		Where("token_hash = ? AND deleted_at IS NULL", tokenHash).
 		First(&inv).Error; err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
 			return nil, domainerrors.ErrInvitationNotFound
@@ -80,11 +80,12 @@ func (r *gormUserInvitationRepository) conditionalUpdate(c context.Context, tena
 	return nil
 }
 
-func (r *gormUserInvitationRepository) UpdateToken(c context.Context, tenantID, id uuid.UUID, tokenHash string, expiresAt time.Time) error {
+func (r *gormUserInvitationRepository) UpdateToken(c context.Context, tenantID, id, actorID uuid.UUID, tokenHash string, expiresAt time.Time) error {
 	return r.conditionalUpdate(c, tenantID, id, map[string]any{
 		"token_hash": tokenHash,
 		"expires_at": expiresAt,
 		"updated_at": time.Now().UTC(),
+		"updated_by": actorID,
 	})
 }
 
@@ -92,18 +93,18 @@ func (r *gormUserInvitationRepository) MarkAccepted(c context.Context, tenantID,
 	return r.conditionalUpdate(c, tenantID, id, map[string]any{"accepted_at": at, "updated_at": at})
 }
 
-func (r *gormUserInvitationRepository) MarkRevoked(c context.Context, tenantID, id uuid.UUID, at time.Time) error {
-	return r.conditionalUpdate(c, tenantID, id, map[string]any{"revoked_at": at, "updated_at": at})
+func (r *gormUserInvitationRepository) MarkRevoked(c context.Context, tenantID, id, actorID uuid.UUID, at time.Time) error {
+	return r.conditionalUpdate(c, tenantID, id, map[string]any{"revoked_at": at, "updated_at": at, "updated_by": actorID})
 }
 
 func (r *gormUserInvitationRepository) List(c context.Context, tenantID uuid.UUID, limit, offset int) ([]*entity.UserInvitation, int64, error) {
 	var total int64
-	base := database.DBFromContext(c, r.db).Model(&entity.UserInvitation{}).Where("tenant_id = ?", tenantID)
+	base := database.DBFromContext(c, r.db).Model(&entity.UserInvitation{}).Where("tenant_id = ? AND deleted_at IS NULL", tenantID)
 	if err := base.Count(&total).Error; err != nil {
 		return nil, 0, err
 	}
 	var out []*entity.UserInvitation
-	q := database.DBFromContext(c, r.db).Where("tenant_id = ?", tenantID).Order("created_at DESC, id DESC")
+	q := database.DBFromContext(c, r.db).Where("tenant_id = ? AND deleted_at IS NULL", tenantID).Order("created_at DESC, id DESC")
 	if limit > 0 {
 		q = q.Limit(limit)
 	}

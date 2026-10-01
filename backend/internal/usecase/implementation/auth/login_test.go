@@ -89,7 +89,7 @@ func (m *mockUserRepository) Update(ctx context.Context, tenantID uuid.UUID, use
 // Delete enforces the tenantID param against the stored user's own tenant --
 // a mismatch leaves the row untouched and returns not found, mirroring the
 // real GORM adapter's "id = ? AND tenant_id = ?" scoping.
-func (m *mockUserRepository) Delete(ctx context.Context, tenantID, id uuid.UUID) error {
+func (m *mockUserRepository) Delete(ctx context.Context, tenantID, id, actorID uuid.UUID) error {
 	u, ok := m.usersByID[id]
 	if !ok || u.TenantID != tenantID {
 		return domainerrors.ErrUserNotFound

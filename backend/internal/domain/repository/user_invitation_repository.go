@@ -21,7 +21,7 @@ type UserInvitationRepository interface {
 	// UpdateToken replaces the token hash and expiry (resend). It is a
 	// conditional update (accepted_at IS NULL AND revoked_at IS NULL) and MUST
 	// return domainerrors.ErrInvitationNotPending when 0 rows were updated.
-	UpdateToken(ctx context.Context, tenantID, id uuid.UUID, tokenHash string, expiresAt time.Time) error
+	UpdateToken(ctx context.Context, tenantID, id, actorID uuid.UUID, tokenHash string, expiresAt time.Time) error
 	// MarkAccepted is a conditional update (accepted_at IS NULL AND
 	// revoked_at IS NULL) and MUST return domainerrors.ErrInvitationNotPending
 	// when 0 rows were updated (the accept usecase maps it to ErrInvalidToken).
@@ -29,6 +29,6 @@ type UserInvitationRepository interface {
 	// MarkRevoked is a conditional update (accepted_at IS NULL AND
 	// revoked_at IS NULL) and MUST return domainerrors.ErrInvitationNotPending
 	// when 0 rows were updated.
-	MarkRevoked(ctx context.Context, tenantID, id uuid.UUID, at time.Time) error
+	MarkRevoked(ctx context.Context, tenantID, id, actorID uuid.UUID, at time.Time) error
 	List(ctx context.Context, tenantID uuid.UUID, limit, offset int) ([]*entity.UserInvitation, int64, error)
 }

@@ -3,6 +3,7 @@ package persistence
 import (
 	"context"
 	"errors"
+	"time"
 
 	"github.com/google/uuid"
 	"gorm.io/gorm"
@@ -43,7 +44,7 @@ func (r *gormUserRepository) Create(c context.Context, user *entity.User) error 
 func (r *gormUserRepository) GetByID(c context.Context, tenantID, id uuid.UUID) (*entity.User, error) {
 	var user entity.User
 	if err := database.DBFromContext(c, r.db).
-		Where("id = ? AND tenant_id = ?", id, tenantID).
+		Where("id = ? AND tenant_id = ? AND deleted_at IS NULL", id, tenantID).
 		First(&user).Error; err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
 			return nil, domainerrors.ErrUserNotFound
@@ -57,7 +58,7 @@ func (r *gormUserRepository) GetByID(c context.Context, tenantID, id uuid.UUID) 
 func (r *gormUserRepository) GetByTenantAndEmail(c context.Context, tenantID uuid.UUID, email string) (*entity.User, error) {
 	var user entity.User
 	if err := database.DBFromContext(c, r.db).
-		Where("tenant_id = ? AND email = ?", tenantID, email).
+		Where("tenant_id = ? AND email = ? AND deleted_at IS NULL", tenantID, email).
 		First(&user).Error; err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
 			return nil, domainerrors.ErrUserNotFound
@@ -106,7 +107,7 @@ func (r *gormUserRepository) loadRoles(c context.Context, user *entity.User) err
 	if err := database.DBFromContext(c, r.db).
 		Table("roles").
 		Joins("JOIN user_roles ON user_roles.role_id = roles.id").
-		Where("user_roles.user_id = ? AND user_roles.tenant_id = ?", user.ID, user.TenantID).
+		Where("user_roles.user_id = ? AND user_roles.tenant_id = ? AND roles.deleted_at IS NULL", user.ID, user.TenantID).
 		Find(&roles).Error; err != nil {
 		return err
 	}
@@ -121,9 +122,9 @@ func (r *gormUserRepository) loadRoles(c context.Context, user *entity.User) err
 func (r *gormUserRepository) Update(c context.Context, tenantID uuid.UUID, user *entity.User) error {
 	result := database.DBFromContext(c, r.db).
 		Model(&entity.User{}).
-		Where("id = ? AND tenant_id = ?", user.ID, tenantID).
+		Where("id = ? AND tenant_id = ? AND deleted_at IS NULL", user.ID, tenantID).
 		Select("*").
-		Omit("ID", "TenantID", "CreatedAt").
+		Omit("ID", "TenantID", "CreatedAt", "CreatedBy", "DeletedAt", "DeletedBy").
 		Updates(user)
 	if result.Error != nil {
 		return result.Error
@@ -134,11 +135,15 @@ func (r *gormUserRepository) Update(c context.Context, tenantID uuid.UUID, user 
 	return nil
 }
 
-// Delete removes a user, scoped to the given tenantID.
-func (r *gormUserRepository) Delete(c context.Context, tenantID, id uuid.UUID) error {
+// Delete soft-deletes a user (sets deleted_at/deleted_by), scoped to the given
+// tenantID. actorID is the admin performing the removal. Already-deleted rows
+// are treated as not found.
+func (r *gormUserRepository) Delete(c context.Context, tenantID, id, actorID uuid.UUID) error {
+	now := time.Now().UTC()
 	result := database.DBFromContext(c, r.db).
-		Where("id = ? AND tenant_id = ?", id, tenantID).
-		Delete(&entity.User{})
+		Model(&entity.User{}).
+		Where("id = ? AND tenant_id = ? AND deleted_at IS NULL", id, tenantID).
+		Updates(map[string]any{"deleted_at": now, "deleted_by": actorID, "updated_at": now, "updated_by": actorID})
 	if result.Error != nil {
 		return result.Error
 	}
@@ -154,14 +159,14 @@ func (r *gormUserRepository) List(c context.Context, tenantID uuid.UUID, limit, 
 	var total int64
 	if err := database.DBFromContext(c, r.db).
 		Model(&entity.User{}).
-		Where("tenant_id = ?", tenantID).
+		Where("tenant_id = ? AND deleted_at IS NULL", tenantID).
 		Count(&total).Error; err != nil {
 		return nil, 0, err
 	}
 
 	var users []*entity.User
 	if err := database.DBFromContext(c, r.db).
-		Where("tenant_id = ?", tenantID).
+		Where("tenant_id = ? AND deleted_at IS NULL", tenantID).
 		Order("created_at DESC").
 		Limit(limit).
 		Offset(offset).

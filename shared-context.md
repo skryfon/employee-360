@@ -86,9 +86,19 @@ cycles — it is not a green light to build all of it now.
 - Handlers and repositories **must never trust client-supplied tenant IDs** in
   request payloads.
 - `tenant_id` is resolved exclusively via authentication middleware and injected
-  into the Go `context.Context`.
-- All repository queries and mutations **must scope queries by `tenant_id`
-  extracted from context**.
+  into the Go `context.Context` (via `internal/ctx`).
+- A validly signed JWT is not sufficient: on every authenticated request the
+  auth middleware also verifies against the database (through the
+  `VerifyIdentityUseCase` port) that the tenant exists, is active and not
+  soft-deleted, and that the user exists **in that tenant**, is active and not
+  soft-deleted. Failures are a uniform 401; a lookup error fails closed (503).
+  The user's current roles are loaded from the database and replace the token's
+  role claims.
+- Only handlers read identity from the context; they pass `tenant_id` / user ID
+  down as explicit usecase and repository parameters. Usecases and repositories
+  never read identity from `context.Context`.
+- All repository queries and mutations **must scope queries by the explicit
+  `tenantID` parameter** (sourced from the authenticated context by the handler).
 
 ### Invariant 2: Go Clean Architecture Boundaries
 - **Domain Layer (`internal/domain/`)**: Pure Go entities and repository
@@ -98,7 +108,9 @@ cycles — it is not a green light to build all of it now.
   logic. Coordinates domain entities and repositories.
 - **Delivery Layer (`internal/delivery/http/`)**: Gin handlers, route
   registration, middleware, and request/response serialisation. **Handlers must
-  never call GORM or database queries directly.**
+  never call GORM or database queries directly.** Middleware is referenced only
+  from route registration; handlers read identity via `internal/ctx`, never via
+  `middleware.*`.
 - **Infrastructure Layer (`internal/infrastructure/`)**: Implements repository
   interfaces using GORM, external services (JWT, bcrypt, mailer), database
   seeder, and server lifecycle.

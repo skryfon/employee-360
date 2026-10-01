@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -14,10 +15,10 @@ import (
 	"github.com/google/uuid"
 	"github.com/rs/zerolog"
 	"github.com/skryfon/employee360/backend/config"
-	"github.com/skryfon/employee360/backend/internal/ctx"
 	"github.com/skryfon/employee360/backend/internal/delivery/http/handlers"
 	"github.com/skryfon/employee360/backend/internal/delivery/http/response"
 	"github.com/skryfon/employee360/backend/internal/domain/entity"
+	domainerrors "github.com/skryfon/employee360/backend/internal/domain/errors"
 	domainservice "github.com/skryfon/employee360/backend/internal/domain/service"
 	"github.com/skryfon/employee360/backend/internal/infrastructure/container"
 	infraservice "github.com/skryfon/employee360/backend/internal/infrastructure/service"
@@ -73,13 +74,47 @@ func (f *fakeResetPasswordUseCase) Execute(ctx context.Context, req authtypes.Re
 	return nil
 }
 
+// fakeVerifier is an in-memory VerifyIdentityUseCase keyed by user id.
+type fakeVerifier struct {
+	users map[uuid.UUID]uuid.UUID // userID -> tenantID
+	roles map[uuid.UUID][]string
+	err   error
+}
+
+func (f *fakeVerifier) Execute(_ context.Context, tenantID, userID uuid.UUID) (*authtypes.VerifiedIdentity, error) {
+	if f.err != nil {
+		return nil, f.err
+	}
+	if tid, ok := f.users[userID]; !ok || tid != tenantID {
+		return nil, domainerrors.ErrUnauthorized
+	}
+	return &authtypes.VerifiedIdentity{TenantID: tenantID, UserID: userID, Roles: f.roles[userID]}, nil
+}
+
+// registeringTokenService wraps a TokenService so each minted access token also
+// registers a healthy identity (and its roles) in the fake verifier.
+type registeringTokenService struct {
+	domainservice.TokenService
+	verifier *fakeVerifier
+}
+
+func (r *registeringTokenService) GenerateAccessToken(claims domainservice.AccessTokenClaims) (string, time.Time, error) {
+	r.verifier.users[claims.UserID] = claims.TenantID
+	r.verifier.roles[claims.UserID] = claims.Roles
+	return r.TokenService.GenerateAccessToken(claims)
+}
+
+func verifierOf(svc domainservice.TokenService) *fakeVerifier {
+	return svc.(*registeringTokenService).verifier
+}
+
 func setupTestTokenService(t *testing.T) domainservice.TokenService {
 	t.Helper()
 	svc, err := infraservice.NewJWTService("super-secret-jwt-key-32-bytes-long!", 15*time.Minute, 7*24*time.Hour)
 	if err != nil {
 		t.Fatalf("failed to create JWT service: %v", err)
 	}
-	return svc
+	return &registeringTokenService{TokenService: svc, verifier: &fakeVerifier{users: map[uuid.UUID]uuid.UUID{}, roles: map[uuid.UUID][]string{}}}
 }
 
 // testContainer builds a minimal *container.AppContainer directly from fakes,
@@ -96,8 +131,9 @@ func testContainer(t *testing.T, cfg *config.Config, authHandler *handlers.AuthH
 	}
 	if authHandler != nil {
 		ctr.Auth = &container.AuthContainer{
-			Handler:      authHandler,
-			TokenService: tokenService,
+			Handler:          authHandler,
+			TokenService:     tokenService,
+			IdentityVerifier: verifierOf(tokenService),
 		}
 	}
 	return ctr
@@ -281,8 +317,8 @@ func TestSetupRouter_AuthRoutes(t *testing.T) {
 
 type fakeInvite struct{ gotTenant string }
 
-func (f *fakeInvite) Execute(c context.Context, req invtypes.InviteUserRequest) (*entity.UserInvitation, error) {
-	f.gotTenant, _ = ctx.TenantIDFromContext(c)
+func (f *fakeInvite) Execute(c context.Context, tenantID, _ uuid.UUID, req invtypes.InviteUserRequest) (*entity.UserInvitation, error) {
+	f.gotTenant = tenantID.String()
 	return &entity.UserInvitation{ID: uuid.New(), Email: req.Email, ExpiresAt: time.Now().Add(time.Hour)}, nil
 }
 
@@ -292,17 +328,17 @@ func (f *fakeAccept) Execute(context.Context, invtypes.AcceptInvitationRequest) 
 
 type fakeResend struct{}
 
-func (fakeResend) Execute(context.Context, uuid.UUID) (*entity.UserInvitation, error) {
+func (fakeResend) Execute(context.Context, uuid.UUID, uuid.UUID, uuid.UUID) (*entity.UserInvitation, error) {
 	return &entity.UserInvitation{ID: uuid.New(), ExpiresAt: time.Now().Add(time.Hour)}, nil
 }
 
 type fakeRevoke struct{ err error }
 
-func (f fakeRevoke) Execute(context.Context, uuid.UUID) error { return f.err }
+func (f fakeRevoke) Execute(context.Context, uuid.UUID, uuid.UUID, uuid.UUID) error { return f.err }
 
 type fakeList struct{}
 
-func (fakeList) Execute(context.Context, int, int) ([]*entity.UserInvitation, int64, error) {
+func (fakeList) Execute(context.Context, uuid.UUID, int, int) ([]*entity.UserInvitation, int64, error) {
 	return []*entity.UserInvitation{{ID: uuid.New(), ExpiresAt: time.Now().Add(time.Hour)}}, 1, nil
 }
 
@@ -320,6 +356,7 @@ func invitationEngine(t *testing.T, invite *fakeInvite, accept *fakeAccept, revo
 	ctr := testContainer(t, cfg, nil, nil)
 	ctr.Auth = &container.AuthContainer{
 		TokenService:      jwtSvc,
+		IdentityVerifier:  verifierOf(jwtSvc),
 		InvitationHandler: handlers.NewInvitationHandler(invite, accept, fakeResend{}, revoke, fakeList{}, fakeValidate{}),
 	}
 	return SetupRouter(cfg, zerolog.Nop(), ctr), jwtSvc
@@ -435,9 +472,11 @@ func TestInvitationRoutes_AcceptRateLimited(t *testing.T) {
 		CORS:      config.CORSConfig{AllowedOrigins: []string{"*"}},
 		RateLimit: config.RateLimitConfig{Enabled: true, RequestsPerSecond: 0.001, Burst: 2},
 	}
+	rlSvc := setupTestTokenService(t)
 	ctr := testContainer(t, cfg, nil, nil)
 	ctr.Auth = &container.AuthContainer{
-		TokenService:      setupTestTokenService(t),
+		TokenService:      rlSvc,
+		IdentityVerifier:  verifierOf(rlSvc),
 		InvitationHandler: handlers.NewInvitationHandler(&fakeInvite{}, &fakeAccept{}, fakeResend{}, fakeRevoke{}, fakeList{}, fakeValidate{}),
 	}
 	engine := SetupRouter(cfg, zerolog.Nop(), ctr)
@@ -465,7 +504,7 @@ func TestInvitationRoutes_AcceptRateLimited(t *testing.T) {
 
 type fakeListRoles struct{}
 
-func (fakeListRoles) Execute(context.Context) ([]*entity.Role, error) {
+func (fakeListRoles) Execute(context.Context, uuid.UUID) ([]*entity.Role, error) {
 	return []*entity.Role{{ID: uuid.New(), Name: "employee"}}, nil
 }
 
@@ -474,7 +513,7 @@ func TestRoleRoutes_ListRequiresAdminToken(t *testing.T) {
 	jwtSvc := setupTestTokenService(t)
 	cfg := &config.Config{CORS: config.CORSConfig{AllowedOrigins: []string{"*"}}}
 	ctr := testContainer(t, cfg, nil, nil)
-	ctr.Auth = &container.AuthContainer{TokenService: jwtSvc, RoleHandler: handlers.NewRoleHandler(fakeListRoles{})}
+	ctr.Auth = &container.AuthContainer{TokenService: jwtSvc, IdentityVerifier: verifierOf(jwtSvc), RoleHandler: handlers.NewRoleHandler(fakeListRoles{})}
 	engine := SetupRouter(cfg, zerolog.Nop(), ctr)
 
 	const path = "/api/v1/roles"
@@ -503,9 +542,11 @@ func TestInvitationRoutes_ValidateRateLimited(t *testing.T) {
 		CORS:      config.CORSConfig{AllowedOrigins: []string{"*"}},
 		RateLimit: config.RateLimitConfig{Enabled: true, RequestsPerSecond: 0.001, Burst: 2},
 	}
+	rlSvc := setupTestTokenService(t)
 	ctr := testContainer(t, cfg, nil, nil)
 	ctr.Auth = &container.AuthContainer{
-		TokenService:      setupTestTokenService(t),
+		TokenService:      rlSvc,
+		IdentityVerifier:  verifierOf(rlSvc),
 		InvitationHandler: handlers.NewInvitationHandler(&fakeInvite{}, &fakeAccept{}, fakeResend{}, fakeRevoke{}, fakeList{}, fakeValidate{}),
 	}
 	engine := SetupRouter(cfg, zerolog.Nop(), ctr)
@@ -521,5 +562,54 @@ func TestInvitationRoutes_ValidateRateLimited(t *testing.T) {
 	}
 	if rec.Header().Get("Retry-After") == "" {
 		t.Fatal("expected Retry-After header")
+	}
+}
+
+// A validly signed token whose user/tenant is no longer usable must be rejected
+// by the real route wiring (Auth middleware + verifier), and a verifier failure
+// must fail closed.
+func TestProtectedRoutes_RejectUnverifiableIdentity(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	jwtSvc := setupTestTokenService(t)
+	cfg := &config.Config{CORS: config.CORSConfig{AllowedOrigins: []string{"*"}}}
+	ctr := testContainer(t, cfg, nil, nil)
+	ctr.Auth = &container.AuthContainer{TokenService: jwtSvc, IdentityVerifier: verifierOf(jwtSvc), RoleHandler: handlers.NewRoleHandler(fakeListRoles{})}
+	engine := SetupRouter(cfg, zerolog.Nop(), ctr)
+
+	tenant := uuid.New()
+	auth := bearer(t, jwtSvc, tenant, entity.RoleAdmin)
+	if rec := do(engine, http.MethodGet, "/api/v1/roles", auth, ""); rec.Code != http.StatusOK {
+		t.Fatalf("healthy identity: got %d: %s", rec.Code, rec.Body.String())
+	}
+
+	v := verifierOf(jwtSvc)
+	for id := range v.users { // user deleted/deactivated or tenant removed
+		delete(v.users, id)
+	}
+	if rec := do(engine, http.MethodGet, "/api/v1/roles", auth, ""); rec.Code != http.StatusUnauthorized {
+		t.Fatalf("revoked identity: got %d, want 401", rec.Code)
+	}
+
+	v.err = errors.New("db down")
+	if rec := do(engine, http.MethodGet, "/api/v1/roles", auth, ""); rec.Code != http.StatusServiceUnavailable {
+		t.Fatalf("verifier error: got %d, want 503", rec.Code)
+	}
+}
+
+// Pre-auth routes must not invoke the verifier at all.
+func TestPreAuthRoutes_DoNotVerifyIdentity(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	jwtSvc := setupTestTokenService(t)
+	verifierOf(jwtSvc).err = errors.New("verifier must not be called")
+	cfg := &config.Config{CORS: config.CORSConfig{AllowedOrigins: []string{"*"}}}
+	ctr := testContainer(t, cfg, nil, nil)
+	ctr.Auth = &container.AuthContainer{
+		TokenService:      jwtSvc,
+		IdentityVerifier:  verifierOf(jwtSvc),
+		InvitationHandler: handlers.NewInvitationHandler(&fakeInvite{}, &fakeAccept{}, fakeResend{}, fakeRevoke{}, fakeList{}, fakeValidate{}),
+	}
+	engine := SetupRouter(cfg, zerolog.Nop(), ctr)
+	if rec := do(engine, http.MethodGet, "/api/v1/invitations/validate?token=t", "", ""); rec.Code != http.StatusOK {
+		t.Fatalf("validate: got %d: %s", rec.Code, rec.Body.String())
 	}
 }

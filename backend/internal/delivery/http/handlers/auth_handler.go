@@ -4,8 +4,6 @@ import (
 	"errors"
 
 	"github.com/gin-gonic/gin"
-	"github.com/google/uuid"
-	"github.com/skryfon/employee360/backend/internal/delivery/http/middleware"
 	"github.com/skryfon/employee360/backend/internal/delivery/http/response"
 	domainerrors "github.com/skryfon/employee360/backend/internal/domain/errors"
 	authtypes "github.com/skryfon/employee360/backend/internal/types/auth"
@@ -143,14 +141,8 @@ func (h *AuthHandler) Logout(c *gin.Context) {
 		return
 	}
 
-	tenantID, err := middleware.GetTenantID(c)
-	if err != nil || tenantID == uuid.Nil {
-		response.Unauthorized(c, "unauthorized")
-		return
-	}
-	userID, err := middleware.GetUserID(c)
-	if err != nil || userID == uuid.Nil {
-		response.Unauthorized(c, "unauthorized")
+	tenantID, userID, ok := tenantAndUser(c)
+	if !ok {
 		return
 	}
 

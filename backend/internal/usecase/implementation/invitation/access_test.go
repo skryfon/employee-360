@@ -5,7 +5,6 @@ import (
 	"testing"
 
 	"github.com/google/uuid"
-	"github.com/skryfon/employee360/backend/internal/ctx"
 	"github.com/skryfon/employee360/backend/internal/domain/entity"
 	domainerrors "github.com/skryfon/employee360/backend/internal/domain/errors"
 	invtypes "github.com/skryfon/employee360/backend/internal/types/invitation"
@@ -13,27 +12,25 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// Non-admins and callers without a tenant are rejected by every management usecase.
-func TestManagementUseCases_RequireAdminAndTenant(t *testing.T) {
+// A nil tenant or actor is rejected by every management usecase before any work happens.
+func TestManagementUseCases_RequireIdentity(t *testing.T) {
 	f := newFixture()
 	inv, _ := f.doInvite(t, "x@acme.com")
-	employee := ctx.WithRoles(f.adminCtx, []string{"employee"})
-	noTenant := ctx.WithRoles(context.Background(), []string{"admin"})
+	bg := context.Background()
 	list := NewListInvitationsUseCase(fakeInvRepo{f.s})
 
-	for name, c := range map[string]struct {
-		ctx context.Context
-		err error
-	}{
-		"employee":  {employee, domainerrors.ErrForbidden},
-		"no tenant": {noTenant, domainerrors.ErrUnauthorized},
+	for name, c := range map[string]struct{ tenant, actor uuid.UUID }{
+		"no tenant": {uuid.Nil, f.adminID},
+		"no actor":  {f.tenantA, uuid.Nil},
 	} {
 		t.Run(name, func(t *testing.T) {
-			_, err := f.resend().Execute(c.ctx, inv.ID)
-			assert.ErrorIs(t, err, c.err)
-			assert.ErrorIs(t, f.revoke().Execute(c.ctx, inv.ID), c.err)
-			_, _, err = list.Execute(c.ctx, 10, 0)
-			assert.ErrorIs(t, err, c.err)
+			_, err := f.resend().Execute(bg, c.tenant, c.actor, inv.ID)
+			assert.ErrorIs(t, err, domainerrors.ErrUnauthorized)
+			assert.ErrorIs(t, f.revoke().Execute(bg, c.tenant, c.actor, inv.ID), domainerrors.ErrUnauthorized)
+			if c.tenant == uuid.Nil {
+				_, _, err = list.Execute(bg, c.tenant, 10, 0)
+				assert.ErrorIs(t, err, domainerrors.ErrUnauthorized)
+			}
 		})
 	}
 	assert.True(t, f.s.invitations[inv.ID].IsPending(), "rejected calls must not change the invitation")
@@ -72,7 +69,7 @@ func TestList_PaginationBounds(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			f := newFixture()
 			rec := &limitRecorder{fakeInvRepo: fakeInvRepo{f.s}}
-			_, _, err := NewListInvitationsUseCase(rec).Execute(f.adminCtx, tt.limit, tt.offset)
+			_, _, err := NewListInvitationsUseCase(rec).Execute(context.Background(), f.tenantA, tt.limit, tt.offset)
 			require.NoError(t, err)
 			assert.Equal(t, tt.wantLimit, rec.limit)
 			assert.Equal(t, tt.wantOffset, rec.offset)

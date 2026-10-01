@@ -32,6 +32,10 @@ type UserInvitation struct {
 	RevokedAt    *time.Time `json:"revoked_at,omitempty"`
 	CreatedAt    time.Time  `json:"created_at"`
 	UpdatedAt    time.Time  `json:"updated_at"`
+	CreatedBy    *uuid.UUID `json:"-"`
+	UpdatedBy    *uuid.UUID `json:"-"`
+	DeletedBy    *uuid.UUID `json:"-"`
+	DeletedAt    *time.Time `json:"-"`
 }
 
 // IsPending reports whether the invitation has been neither accepted nor

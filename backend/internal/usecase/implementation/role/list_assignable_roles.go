@@ -5,7 +5,6 @@ import (
 	"context"
 
 	"github.com/google/uuid"
-	"github.com/skryfon/employee360/backend/internal/ctx"
 	"github.com/skryfon/employee360/backend/internal/domain/entity"
 	domainerrors "github.com/skryfon/employee360/backend/internal/domain/errors"
 	"github.com/skryfon/employee360/backend/internal/domain/repository"
@@ -25,26 +24,14 @@ func NewListAssignableRolesUseCase(roleRepo repository.RoleRepository) *ListAssi
 }
 
 // Execute returns the caller's tenant roles excluding super_admin, which the
-// invite flow rejects. Tenant comes from context only.
-func (u *ListAssignableRolesUseCaseImpl) Execute(c context.Context) ([]*entity.Role, error) {
-	roles, _ := ctx.RolesFromContext(c)
-	isAdmin := false
-	for _, r := range roles {
-		if r == entity.RoleAdmin || r == entity.RoleSuperAdmin {
-			isAdmin = true
-			break
-		}
-	}
-	if !isAdmin {
-		return nil, domainerrors.ErrForbidden
-	}
-	raw, ok := ctx.TenantIDFromContext(c)
-	tenantID, err := uuid.Parse(raw)
-	if !ok || err != nil || tenantID == uuid.Nil {
+// invite flow rejects. tenantID is resolved by the handler from the authenticated
+// request; admin authorization is enforced by the route-level RequireRole.
+func (u *ListAssignableRolesUseCaseImpl) Execute(c context.Context, tenantID uuid.UUID) ([]*entity.Role, error) {
+	if tenantID == uuid.Nil {
 		return nil, domainerrors.ErrUnauthorized
 	}
 
-	all, err := u.roleRepo.List(c)
+	all, err := u.roleRepo.List(c, tenantID)
 	if err != nil {
 		return nil, err
 	}

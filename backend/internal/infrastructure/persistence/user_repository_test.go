@@ -112,7 +112,7 @@ func TestGormUserRepository_CRUDRoundTrip(t *testing.T) {
 		t.Errorf("expected List to include created user %s", user.ID)
 	}
 
-	if err := repo.Delete(c, tenant.ID, user.ID); err != nil {
+	if err := repo.Delete(c, tenant.ID, user.ID, uuid.New()); err != nil {
 		t.Fatalf("Delete failed: %v", err)
 	}
 
@@ -246,7 +246,7 @@ func TestGormUserRepository_TenantIsolation(t *testing.T) {
 	})
 
 	t.Run("Delete scoped to the wrong tenant cannot remove another tenant's row", func(t *testing.T) {
-		err := repo.Delete(c, tenantB.ID, userA.ID)
+		err := repo.Delete(c, tenantB.ID, userA.ID, uuid.New())
 		if err != domainerrors.ErrUserNotFound {
 			t.Fatalf("expected ErrUserNotFound deleting tenant A's user via tenant B's id, got: %v", err)
 		}

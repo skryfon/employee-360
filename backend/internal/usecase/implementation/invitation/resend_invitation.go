@@ -46,16 +46,8 @@ func NewResendInvitationUseCase(
 }
 
 // Execute reissues the token and publishes InvitationResent, only while pending.
-func (u *ResendInvitationUseCaseImpl) Execute(c context.Context, id uuid.UUID) (*entity.UserInvitation, error) {
-	if err := requireAdmin(c); err != nil {
-		return nil, err
-	}
-	tenantID, err := tenantFromContext(c)
-	if err != nil {
-		return nil, err
-	}
-	actorID, err := actorFromContext(c)
-	if err != nil {
+func (u *ResendInvitationUseCaseImpl) Execute(c context.Context, tenantID, actorID, id uuid.UUID) (*entity.UserInvitation, error) {
+	if err := requireIdentity(tenantID, actorID); err != nil {
 		return nil, err
 	}
 	inv, err := u.invitationRepo.GetByID(c, tenantID, id)
@@ -65,7 +57,7 @@ func (u *ResendInvitationUseCaseImpl) Execute(c context.Context, id uuid.UUID) (
 	if !inv.IsPending() {
 		return nil, domainerrors.ErrInvitationNotPending
 	}
-	role, err := u.roleRepo.GetByID(c, inv.RoleID)
+	role, err := u.roleRepo.GetByID(c, tenantID, inv.RoleID)
 	if err != nil || role == nil {
 		return nil, domainerrors.ErrRoleNotFound
 	}
@@ -95,7 +87,7 @@ func (u *ResendInvitationUseCaseImpl) Execute(c context.Context, id uuid.UUID) (
 	}
 
 	if err := u.transactor.WithinTransaction(c, func(txCtx context.Context) error {
-		if err := u.invitationRepo.UpdateToken(txCtx, tenantID, inv.ID, inv.TokenHash, inv.ExpiresAt); err != nil {
+		if err := u.invitationRepo.UpdateToken(txCtx, tenantID, inv.ID, actorID, inv.TokenHash, inv.ExpiresAt); err != nil {
 			return err
 		}
 		if err := writeAudit(txCtx, u.auditRepo, tenantID, actorID, inv.ID, auditActionResend,

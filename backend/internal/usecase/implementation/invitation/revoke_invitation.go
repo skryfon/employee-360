@@ -40,16 +40,8 @@ func NewRevokeInvitationUseCase(
 // Execute revokes a pending invitation in the caller's tenant and, in the same
 // transaction, removes the still-inactive pending user (and its role
 // assignment) so the email can be invited again.
-func (u *RevokeInvitationUseCaseImpl) Execute(c context.Context, id uuid.UUID) error {
-	if err := requireAdmin(c); err != nil {
-		return err
-	}
-	tenantID, err := tenantFromContext(c)
-	if err != nil {
-		return err
-	}
-	actorID, err := actorFromContext(c)
-	if err != nil {
+func (u *RevokeInvitationUseCaseImpl) Execute(c context.Context, tenantID, actorID, id uuid.UUID) error {
+	if err := requireIdentity(tenantID, actorID); err != nil {
 		return err
 	}
 	return u.transactor.WithinTransaction(c, func(txCtx context.Context) error {
@@ -60,7 +52,7 @@ func (u *RevokeInvitationUseCaseImpl) Execute(c context.Context, id uuid.UUID) e
 		if !inv.IsPending() {
 			return domainerrors.ErrInvitationNotPending
 		}
-		if err := u.invitationRepo.MarkRevoked(txCtx, tenantID, inv.ID, time.Now().UTC()); err != nil {
+		if err := u.invitationRepo.MarkRevoked(txCtx, tenantID, inv.ID, actorID, time.Now().UTC()); err != nil {
 			return err
 		}
 
@@ -71,10 +63,10 @@ func (u *RevokeInvitationUseCaseImpl) Execute(c context.Context, id uuid.UUID) e
 		// Only a never-activated pending user is removed; a real account is left alone.
 		removed := false
 		if user != nil && !user.IsActive && user.PasswordHash == nil && user.EmailVerifiedAt == nil && user.LastLoginAt == nil {
-			if err := u.userRoleRepo.DeleteByUserID(txCtx, user.ID); err != nil {
+			if err := u.userRoleRepo.DeleteByUserID(txCtx, tenantID, user.ID); err != nil {
 				return err
 			}
-			if err := u.userRepo.Delete(txCtx, tenantID, user.ID); err != nil {
+			if err := u.userRepo.Delete(txCtx, tenantID, user.ID, actorID); err != nil {
 				return err
 			}
 			removed = true

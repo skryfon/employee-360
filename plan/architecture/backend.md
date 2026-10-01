@@ -280,7 +280,7 @@ HTTP Request
 [Domain Repository Interface] (Defined in domain/repository)
      │
      ▼
-[Infrastructure Persistence] (GORM implementation, scoped by context tenant_id)
+[Infrastructure Persistence] (GORM implementation, scoped by explicit tenantID param)
      │
      ▼
 PostgreSQL Database
@@ -318,5 +318,7 @@ PostgreSQL Database
 - **Platform Super Admin Governance**:
   - The `super_admin` role operates at the platform level to govern tenants, manage platform settings, and monitor system health.
   - Initial platform governance is bootstrapped via `cmd/bootstrap/main.go` using environment-configured credentials.
-- **Context Injection**: The tenant resolution middleware resolves the `tenant_id` from the JWT token or verified domain and stores it in `ctx`.
-- **Query Scoping**: Repository implementations in `internal/infrastructure/persistence` extract `tenant_id` from `ctx` and enforce tenant filtering on all queries and mutations.
+- **Context Injection**: The tenant resolution middleware (referenced only from `routes.go`) resolves the `tenant_id` from the JWT token or verified domain and stores it in the request context via `internal/ctx`.
+- **Identity Verification**: `middleware.Auth(tokenService, verifier)` validates the JWT, then calls the `VerifyIdentityUseCase` port (`usecase/interface/auth`, implemented in `usecase/implementation/auth/verify_identity.go` over `TenantReader`, `UserRepository.GetByID(tenantID, id)` and `UserRoleRepository.GetRolesByUserID`). It checks the tenant exists, `is_active` and `deleted_at IS NULL`, and the user exists in that tenant, is active and not soft-deleted, so deleted/deactivated users and tenants lose access immediately rather than at token expiry. Any unusable identity returns one uniform 401 (the response never says which check failed); a repository error fails closed with 503. The user's current roles from the database (not the token claims) populate the context used by `RequireRole`. This costs three indexed lookups per authenticated request; there is deliberately no cache, so revocation is immediate. `Tenant()` runs after `Auth` and only consumes the verified tenant.
+- **Identity Flow**: Handlers are the only layer that reads identity (`ctx.TenantIDFromContext` / `UserIDFromContext` / `RolesFromContext` on `c.Request.Context()`, 401 on failure) and pass `tenantID` / `actorID` to usecases as explicit parameters. Usecases and repositories never read identity from `context.Context` and never import `middleware`.
+- **Query Scoping**: Repository implementations in `internal/infrastructure/persistence` receive `tenantID` as an explicit parameter and enforce tenant filtering with it on all queries and mutations.

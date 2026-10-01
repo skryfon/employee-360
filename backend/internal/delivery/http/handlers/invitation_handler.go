@@ -97,7 +97,11 @@ func (h *InvitationHandler) Invite(c *gin.Context) {
 		response.BadRequest(c, "invalid request payload")
 		return
 	}
-	inv, err := h.inviteUC.Execute(c.Request.Context(), req)
+	tenantID, actorID, ok := tenantAndUser(c)
+	if !ok {
+		return
+	}
+	inv, err := h.inviteUC.Execute(c.Request.Context(), tenantID, actorID, req)
 	if err != nil {
 		writeInvitationError(c, err)
 		return
@@ -122,7 +126,11 @@ func (h *InvitationHandler) Resend(c *gin.Context) {
 		response.BadRequest(c, "invalid invitation id")
 		return
 	}
-	inv, err := h.resendUC.Execute(c.Request.Context(), id)
+	tenantID, actorID, ok := tenantAndUser(c)
+	if !ok {
+		return
+	}
+	inv, err := h.resendUC.Execute(c.Request.Context(), tenantID, actorID, id)
 	if err != nil {
 		writeInvitationError(c, err)
 		return
@@ -147,7 +155,11 @@ func (h *InvitationHandler) Revoke(c *gin.Context) {
 		response.BadRequest(c, "invalid invitation id")
 		return
 	}
-	if err := h.revokeUC.Execute(c.Request.Context(), id); err != nil {
+	tenantID, actorID, ok := tenantAndUser(c)
+	if !ok {
+		return
+	}
+	if err := h.revokeUC.Execute(c.Request.Context(), tenantID, actorID, id); err != nil {
 		writeInvitationError(c, err)
 		return
 	}
@@ -165,6 +177,10 @@ func (h *InvitationHandler) Revoke(c *gin.Context) {
 // @Success      200  {object}  response.Envelope{data=[]invtypes.InvitationResponse}
 // @Router       /api/v1/users/invitations [get]
 func (h *InvitationHandler) List(c *gin.Context) {
+	tenantID, ok := tenantOnly(c)
+	if !ok {
+		return
+	}
 	page, _ := strconv.Atoi(c.DefaultQuery("page", "1"))
 	pageSize, _ := strconv.Atoi(c.DefaultQuery("page_size", "20"))
 	if page < 1 {
@@ -173,7 +189,7 @@ func (h *InvitationHandler) List(c *gin.Context) {
 	if pageSize < 1 || pageSize > 100 {
 		pageSize = 20
 	}
-	items, total, err := h.listUC.Execute(c.Request.Context(), pageSize, (page-1)*pageSize)
+	items, total, err := h.listUC.Execute(c.Request.Context(), tenantID, pageSize, (page-1)*pageSize)
 	if err != nil {
 		writeInvitationError(c, err)
 		return

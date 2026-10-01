@@ -10,8 +10,9 @@ import (
 	roleusecase "github.com/skryfon/employee360/backend/internal/usecase/interface/role"
 )
 
-// RoleHandler handles HTTP requests for role lookups. Tenant identity comes
-// only from the request context populated by the Auth/Tenant middleware.
+// RoleHandler handles HTTP requests for role lookups. Tenant identity is read
+// once via the ctx package (populated by the Auth/Tenant middleware) and passed
+// to the usecase explicitly.
 type RoleHandler struct {
 	listUC roleusecase.ListAssignableRolesUseCase
 }
@@ -32,7 +33,11 @@ func NewRoleHandler(listUC roleusecase.ListAssignableRolesUseCase) *RoleHandler 
 // @Failure      403  {object}  response.Envelope
 // @Router       /api/v1/roles [get]
 func (h *RoleHandler) List(c *gin.Context) {
-	roles, err := h.listUC.Execute(c.Request.Context())
+	tenantID, ok := tenantOnly(c)
+	if !ok {
+		return
+	}
+	roles, err := h.listUC.Execute(c.Request.Context(), tenantID)
 	if err != nil {
 		switch {
 		case errors.Is(err, domainerrors.ErrUnauthorized):
