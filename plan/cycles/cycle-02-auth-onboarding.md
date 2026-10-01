@@ -195,6 +195,9 @@ FK column. See the `create-migration` skill for the full invariant checklist.
 
 - [ ] `auth_handler.go` — `POST /api/v1/auth/login`, `POST /api/v1/auth/refresh`, `POST /api/v1/auth/logout`, `POST /api/v1/auth/forgot-password`, `POST /api/v1/auth/reset-password` — all unauthenticated except logout; `login` serves every role (`super_admin`/`admin`/`employee`)
 - [ ] `invitation_handler.go` (or fold into `user_handler.go`) — `POST /api/v1/users/invitations` (admin-only), `POST /api/v1/users/invitations/:id/resend`, `DELETE /api/v1/users/invitations/:id`, `GET /api/v1/users/invitations`, and an unauthenticated `POST /api/v1/invitations/accept`
+  - Added during EMPLOYEE36-23: unauthenticated `GET /api/v1/invitations/validate?token=` (same rate limiter as accept). Success returns `{email, role}` where `role` is the invitee's role name (`admin` | `employee` | ...); tenant and role are derived from the invitation row, never from input.
+  - Distinct failure states (the endpoint is unauthenticated and the ticket waives enumeration-safety), returned by **both** validate and accept when the token hash matches a row: `INVITATION_EXPIRED` (410), `INVITATION_REVOKED` (403), `INVITATION_ACCEPTED` (409; also when the user is already active). An unknown/empty token stays `INVALID_TOKEN` (400). Clients must branch on the envelope `error.code`, not on message text.
+- [ ] `role_handler.go` — `GET /api/v1/roles` (admin/super_admin only; Auth → Tenant → `RequireRole`): lists the caller-tenant roles an admin may assign, excluding `super_admin`, returning `{id, name}` only. Added during EMPLOYEE36-21 because the invite form needs a `role_id` and no endpoint exposed role IDs. Department/position list endpoints are not yet built (the invite form takes raw UUIDs until a follow-up cycle adds them)
 - [ ] Wire `auth.go`/`tenant.go` middleware onto every route above except login/refresh/forgot-password/reset-password/invitation-accept
 
 ### Seeding (`backend/internal/infrastructure/database/seeder/`, run via `cmd/bootstrap`)
@@ -219,14 +222,21 @@ frontend item before its backend endpoint is callable.
   Query mutations via the API client
 - [ ] `clients/admin/src/features/invitations/` — invite-user form (email + role +
   optional department/position), invitations list (pending/accepted/revoked), resend and
-  revoke actions
+  revoke actions; the list is the landing page at `/invitations`, the form lives on
+  `/invitations/new`; the role select is fed by `GET /api/v1/roles`
+- [ ] `clients/admin/` app shell — collapsible sidebar + top header (nav links from
+  `components/layout/navItems.ts`, UI state in a Zustand `uiStore`); added during
+  EMPLOYEE36-21 so later admin features have somewhere to register navigation
 - [ ] `clients/employee/src/features/auth/` — login page (email + password), forgot-password
   page, reset-password page; Zustand store for auth state — same shape as the admin auth
   feature, since login is one mechanism for every role
+  - `admin`/`super_admin` accounts are intentionally allowed into the employee portal
+    (only roles outside `employee`/`admin`/`super_admin` are rejected)
 - [ ] Invitation-accept page — a token-in-URL route (unauthenticated) that calls
   `POST /api/v1/invitations/accept`; invitee (admin or employee) sets a password to
   activate. Lives wherever `plan/architecture/frontend.md` places shared/public routes —
   confirm before building if that's not yet decided.
+  - **Decision (EMPLOYEE36-23, host switching):** the admin and employee apps are separate hosts. The invite email link targets the *invited role's* app (`admin`/`super_admin` -> `APP_ADMIN_URL`, `employee` -> `APP_EMPLOYEE_URL`, each falling back to `APP_FRONTEND_URL` when unset). The accept page exists in both apps; on load it calls validate, and if the returned `role` belongs to the other app it redirects (carrying the token) to the correct app's accept page. Forgot/reset-password links still use `APP_FRONTEND_URL`.
 
 **Done when:** `make migrate` applies all 12 migrations cleanly, `make migrate-down`
 reverses them cleanly, `cmd/bootstrap` seeds a working system tenant + super admin, and

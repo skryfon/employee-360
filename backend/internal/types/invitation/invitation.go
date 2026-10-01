@@ -50,3 +50,11 @@ func ToInvitationResponse(i *entity.UserInvitation) InvitationResponse {
 		ExpiresAt: i.ExpiresAt, AcceptedAt: i.AcceptedAt, RevokedAt: i.RevokedAt, CreatedAt: i.CreatedAt,
 	}
 }
+
+// ValidateInvitationResponse is returned when checking if an invitation token is valid before password entry.
+type ValidateInvitationResponse struct {
+	Email string `json:"email"`
+	// Role is the invitee's role name (e.g. "admin", "employee"); clients use it
+	// to send the invitee to the correct app.
+	Role string `json:"role"`
+}

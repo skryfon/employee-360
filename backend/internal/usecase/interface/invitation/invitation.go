@@ -32,3 +32,8 @@ type RevokeInvitationUseCase interface {
 type ListInvitationsUseCase interface {
 	Execute(ctx context.Context, limit, offset int) ([]*entity.UserInvitation, int64, error)
 }
+
+// ValidateInvitationUseCase verifies that an invitation token exists, is pending, not expired, and ready for acceptance.
+type ValidateInvitationUseCase interface {
+	Execute(ctx context.Context, token string) (*invtypes.ValidateInvitationResponse, error)
+}

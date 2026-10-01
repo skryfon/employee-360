@@ -306,6 +306,12 @@ func (fakeList) Execute(context.Context, int, int) ([]*entity.UserInvitation, in
 	return []*entity.UserInvitation{{ID: uuid.New(), ExpiresAt: time.Now().Add(time.Hour)}}, 1, nil
 }
 
+type fakeValidate struct{}
+
+func (fakeValidate) Execute(context.Context, string) (*invtypes.ValidateInvitationResponse, error) {
+	return &invtypes.ValidateInvitationResponse{Email: "x@y.com", Role: "employee"}, nil
+}
+
 func invitationEngine(t *testing.T, invite *fakeInvite, accept *fakeAccept, revoke fakeRevoke) (*gin.Engine, domainservice.TokenService) {
 	t.Helper()
 	gin.SetMode(gin.TestMode)
@@ -314,7 +320,7 @@ func invitationEngine(t *testing.T, invite *fakeInvite, accept *fakeAccept, revo
 	ctr := testContainer(t, cfg, nil, nil)
 	ctr.Auth = &container.AuthContainer{
 		TokenService:      jwtSvc,
-		InvitationHandler: handlers.NewInvitationHandler(invite, accept, fakeResend{}, revoke, fakeList{}),
+		InvitationHandler: handlers.NewInvitationHandler(invite, accept, fakeResend{}, revoke, fakeList{}, fakeValidate{}),
 	}
 	return SetupRouter(cfg, zerolog.Nop(), ctr), jwtSvc
 }
@@ -395,6 +401,14 @@ func TestInvitationRoutes_AcceptIsUnauthenticated(t *testing.T) {
 	}
 }
 
+func TestInvitationRoutes_ValidateIsUnauthenticated(t *testing.T) {
+	engine, _ := invitationEngine(t, &fakeInvite{}, &fakeAccept{}, fakeRevoke{})
+	rec := do(engine, http.MethodGet, "/api/v1/invitations/validate?token=abc", "", "")
+	if rec.Code != http.StatusOK {
+		t.Fatalf("want 200 without token, got %d: %s", rec.Code, rec.Body.String())
+	}
+}
+
 func TestInvitationRoutes_AllRegistered(t *testing.T) {
 	engine, _ := invitationEngine(t, &fakeInvite{}, &fakeAccept{}, fakeRevoke{})
 	registered := map[string]bool{}
@@ -403,6 +417,7 @@ func TestInvitationRoutes_AllRegistered(t *testing.T) {
 	}
 	for _, want := range []string{
 		"POST /api/v1/invitations/accept",
+		"GET /api/v1/invitations/validate",
 		"POST /api/v1/users/invitations",
 		"GET /api/v1/users/invitations",
 		"POST /api/v1/users/invitations/:id/resend",
@@ -423,7 +438,7 @@ func TestInvitationRoutes_AcceptRateLimited(t *testing.T) {
 	ctr := testContainer(t, cfg, nil, nil)
 	ctr.Auth = &container.AuthContainer{
 		TokenService:      setupTestTokenService(t),
-		InvitationHandler: handlers.NewInvitationHandler(&fakeInvite{}, &fakeAccept{}, fakeResend{}, fakeRevoke{}, fakeList{}),
+		InvitationHandler: handlers.NewInvitationHandler(&fakeInvite{}, &fakeAccept{}, fakeResend{}, fakeRevoke{}, fakeList{}, fakeValidate{}),
 	}
 	engine := SetupRouter(cfg, zerolog.Nop(), ctr)
 
@@ -445,5 +460,66 @@ func TestInvitationRoutes_AcceptRateLimited(t *testing.T) {
 		if rec := do(engine, http.MethodGet, "/healthz", "", ""); rec.Code == http.StatusTooManyRequests {
 			t.Fatal("health route must be exempt from rate limiting")
 		}
+	}
+}
+
+type fakeListRoles struct{}
+
+func (fakeListRoles) Execute(context.Context) ([]*entity.Role, error) {
+	return []*entity.Role{{ID: uuid.New(), Name: "employee"}}, nil
+}
+
+func TestRoleRoutes_ListRequiresAdminToken(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	jwtSvc := setupTestTokenService(t)
+	cfg := &config.Config{CORS: config.CORSConfig{AllowedOrigins: []string{"*"}}}
+	ctr := testContainer(t, cfg, nil, nil)
+	ctr.Auth = &container.AuthContainer{TokenService: jwtSvc, RoleHandler: handlers.NewRoleHandler(fakeListRoles{})}
+	engine := SetupRouter(cfg, zerolog.Nop(), ctr)
+
+	const path = "/api/v1/roles"
+	tenant := uuid.New()
+	tests := []struct {
+		name, auth string
+		want       int
+	}{
+		{"no token", "", http.StatusUnauthorized},
+		{"employee", bearer(t, jwtSvc, tenant, "employee"), http.StatusForbidden},
+		{"admin", bearer(t, jwtSvc, tenant, "admin"), http.StatusOK},
+		{"super_admin", bearer(t, jwtSvc, tenant, "super_admin"), http.StatusOK},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			if rec := do(engine, http.MethodGet, path, tc.auth, ""); rec.Code != tc.want {
+				t.Fatalf("want %d, got %d: %s", tc.want, rec.Code, rec.Body.String())
+			}
+		})
+	}
+}
+
+func TestInvitationRoutes_ValidateRateLimited(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	cfg := &config.Config{
+		CORS:      config.CORSConfig{AllowedOrigins: []string{"*"}},
+		RateLimit: config.RateLimitConfig{Enabled: true, RequestsPerSecond: 0.001, Burst: 2},
+	}
+	ctr := testContainer(t, cfg, nil, nil)
+	ctr.Auth = &container.AuthContainer{
+		TokenService:      setupTestTokenService(t),
+		InvitationHandler: handlers.NewInvitationHandler(&fakeInvite{}, &fakeAccept{}, fakeResend{}, fakeRevoke{}, fakeList{}, fakeValidate{}),
+	}
+	engine := SetupRouter(cfg, zerolog.Nop(), ctr)
+
+	for i := 0; i < 2; i++ {
+		if rec := do(engine, http.MethodGet, "/api/v1/invitations/validate?token=t", "", ""); rec.Code != http.StatusOK {
+			t.Fatalf("request %d: expected 200, got %d: %s", i, rec.Code, rec.Body.String())
+		}
+	}
+	rec := do(engine, http.MethodGet, "/api/v1/invitations/validate?token=t", "", "")
+	if rec.Code != http.StatusTooManyRequests {
+		t.Fatalf("expected 429, got %d", rec.Code)
+	}
+	if rec.Header().Get("Retry-After") == "" {
+		t.Fatal("expected Retry-After header")
 	}
 }

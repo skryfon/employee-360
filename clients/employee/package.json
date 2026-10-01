@@ -13,9 +13,15 @@
   },
   "dependencies": {
     "@employee360/api-client": "workspace:*",
+    "@employee360/ui": "workspace:*",
+    "@hookform/resolvers": "^5.9.1",
     "@tanstack/react-query": "^5.103.1",
     "react": "^19.3.0",
-    "react-dom": "^19.3.0"
+    "react-dom": "^19.3.0",
+    "react-hook-form": "^7.89.0",
+    "react-router-dom": "^7.18.4",
+    "zod": "^4.6.5",
+    "zustand": "^5.0.15"
   },
   "devDependencies": {
     "@eslint/js": "^10.0.1",

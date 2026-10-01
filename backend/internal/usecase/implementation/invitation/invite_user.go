@@ -30,7 +30,7 @@ type InviteUserUseCaseImpl struct {
 	eventPublisher service.EventPublisher
 	transactor     ucshared.Transactor
 	expiry         time.Duration
-	frontendURL    string
+	appURLs        AppURLs
 }
 
 var _ invusecase.InviteUserUseCase = (*InviteUserUseCaseImpl)(nil)
@@ -46,14 +46,14 @@ func NewInviteUserUseCase(
 	hashService service.HashService,
 	eventPublisher service.EventPublisher,
 	transactor ucshared.Transactor,
-	frontendBaseURL string,
+	appURLs AppURLs,
 ) *InviteUserUseCaseImpl {
 	return &InviteUserUseCaseImpl{
 		userRepo: userRepo, userRoleRepo: userRoleRepo, roleRepo: roleRepo,
 		invitationRepo: invitationRepo, orgRefRepo: orgRefRepo, auditRepo: auditRepo, hashService: hashService,
 		eventPublisher: eventPublisher, transactor: transactor,
-		expiry:      defaultInvitationExpiry,
-		frontendURL: strings.TrimRight(frontendBaseURL, "/"),
+		expiry:  defaultInvitationExpiry,
+		appURLs: appURLs,
 	}
 }
 
@@ -153,7 +153,7 @@ func (u *InviteUserUseCaseImpl) Execute(c context.Context, req invtypes.InviteUs
 		Payload: event.UserInvitedPayload{
 			InvitationID: inv.ID, TenantID: tenantID, Email: email,
 			RoleName: role.Name, PlainToken: plainToken,
-			InviteURL: u.frontendURL + "/accept-invitation?token=" + plainToken,
+			InviteURL: u.appURLs.acceptLink(role.Name, plainToken),
 			InvitedBy: inviterID, ExpiresAt: inv.ExpiresAt,
 		},
 		OccurredAt: now,

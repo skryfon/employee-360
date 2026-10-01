@@ -31,6 +31,11 @@ app:
   log_level: "debug"
   # Public base URL of the web client; used to build links in emails.
   frontend_url: "http://localhost:5173"
+  # Optional per-app base URLs; invitation emails link to the invited role's app
+  # (admin/super_admin -> admin_url, employee -> employee_url). Each falls back
+  # to frontend_url when unset.
+  # admin_url: "http://localhost:5173"
+  # employee_url: "http://localhost:5174"
 
 # Global per-client-IP token-bucket rate limiting (in-memory, per instance).
 # Health probes (/health, /healthz, /api/v1/health) are exempt.

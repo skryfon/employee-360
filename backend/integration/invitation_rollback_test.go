@@ -44,7 +44,7 @@ func TestInviteUser_RollbackLeavesNothing(t *testing.T) {
 			persistence.NewGormUserRepository(db), persistence.NewGormUserRoleRepository(db),
 			persistence.NewGormRoleRepository(db), persistence.NewGormUserInvitationRepository(db),
 			persistence.NewGormOrgReferenceRepository(db), persistence.NewGormAuditRepository(db),
-			infraservice.NewHashService(), pub, database.NewGormTransactor(db), "http://frontend.test")
+			infraservice.NewHashService(), pub, database.NewGormTransactor(db), invimpl.AppURLs{Default: "http://frontend.test"})
 	}
 	adminCtx := ctx.WithRoles(ctx.WithUserID(ctx.WithTenantID(context.Background(), tenantID.String()), adminID.String()), []string{entity.RoleAdmin})
 

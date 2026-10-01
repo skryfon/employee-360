@@ -27,6 +27,7 @@ type fakeInvUC struct {
 	err       error
 	gotInvite invtypes.InviteUserRequest
 	gotAccept invtypes.AcceptInvitationRequest
+	gotToken  string
 	gotID     uuid.UUID
 	gotLimit  int
 	gotOffset int
@@ -71,16 +72,27 @@ func (f fakeListUC) Execute(_ context.Context, limit, offset int) ([]*entity.Use
 	return f.items, f.total, f.err
 }
 
+type fakeValidateUC struct{ *fakeInvUC }
+
+func (f fakeValidateUC) Execute(_ context.Context, token string) (*invtypes.ValidateInvitationResponse, error) {
+	f.gotToken = token
+	if f.err != nil {
+		return nil, f.err
+	}
+	return &invtypes.ValidateInvitationResponse{Email: "new@acme.com", Role: "employee"}, nil
+}
+
 func setupInvitationHandlerTest() (*gin.Engine, *fakeInvUC) {
 	gin.SetMode(gin.TestMode)
 	f := &fakeInvUC{inv: pendingInvitation()}
-	h := NewInvitationHandler(fakeInviteUC{f}, fakeAcceptUC{f}, fakeResendUC{f}, fakeRevokeUC{f}, fakeListUC{f})
+	h := NewInvitationHandler(fakeInviteUC{f}, fakeAcceptUC{f}, fakeResendUC{f}, fakeRevokeUC{f}, fakeListUC{f}, fakeValidateUC{f})
 	engine := gin.New()
 	engine.POST("/invitations", h.Invite)
 	engine.GET("/invitations", h.List)
 	engine.POST("/invitations/:id/resend", h.Resend)
 	engine.DELETE("/invitations/:id", h.Revoke)
 	engine.POST("/accept", h.Accept)
+	engine.GET("/validate", h.Validate)
 	return engine, f
 }
 
@@ -349,5 +361,87 @@ func TestWriteInvitationError_Mapping(t *testing.T) {
 				t.Error("internal error message leaked")
 			}
 		})
+	}
+}
+
+func TestInvitationHandler_Validate(t *testing.T) {
+	t.Run("success", func(t *testing.T) {
+		engine, f := setupInvitationHandlerTest()
+		rec := doInv(engine, http.MethodGet, "/validate?token=abc", "")
+		if rec.Code != http.StatusOK {
+			t.Fatalf("want 200, got %d: %s", rec.Code, rec.Body.String())
+		}
+		if f.gotToken != "abc" {
+			t.Errorf("want token abc, got %q", f.gotToken)
+		}
+		data := decodeEnvelope(t, rec).Data.(map[string]any)
+		if data["email"] != "new@acme.com" || data["role"] != "employee" {
+			t.Errorf("unexpected payload: %+v", data)
+		}
+	})
+
+	t.Run("missing token query param", func(t *testing.T) {
+		engine, _ := setupInvitationHandlerTest()
+		rec := doInv(engine, http.MethodGet, "/validate", "")
+		if rec.Code != http.StatusBadRequest {
+			t.Errorf("want 400, got %d", rec.Code)
+		}
+	})
+
+	t.Run("invalid or expired token error", func(t *testing.T) {
+		engine, f := setupInvitationHandlerTest()
+		f.err = domainerrors.ErrInvalidToken
+		rec := doInv(engine, http.MethodGet, "/validate?token=expired", "")
+		if rec.Code != http.StatusBadRequest {
+			t.Errorf("want 400, got %d", rec.Code)
+		}
+	})
+}
+
+func TestInvitationHandler_FailureStateCodes(t *testing.T) {
+	cases := []struct {
+		err    error
+		status int
+		code   string
+	}{
+		{domainerrors.ErrInvitationExpired, http.StatusGone, "INVITATION_EXPIRED"},
+		{domainerrors.ErrInvitationRevoked, http.StatusForbidden, "INVITATION_REVOKED"},
+		{domainerrors.ErrInvitationAccepted, http.StatusConflict, "INVITATION_ACCEPTED"},
+		{domainerrors.ErrInvalidToken, http.StatusBadRequest, "INVALID_TOKEN"},
+	}
+	seen := map[string]bool{}
+	for _, tc := range cases {
+		t.Run(tc.code, func(t *testing.T) {
+			for _, req := range []struct{ method, path, body string }{
+				{http.MethodGet, "/validate?token=abc", ""},
+				{http.MethodPost, "/accept", `{"token":"abc","password":"password123"}`},
+			} {
+				engine, f := setupInvitationHandlerTest()
+				f.err = tc.err
+				rec := doInv(engine, req.method, req.path, req.body)
+				if rec.Code != tc.status {
+					t.Fatalf("%s: want %d, got %d", req.path, tc.status, rec.Code)
+				}
+				env := decodeEnvelope(t, rec)
+				if env.Error == nil || env.Error.Code != tc.code || env.Error.Message == "" {
+					t.Fatalf("%s: want code %s, got %+v", req.path, tc.code, env.Error)
+				}
+			}
+			engine, f := setupInvitationHandlerTest()
+			f.err = tc.err
+			msg := decodeEnvelope(t, doInv(engine, http.MethodGet, "/validate?token=abc", "")).Error.Message
+			if seen[msg] {
+				t.Errorf("message not distinct: %q", msg)
+			}
+			seen[msg] = true
+		})
+	}
+}
+
+func TestInvitationHandler_ValidateMissingTokenCode(t *testing.T) {
+	engine, _ := setupInvitationHandlerTest()
+	env := decodeEnvelope(t, doInv(engine, http.MethodGet, "/validate", ""))
+	if env.Error == nil || env.Error.Code != "INVALID_TOKEN" {
+		t.Errorf("want INVALID_TOKEN, got %+v", env.Error)
 	}
 }

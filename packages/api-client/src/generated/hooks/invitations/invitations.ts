@@ -25,6 +25,8 @@ import type {
 } from '@tanstack/react-query';
 
 import type {
+  GetApiV1InvitationsValidate200,
+  GetApiV1InvitationsValidateParams,
   GetApiV1UsersInvitations200,
   GetApiV1UsersInvitationsParams,
   GithubComSkryfonEmployee360BackendInternalDeliveryHttpResponseEnvelope,
@@ -122,6 +124,99 @@ export const usePostApiV1InvitationsAccept = <TError = GithubComSkryfonEmployee3
       return useMutation(getPostApiV1InvitationsAcceptMutationOptions(options), queryClient);
     }
     /**
+ * @summary Validate invitation token
+ */
+export const getApiV1InvitationsValidate = (
+    params: GetApiV1InvitationsValidateParams,
+ signal?: AbortSignal
+) => {
+
+
+      return apiRequest<GetApiV1InvitationsValidate200>(
+      {url: `/api/v1/invitations/validate`, method: 'GET',
+        params, signal
+    },
+      );
+    }
+
+
+
+
+export const getGetApiV1InvitationsValidateQueryKey = (params?: GetApiV1InvitationsValidateParams,) => {
+    return [
+    `/api/v1/invitations/validate`, ...(params ? [params] : [])
+    ] as const;
+    }
+
+
+export const getGetApiV1InvitationsValidateQueryOptions = <TData = Awaited<ReturnType<typeof getApiV1InvitationsValidate>>, TError = GithubComSkryfonEmployee360BackendInternalDeliveryHttpResponseEnvelope>(params: GetApiV1InvitationsValidateParams, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getApiV1InvitationsValidate>>, TError, TData>>, }
+) => {
+
+const {query: queryOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getGetApiV1InvitationsValidateQueryKey(params);
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getApiV1InvitationsValidate>>> = ({ signal }) => getApiV1InvitationsValidate(params, signal);
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getApiV1InvitationsValidate>>, TError, TData> & { queryKey: DataTag<QueryKey, TData, TError> }
+}
+
+export type GetApiV1InvitationsValidateQueryResult = NonNullable<Awaited<ReturnType<typeof getApiV1InvitationsValidate>>>
+export type GetApiV1InvitationsValidateQueryError = GithubComSkryfonEmployee360BackendInternalDeliveryHttpResponseEnvelope
+
+
+export function useGetApiV1InvitationsValidate<TData = Awaited<ReturnType<typeof getApiV1InvitationsValidate>>, TError = GithubComSkryfonEmployee360BackendInternalDeliveryHttpResponseEnvelope>(
+ params: GetApiV1InvitationsValidateParams, options: { query:Partial<UseQueryOptions<Awaited<ReturnType<typeof getApiV1InvitationsValidate>>, TError, TData>> & Pick<
+        DefinedInitialDataOptions<
+          Awaited<ReturnType<typeof getApiV1InvitationsValidate>>,
+          TError,
+          Awaited<ReturnType<typeof getApiV1InvitationsValidate>>
+        > , 'initialData'
+      >, }
+ , queryClient?: QueryClient
+  ):  DefinedUseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+export function useGetApiV1InvitationsValidate<TData = Awaited<ReturnType<typeof getApiV1InvitationsValidate>>, TError = GithubComSkryfonEmployee360BackendInternalDeliveryHttpResponseEnvelope>(
+ params: GetApiV1InvitationsValidateParams, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getApiV1InvitationsValidate>>, TError, TData>> & Pick<
+        UndefinedInitialDataOptions<
+          Awaited<ReturnType<typeof getApiV1InvitationsValidate>>,
+          TError,
+          Awaited<ReturnType<typeof getApiV1InvitationsValidate>>
+        > , 'initialData'
+      >, }
+ , queryClient?: QueryClient
+  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+export function useGetApiV1InvitationsValidate<TData = Awaited<ReturnType<typeof getApiV1InvitationsValidate>>, TError = GithubComSkryfonEmployee360BackendInternalDeliveryHttpResponseEnvelope>(
+ params: GetApiV1InvitationsValidateParams, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getApiV1InvitationsValidate>>, TError, TData>>, }
+ , queryClient?: QueryClient
+  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+/**
+ * @summary Validate invitation token
+ */
+
+export function useGetApiV1InvitationsValidate<TData = Awaited<ReturnType<typeof getApiV1InvitationsValidate>>, TError = GithubComSkryfonEmployee360BackendInternalDeliveryHttpResponseEnvelope>(
+ params: GetApiV1InvitationsValidateParams, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getApiV1InvitationsValidate>>, TError, TData>>, }
+ , queryClient?: QueryClient
+ ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> } {
+
+  const queryOptions = getGetApiV1InvitationsValidateQueryOptions(params,options)
+
+  const query = useQuery(queryOptions, queryClient) as  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+/**
  * @summary List invitations
  */
 export const getApiV1UsersInvitations = (

@@ -430,3 +430,16 @@ func TestConfig_TrustedProxiesEnvOverride(t *testing.T) {
 }
 
 func strPtr(s string) *string { return &s }
+
+func TestAppURLsOptionalOverrides(t *testing.T) {
+	t.Setenv("APP_FRONTEND_URL", "https://app.example.com")
+	t.Setenv("APP_ADMIN_URL", "https://admin.example.com")
+	t.Setenv("APP_EMPLOYEE_URL", "https://staff.example.com")
+	cfg, err := Load()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if cfg.App.AdminURL != "https://admin.example.com" || cfg.App.EmployeeURL != "https://staff.example.com" {
+		t.Errorf("unexpected urls: %+v", cfg.App)
+	}
+}

@@ -361,7 +361,140 @@ const docTemplate = `{
                         }
                     },
                     "400": {
-                        "description": "Bad Request",
+                        "description": "INVALID_TOKEN or validation error",
+                        "schema": {
+                            "$ref": "#/definitions/github_com_skryfon_employee360_backend_internal_delivery_http_response.Envelope"
+                        }
+                    },
+                    "403": {
+                        "description": "INVITATION_REVOKED",
+                        "schema": {
+                            "$ref": "#/definitions/github_com_skryfon_employee360_backend_internal_delivery_http_response.Envelope"
+                        }
+                    },
+                    "409": {
+                        "description": "INVITATION_ACCEPTED",
+                        "schema": {
+                            "$ref": "#/definitions/github_com_skryfon_employee360_backend_internal_delivery_http_response.Envelope"
+                        }
+                    },
+                    "410": {
+                        "description": "INVITATION_EXPIRED",
+                        "schema": {
+                            "$ref": "#/definitions/github_com_skryfon_employee360_backend_internal_delivery_http_response.Envelope"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v1/invitations/validate": {
+            "get": {
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "invitations"
+                ],
+                "summary": "Validate invitation token",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Invitation token",
+                        "name": "token",
+                        "in": "query",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/github_com_skryfon_employee360_backend_internal_delivery_http_response.Envelope"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/github_com_skryfon_employee360_backend_internal_types_invitation.ValidateInvitationResponse"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "400": {
+                        "description": "INVALID_TOKEN",
+                        "schema": {
+                            "$ref": "#/definitions/github_com_skryfon_employee360_backend_internal_delivery_http_response.Envelope"
+                        }
+                    },
+                    "403": {
+                        "description": "INVITATION_REVOKED",
+                        "schema": {
+                            "$ref": "#/definitions/github_com_skryfon_employee360_backend_internal_delivery_http_response.Envelope"
+                        }
+                    },
+                    "409": {
+                        "description": "INVITATION_ACCEPTED",
+                        "schema": {
+                            "$ref": "#/definitions/github_com_skryfon_employee360_backend_internal_delivery_http_response.Envelope"
+                        }
+                    },
+                    "410": {
+                        "description": "INVITATION_EXPIRED",
+                        "schema": {
+                            "$ref": "#/definitions/github_com_skryfon_employee360_backend_internal_delivery_http_response.Envelope"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v1/roles": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "roles"
+                ],
+                "summary": "List assignable roles",
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/github_com_skryfon_employee360_backend_internal_delivery_http_response.Envelope"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "type": "array",
+                                            "items": {
+                                                "$ref": "#/definitions/github_com_skryfon_employee360_backend_internal_types_role.RoleResponse"
+                                            }
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/github_com_skryfon_employee360_backend_internal_delivery_http_response.Envelope"
+                        }
+                    },
+                    "403": {
+                        "description": "Forbidden",
                         "schema": {
                             "$ref": "#/definitions/github_com_skryfon_employee360_backend_internal_delivery_http_response.Envelope"
                         }
@@ -940,6 +1073,29 @@ const docTemplate = `{
                     "type": "string"
                 },
                 "role_id": {
+                    "type": "string"
+                }
+            }
+        },
+        "github_com_skryfon_employee360_backend_internal_types_invitation.ValidateInvitationResponse": {
+            "type": "object",
+            "properties": {
+                "email": {
+                    "type": "string"
+                },
+                "role": {
+                    "description": "Role is the invitee's role name (e.g. \"admin\", \"employee\"); clients use it\nto send the invitee to the correct app.",
+                    "type": "string"
+                }
+            }
+        },
+        "github_com_skryfon_employee360_backend_internal_types_role.RoleResponse": {
+            "type": "object",
+            "properties": {
+                "id": {
+                    "type": "string"
+                },
+                "name": {
                     "type": "string"
                 }
             }

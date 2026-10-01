@@ -19,6 +19,24 @@ export default tseslint.config([
       globals: globals.browser,
     },
     rules: {
+      'no-restricted-imports': [
+        'error',
+        {
+          paths: [
+            {
+              name: 'axios',
+              message: 'Use @employee360/api-client instead of importing axios directly.',
+            },
+          ],
+        },
+      ],
+      'no-restricted-globals': [
+        'error',
+        {
+          name: 'fetch',
+          message: 'Use @employee360/api-client instead of bare fetch.',
+        },
+      ],
       ...reactHooks.configs.recommended.rules,
       'react-refresh/only-export-components': [
         'warn',

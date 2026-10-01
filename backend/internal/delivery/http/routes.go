@@ -78,11 +78,22 @@ func registerRoutes(engine *gin.Engine, c *container.Container) {
 			}
 		}
 
+		// Admin-only role lookup (feeds the invitation form's role select).
+		if c.Auth != nil && c.Auth.RoleHandler != nil {
+			v1.GET("/roles",
+				middleware.Auth(c.Auth.TokenService),
+				middleware.Tenant(),
+				middleware.RequireRole(entity.RoleAdmin, entity.RoleSuperAdmin),
+				c.Auth.RoleHandler.List,
+			)
+		}
+
 		if c.Auth != nil && c.Auth.InvitationHandler != nil {
 			ih := c.Auth.InvitationHandler
 
 			// Unauthenticated: the invitee proves possession of the emailed token.
 			v1.POST("/invitations/accept", ih.Accept)
+			v1.GET("/invitations/validate", ih.Validate)
 
 			// Admin-only management routes: auth -> tenant -> role check.
 			invGroup := v1.Group("/users/invitations",

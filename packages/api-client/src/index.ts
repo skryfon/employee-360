@@ -1,5 +1,52 @@
-export { apiClient, apiRequest, configureApiClient } from './client.ts';
-export type { ApiClientConfig } from './client.ts';
+export { apiClient, apiRequest, configureApiClient, configureAuth } from './client.ts';
+export type { ApiClientConfig, AuthConfig } from './client.ts';
+
+export {
+  getSession,
+  setSession,
+  clearSession,
+  subscribeSession,
+  setSessionStorage,
+} from './session.ts';
+export type { Session, SessionStorageAdapter } from './session.ts';
+export {
+  createLocalStorageSessionAdapter,
+  DEFAULT_SESSION_STORAGE_KEY,
+} from './sessionStorage.ts';
+
+export { unwrapSingleEntity, unwrapListResponse } from './unwrap.ts';
+export type { ApiEnvelope } from './unwrap.ts';
+export { getErrorMessage, getErrorCode, INVITATION_ERROR_CODES } from './errors.ts';
+export { resolveInvitationRedirect, invitationAppForRole } from './invitationRouting.ts';
+export type { InvitationApp, InvitationRedirect } from './invitationRouting.ts';
+
+export {
+  login,
+  refresh,
+  logout,
+  forgotPassword,
+  resetPassword,
+  inviteUser,
+  listInvitations,
+  listRoles,
+  resendInvitation,
+  revokeInvitation,
+  acceptInvitation,
+  validateInvitation,
+} from './auth.ts';
+export type {
+  LoginRequest,
+  LoginResponse,
+  ForgotPasswordRequest,
+  ResetPasswordRequest,
+  InviteUserRequest,
+  AcceptInvitationRequest,
+  ValidateInvitationResponse,
+  Invitation,
+  PageMeta,
+  ListInvitationsParams,
+  RoleOption,
+} from './auth.ts';
 
 export { fetchHealth, useHealth } from './health.ts';
 export type { HealthResponse } from './health.ts';
