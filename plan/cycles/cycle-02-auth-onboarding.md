@@ -180,7 +180,7 @@ FK column. See the `create-migration` skill for the full invariant checklist.
 
 ### Onboarding Invitation Usecases (`backend/internal/usecase/{interface,implementation}/invitation/`)
 
-- [ ] `InviteUserUseCase` — admin invites by email + role (+ optional department/position); creates a pending `users` row (`is_active = false`, no password) and an invitation row; publishes a `UserInvited` event (same transaction) instead of emailing directly. Tenant-scoped: an admin can only invite into their own tenant.
+- [ ] `InviteUserUseCase` — admin invites by email + role (+ optional department/position); creates a pending `users` row (`is_active = false`, no password) and an invitation row; publishes a `UserInvited` event (same transaction) instead of emailing directly. Tenant-scoped: an admin can only invite into their own tenant. The transaction first takes the tenant row lock (`TenantRepository.LockByID`) and only then validates the email domain (`DomainBelongsToTenant`), so an invite serialises with tenant domain removal/update and cannot create a user on a just-removed domain.
 - [ ] `AcceptInvitationUseCase` — consumes the invitation token; invitee (admin or employee) sets a password and the user is activated
 - [ ] `ResendInvitationUseCase` — reissues token + publishes an `InvitationResent` event, only while pending
 - [ ] `RevokeInvitationUseCase` — admin cancels a pending invitation

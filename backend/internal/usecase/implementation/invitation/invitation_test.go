@@ -16,7 +16,7 @@ import (
 )
 
 func (f *fixture) invite() *InviteUserUseCaseImpl {
-	return NewInviteUserUseCase(f.s, fakeUserRoleRepo{f.s}, fakeRoleRepo{f.s}, fakeInvRepo{f.s}, fakeOrgRepo{f.s}, fakeTenantDomainRepo{f.s}, fakeAuditRepo{f.s}, f.hash, f.s, f.s, AppURLs{Default: "http://app/", Admin: "http://admin.app/"})
+	return NewInviteUserUseCase(f.s, fakeUserRoleRepo{f.s}, fakeRoleRepo{f.s}, fakeInvRepo{f.s}, fakeOrgRepo{f.s}, fakeTenantDomainRepo{f.s}, fakeTenantRepo{f.s}, fakeAuditRepo{f.s}, f.hash, f.s, f.s, AppURLs{Default: "http://app/", Admin: "http://admin.app/"})
 }
 func (f *fixture) resend() *ResendInvitationUseCaseImpl {
 	return NewResendInvitationUseCase(fakeRoleRepo{f.s}, fakeInvRepo{f.s}, fakeAuditRepo{f.s}, f.hash, f.s, f.s, AppURLs{Default: "http://app"})
@@ -91,6 +91,32 @@ func TestInvite_EmailDomainMustBelongToTenant(t *testing.T) {
 	_, err = f.invite().Execute(bg, f.tenantA, f.adminID, req("x@b.com"))
 	assert.ErrorIs(t, err, domainerrors.ErrEmailDomainNotAllowed)
 	assert.Len(t, f.s.invitations, 2)
+}
+
+// The tenant row lock must be taken before the domain check so the check
+// serialises with tenant domain removal/update.
+func TestInvite_LocksTenantBeforeDomainCheck(t *testing.T) {
+	f := newFixture()
+	_, err := f.invite().Execute(bg, f.tenantA, f.adminID, invtypes.InviteUserRequest{Email: "l@acme.com", RoleID: f.employeeRl.ID})
+	require.NoError(t, err)
+	assert.Equal(t, []string{"lock", "domain_check"}, f.s.calls)
+
+	// A rejected domain is still checked after the lock, and nothing persists.
+	f.s.calls = nil
+	_, err = f.invite().Execute(bg, f.tenantA, f.adminID, invtypes.InviteUserRequest{Email: "x@gone.com", RoleID: f.employeeRl.ID})
+	assert.ErrorIs(t, err, domainerrors.ErrEmailDomainNotAllowed)
+	assert.Equal(t, []string{"lock", "domain_check"}, f.s.calls)
+	assert.Len(t, f.s.invitations, 1)
+	assert.Len(t, f.s.users, 1)
+}
+
+func TestInvite_MissingTenantSurfacesNotFound(t *testing.T) {
+	f := newFixture()
+	delete(f.s.tenants, f.tenantA)
+	_, err := f.invite().Execute(bg, f.tenantA, f.adminID, invtypes.InviteUserRequest{Email: "m@acme.com", RoleID: f.employeeRl.ID})
+	assert.ErrorIs(t, err, domainerrors.ErrTenantNotFound)
+	assert.Zero(t, f.s.domainChecks)
+	assert.Empty(t, f.s.users)
 }
 
 // AC2: only hashes stored.

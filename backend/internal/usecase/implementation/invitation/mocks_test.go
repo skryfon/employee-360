@@ -18,13 +18,17 @@ import (
 // transaction rollback so we can assert the outbox guarantee.
 type fakeStore struct {
 	domainChecks int
-	users        map[uuid.UUID]*entity.User
-	userRoles    []*entity.UserRole
-	invitations  map[uuid.UUID]*entity.UserInvitation
-	roles        map[uuid.UUID]*entity.Role
-	events       []event.Event
-	publishErr   error
-	audits       []*entity.AuditLog
+	// calls records the order of lock/domain-check calls.
+	calls []string
+	// tenants is the set of live tenants for the fake tenant repo.
+	tenants     map[uuid.UUID]bool
+	users       map[uuid.UUID]*entity.User
+	userRoles   []*entity.UserRole
+	invitations map[uuid.UUID]*entity.UserInvitation
+	roles       map[uuid.UUID]*entity.Role
+	events      []event.Event
+	publishErr  error
+	audits      []*entity.AuditLog
 	// depts/positions map id -> owning tenant.
 	depts     map[uuid.UUID]uuid.UUID
 	positions map[uuid.UUID]uuid.UUID
@@ -40,6 +44,7 @@ func newFakeStore() *fakeStore {
 		depts:       map[uuid.UUID]uuid.UUID{},
 		positions:   map[uuid.UUID]uuid.UUID{},
 		domains:     map[string]uuid.UUID{},
+		tenants:     map[uuid.UUID]bool{},
 	}
 }
 
@@ -272,8 +277,25 @@ func (r fakeTenantDomainRepo) FindTenantByDomain(context.Context, string) (*enti
 }
 func (r fakeTenantDomainRepo) DomainBelongsToTenant(_ context.Context, t uuid.UUID, d string) (bool, error) {
 	r.s.domainChecks++
+	r.s.calls = append(r.s.calls, "domain_check")
 	owner, ok := r.s.domains[d]
 	return ok && owner == t, nil
+}
+
+type fakeTenantRepo struct{ s *fakeStore }
+
+func (r fakeTenantRepo) GetByID(_ context.Context, id uuid.UUID) (*entity.Tenant, error) {
+	if !r.s.tenants[id] {
+		return nil, domainerrors.ErrTenantNotFound
+	}
+	return &entity.Tenant{ID: id, IsActive: true}, nil
+}
+func (r fakeTenantRepo) LockByID(c context.Context, id uuid.UUID) (*entity.Tenant, error) {
+	r.s.calls = append(r.s.calls, "lock")
+	return r.GetByID(c, id)
+}
+func (r fakeTenantRepo) UpdateName(context.Context, uuid.UUID, string, uuid.UUID, time.Time) error {
+	return nil
 }
 
 // fixture helpers
@@ -290,6 +312,7 @@ func newFixture() *fixture {
 	f := &fixture{s: newFakeStore(), tenantA: uuid.New(), tenantB: uuid.New(), adminID: uuid.New(), hash: infraservice.NewHashService(4)}
 	f.employeeRl = &entity.Role{ID: uuid.New(), TenantID: f.tenantA, Name: "employee"}
 	f.s.roles[f.employeeRl.ID] = f.employeeRl
+	f.s.tenants[f.tenantA], f.s.tenants[f.tenantB] = true, true
 	f.s.domains["acme.com"] = f.tenantA
 	f.s.domains["b.com"] = f.tenantB
 	return f

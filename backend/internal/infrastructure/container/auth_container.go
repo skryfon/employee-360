@@ -136,7 +136,7 @@ func NewAuthContainer(
 	resetPasswordUC := authusecaseimpl.NewResetPasswordUseCase(userRepo, passwordResetRepo, refreshTokenRepo, hashService, transactor)
 
 	inviteAppURLs := invusecaseimpl.AppURLs{Default: cfg.App.FrontendURL, Admin: cfg.App.AdminURL, Employee: cfg.App.EmployeeURL}
-	inviteUC := invusecaseimpl.NewInviteUserUseCase(userRepo, userRoleRepo, roleRepo, invitationRepo, orgRefRepo, tenantDomainRepo, auditRepo, hashService, eventPublisher, transactor, inviteAppURLs)
+	inviteUC := invusecaseimpl.NewInviteUserUseCase(userRepo, userRoleRepo, roleRepo, invitationRepo, orgRefRepo, tenantDomainRepo, persistence.NewGormTenantRepository(db), auditRepo, hashService, eventPublisher, transactor, inviteAppURLs)
 	acceptInvUC := invusecaseimpl.NewAcceptInvitationUseCase(userRepo, invitationRepo, hashService, transactor)
 	resendInvUC := invusecaseimpl.NewResendInvitationUseCase(roleRepo, invitationRepo, auditRepo, hashService, eventPublisher, transactor, inviteAppURLs)
 	revokeInvUC := invusecaseimpl.NewRevokeInvitationUseCase(invitationRepo, userRepo, userRoleRepo, auditRepo, transactor)
