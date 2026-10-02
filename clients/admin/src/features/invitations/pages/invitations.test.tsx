@@ -184,6 +184,20 @@ describe('invitations', () => {
     expect(JSON.parse(mock.history.post[0].data)).toEqual({ email: 'new@x.com', role_id: ROLE_ID })
   })
 
+  it('shows EMAIL_DOMAIN_NOT_ALLOWED inline on the email field without a toast', async () => {
+    signIn()
+    const msg = 'Email domain is not registered for this organization'
+    mock.onPost('/api/v1/users/invitations').reply(400, { success: false, error: { code: 'EMAIL_DOMAIN_NOT_ALLOWED', message: msg } })
+    renderAt('/invitations/new')
+    await userEvent.type(await screen.findByLabelText('Email'), 'new@other.com')
+    await screen.findByRole('option', { name: 'admin' })
+    await userEvent.selectOptions(screen.getByLabelText('Role'), ROLE_ID)
+    await userEvent.click(screen.getByRole('button', { name: 'Send invitation' }))
+    expect(await screen.findByText(msg)).toBeInTheDocument()
+    expect(screen.getByLabelText('Email')).toHaveAttribute('aria-invalid', 'true')
+    expect(screen.getByRole('form', { name: 'Invite user' })).toBeInTheDocument()
+  })
+
   it('shows an error when roles fail to load', async () => {
     signIn()
     mock.onGet('/api/v1/roles').reply(500, { success: false, error: { message: 'boom' } })

@@ -13,7 +13,7 @@ export type GetApiV1UsersInvitationsParams = {
  */
 page?: number;
 /**
- * Page size (default 20, max 100)
+ * Page size (1-100, default 20); values above 100 are rejected with 400
  */
 page_size?: number;
 /**

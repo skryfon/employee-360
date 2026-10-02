@@ -38,3 +38,13 @@ export function DashboardIcon(props: SVGProps<SVGSVGElement>) {
     </Icon>
   )
 }
+
+/** Office building: organization. */
+export function BuildingIcon(props: SVGProps<SVGSVGElement>) {
+  return (
+    <Icon {...props}>
+      <path d="M4 21V5a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2v16M16 9h2a2 2 0 0 1 2 2v10M2 21h20" />
+      <path d="M8 7h4M8 11h4M8 15h4" />
+    </Icon>
+  )
+}

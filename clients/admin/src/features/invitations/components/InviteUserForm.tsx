@@ -1,6 +1,6 @@
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
-import { getErrorMessage } from '@employee360/api-client'
+import { getErrorMessage, getErrorCode, EMAIL_DOMAIN_NOT_ALLOWED } from '@employee360/api-client'
 import { inviteUserSchema, type InviteUserFormValues } from '../schemas/invitationSchemas'
 import { useInviteUserMutation, useRolesQuery } from '../queries/invitationQueries'
 import { Card, FormField, SubmitButton } from '@employee360/ui'
@@ -24,6 +24,7 @@ export function InviteUserForm({ onSuccess, onCancel }: { onSuccess?: () => void
     register,
     handleSubmit,
     reset,
+    setError,
     formState: { errors },
   } = useForm<InviteUserFormValues>({ resolver: zodResolver(inviteUserSchema), defaultValues: EMPTY })
 
@@ -43,7 +44,14 @@ export function InviteUserForm({ onSuccess, onCancel }: { onSuccess?: () => void
           reset(EMPTY)
           onSuccess?.()
         },
-        onError: (err) => toast.error(getErrorMessage(err, 'Could not send invitation.')),
+        onError: (err) => {
+          const message = getErrorMessage(err, 'Could not send invitation.')
+          if (getErrorCode(err) === EMAIL_DOMAIN_NOT_ALLOWED) {
+            setError('email', { type: 'server', message }, { shouldFocus: true })
+            return
+          }
+          toast.error(message)
+        },
       },
     )
 

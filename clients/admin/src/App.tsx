@@ -4,6 +4,7 @@ import { RequireAuth } from './components/layout/RequireAuth'
 import { AdminShell } from './components/layout/AdminShell'
 import { invitationRoutes } from './features/invitations/routes'
 import { AppToaster } from './components/feedback/AppToaster'
+import { tenantRoutes } from './features/tenants/routes'
 import { dashboardRoutes } from './features/dashboard/routes'
 
 export default function App() {
@@ -15,6 +16,7 @@ export default function App() {
           <Route element={<AdminShell />}>
             {dashboardRoutes}
             {invitationRoutes}
+            {tenantRoutes}
           </Route>
         </Route>
         <Route path="*" element={<Navigate to="/" replace />} />

@@ -4,7 +4,7 @@ import { BrandMark, UserBadge, pickPrimaryRole } from '@employee360/ui'
 import { useAuthStore } from '../../stores/authStore'
 import { useLogoutMutation } from '../../features/auth/queries/authMutations'
 import { useUiStore } from '../../stores/uiStore'
-import { NAV_ITEMS } from './navItems'
+import { visibleNavItems } from './navItems'
 
 const FOCUS = 'focus:outline-none focus-visible:ring-2 focus-visible:ring-slate-900 focus-visible:ring-offset-2'
 
@@ -87,7 +87,7 @@ export function Sidebar() {
         </div>
         <nav aria-label="Main" className={`flex flex-1 flex-col gap-1 ${collapsed ? 'p-3 md:p-2' : 'p-3'}`}>
           <p className={`px-3 pb-1 text-xs font-medium text-slate-600 ${labelClass}`}>Manage</p>
-          {NAV_ITEMS.map((item) => (
+          {visibleNavItems(user?.roles).map((item) => (
             <NavLink
               key={item.to}
               to={item.to}
