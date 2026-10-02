@@ -6,6 +6,9 @@
  * OpenAPI spec version: 1.0
  */
 
+export * from './getApiV1Departments200.ts';
+export * from './getApiV1DepartmentsId200.ts';
+export * from './getApiV1DepartmentsParams.ts';
 export * from './getApiV1Health200.ts';
 export * from './getApiV1InvitationsValidate200.ts';
 export * from './getApiV1InvitationsValidateParams.ts';
@@ -27,6 +30,9 @@ export * from './githubComSkryfonEmployee360BackendInternalTypesAuthLogoutReques
 export * from './githubComSkryfonEmployee360BackendInternalTypesAuthResetPasswordRequest.ts';
 export * from './githubComSkryfonEmployee360BackendInternalTypesAuthTokenRefreshRequest.ts';
 export * from './githubComSkryfonEmployee360BackendInternalTypesAuthTokenRefreshResponse.ts';
+export * from './githubComSkryfonEmployee360BackendInternalTypesDepartmentCreateDepartmentRequest.ts';
+export * from './githubComSkryfonEmployee360BackendInternalTypesDepartmentDepartmentResponse.ts';
+export * from './githubComSkryfonEmployee360BackendInternalTypesDepartmentUpdateDepartmentRequest.ts';
 export * from './githubComSkryfonEmployee360BackendInternalTypesInvitationAcceptInvitationRequest.ts';
 export * from './githubComSkryfonEmployee360BackendInternalTypesInvitationInvitationResponse.ts';
 export * from './githubComSkryfonEmployee360BackendInternalTypesInvitationInviteUserRequest.ts';
@@ -35,5 +41,7 @@ export * from './githubComSkryfonEmployee360BackendInternalTypesRoleRoleResponse
 export * from './internalDeliveryHttpHandlersHealthResponse.ts';
 export * from './postApiV1AuthLogin200.ts';
 export * from './postApiV1AuthRefresh200.ts';
+export * from './postApiV1Departments201.ts';
 export * from './postApiV1UsersInvitations201.ts';
 export * from './postApiV1UsersInvitationsIdResend200.ts';
+export * from './putApiV1DepartmentsId200.ts';

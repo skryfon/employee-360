@@ -1,0 +1,111 @@
+package department
+
+import (
+	"context"
+	"errors"
+	"testing"
+
+	"github.com/google/uuid"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+
+	"github.com/skryfon/employee360/backend/internal/domain/entity"
+	domainerrors "github.com/skryfon/employee360/backend/internal/domain/errors"
+	deptuc "github.com/skryfon/employee360/backend/internal/usecase/interface/department"
+)
+
+func TestDeleteDepartmentUseCase(t *testing.T) {
+	tenantID := uuid.New()
+	actorID := uuid.New()
+	deptID := uuid.New()
+	bg := context.Background()
+
+	t.Run("successful deletion", func(t *testing.T) {
+		auditRepo := &mockAuditRepo{}
+		repo := &mockDepartmentRepo{
+			getByIDFn: func(ctx context.Context, tID, id uuid.UUID) (*entity.Department, error) {
+				assert.Equal(t, tenantID, tID)
+				return &entity.Department{ID: deptID, TenantID: tenantID, Name: "Engineering"}, nil
+			},
+			isReferencedFn: func(ctx context.Context, tID, id uuid.UUID) (bool, error) {
+				assert.Equal(t, tenantID, tID)
+				return false, nil
+			},
+			deleteFn: func(ctx context.Context, tID, id, aID uuid.UUID) error {
+				assert.Equal(t, tenantID, tID)
+				assert.Equal(t, deptID, id)
+				assert.Equal(t, actorID, aID)
+				return nil
+			},
+		}
+
+		uc := NewDeleteDepartmentUseCase(repo, auditRepo, nil)
+		err := uc.Execute(bg, tenantID, actorID, deptuc.DeleteDepartmentInput{ID: deptID})
+		require.NoError(t, err)
+
+		require.Len(t, auditRepo.logs, 1)
+		assert.Equal(t, auditActionDelete, auditRepo.logs[0].Action)
+		assert.Equal(t, auditEntityDepartment, auditRepo.logs[0].EntityType)
+		assert.Equal(t, deptID, auditRepo.logs[0].EntityID)
+		assert.Equal(t, &actorID, auditRepo.logs[0].ActorUserID)
+		assert.Equal(t, tenantID, auditRepo.logs[0].TenantID)
+	})
+
+	t.Run("nil uuid returns ErrDepartmentNotFound", func(t *testing.T) {
+		uc := NewDeleteDepartmentUseCase(&mockDepartmentRepo{}, nil, nil)
+		err := uc.Execute(bg, tenantID, actorID, deptuc.DeleteDepartmentInput{ID: uuid.Nil})
+		require.ErrorIs(t, err, domainerrors.ErrDepartmentNotFound)
+	})
+
+	t.Run("department not found returns ErrDepartmentNotFound", func(t *testing.T) {
+		repo := &mockDepartmentRepo{
+			getByIDFn: func(ctx context.Context, tID, id uuid.UUID) (*entity.Department, error) {
+				return nil, domainerrors.ErrDepartmentNotFound
+			},
+		}
+		uc := NewDeleteDepartmentUseCase(repo, nil, nil)
+		err := uc.Execute(bg, tenantID, actorID, deptuc.DeleteDepartmentInput{ID: deptID})
+		require.ErrorIs(t, err, domainerrors.ErrDepartmentNotFound)
+	})
+
+	t.Run("department in use returns ErrDepartmentInUse", func(t *testing.T) {
+		repo := &mockDepartmentRepo{
+			getByIDFn: func(ctx context.Context, tID, id uuid.UUID) (*entity.Department, error) {
+				return &entity.Department{ID: deptID, TenantID: tenantID}, nil
+			},
+			isReferencedFn: func(ctx context.Context, tID, id uuid.UUID) (bool, error) {
+				return true, nil
+			},
+		}
+		uc := NewDeleteDepartmentUseCase(repo, nil, nil)
+		err := uc.Execute(bg, tenantID, actorID, deptuc.DeleteDepartmentInput{ID: deptID})
+		require.ErrorIs(t, err, domainerrors.ErrDepartmentInUse)
+	})
+
+	t.Run("nil tenant or actor returns unauthorized", func(t *testing.T) {
+		uc := NewDeleteDepartmentUseCase(&mockDepartmentRepo{}, nil, nil)
+		err := uc.Execute(bg, uuid.Nil, actorID, deptuc.DeleteDepartmentInput{ID: deptID})
+		require.ErrorIs(t, err, domainerrors.ErrUnauthorized)
+
+		err = uc.Execute(bg, tenantID, uuid.Nil, deptuc.DeleteDepartmentInput{ID: deptID})
+		require.ErrorIs(t, err, domainerrors.ErrUnauthorized)
+	})
+
+	t.Run("repo error on delete propagated", func(t *testing.T) {
+		boom := errors.New("db error")
+		repo := &mockDepartmentRepo{
+			getByIDFn: func(ctx context.Context, tID, id uuid.UUID) (*entity.Department, error) {
+				return &entity.Department{ID: deptID, TenantID: tenantID}, nil
+			},
+			isReferencedFn: func(ctx context.Context, tID, id uuid.UUID) (bool, error) {
+				return false, nil
+			},
+			deleteFn: func(ctx context.Context, tID, id, aID uuid.UUID) error {
+				return boom
+			},
+		}
+		uc := NewDeleteDepartmentUseCase(repo, nil, nil)
+		err := uc.Execute(bg, tenantID, actorID, deptuc.DeleteDepartmentInput{ID: deptID})
+		require.ErrorIs(t, err, boom)
+	})
+}
