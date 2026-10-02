@@ -19,7 +19,7 @@ BACKEND_DIR="$REPO_ROOT/backend"
 
 cd "$BACKEND_DIR" || { printf '{}\n'; exit 0; }
 
-gofmt -l -w "$FILE" 2>&1 >/dev/null
-go vet ./... 2>&1 >/dev/null
+gofmt -l -w "$FILE" >/dev/null 2>&1
+go vet ./... >/dev/null 2>&1
 
 printf '{}\n'

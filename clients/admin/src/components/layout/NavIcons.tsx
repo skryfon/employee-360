@@ -27,6 +27,18 @@ export function MailIcon(props: SVGProps<SVGSVGElement>) {
   )
 }
 
+/** Org chart: departments. */
+export function DepartmentsIcon(props: SVGProps<SVGSVGElement>) {
+  return (
+    <Icon {...props}>
+      <rect x="9" y="3" width="6" height="5" rx="1" />
+      <rect x="3" y="16" width="6" height="5" rx="1" />
+      <rect x="15" y="16" width="6" height="5" rx="1" />
+      <path d="M12 8v4M6 16v-4h12v4" />
+    </Icon>
+  )
+}
+
 /** Four tiles: dashboard. */
 export function DashboardIcon(props: SVGProps<SVGSVGElement>) {
   return (

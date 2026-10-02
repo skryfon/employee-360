@@ -1,5 +1,5 @@
 import type { ComponentType, SVGProps } from 'react'
-import { BuildingIcon, DashboardIcon, MailIcon } from './NavIcons'
+import { BuildingIcon, DashboardIcon, DepartmentsIcon, MailIcon } from './NavIcons'
 
 export interface NavItem {
   to: string
@@ -14,6 +14,7 @@ export interface NavItem {
 export const NAV_ITEMS: NavItem[] = [
   { to: '/', label: 'Dashboard', icon: DashboardIcon },
   { to: '/invitations', label: 'Invitations', icon: MailIcon },
+  { to: '/departments', label: 'Departments', icon: DepartmentsIcon, roles: ['admin', 'super_admin'] },
   { to: '/settings/organization', label: 'Organization', icon: BuildingIcon, roles: ['super_admin'] },
 ]
 

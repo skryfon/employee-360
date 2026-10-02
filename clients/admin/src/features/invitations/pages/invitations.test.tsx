@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
-import { render, screen, within } from '@testing-library/react'
+import { render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { MemoryRouter } from 'react-router-dom'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
@@ -10,6 +10,7 @@ import { useAuthStore } from '../../../stores/authStore'
 import { toast } from 'sonner'
 
 let mock: MockAdapter
+const DEPT_ID = '22222222-2222-4222-8222-222222222222'
 const ROLE_ID = '11111111-1111-4111-8111-111111111111'
 
 const inv = (id: string, email: string, status: string) => ({ id, email, status, created_at: '2026-01-01T00:00:00Z' })
@@ -39,6 +40,7 @@ beforeEach(() => {
   mock = new MockAdapter(apiClient)
   mock.onGet('/api/v1/users/invitations').reply(() => [200, { success: true, data: rows, meta: { total_pages: 1 } }])
   mock.onGet('/api/v1/roles').reply(200, { success: true, data: [{ id: ROLE_ID, name: 'admin' }] })
+  mock.onGet('/api/v1/departments').reply(200, { success: true, data: [{ id: DEPT_ID, name: 'Engineering', is_active: true }], meta: { page: 1, page_size: 100, total_items: 1, total_pages: 1 } })
   clearSession()
   useAuthStore.getState().clear()
   localStorage.clear()
@@ -208,6 +210,54 @@ describe('invitations', () => {
     expect(screen.getByRole('form', { name: 'Invite user' })).toBeInTheDocument()
   })
 
+  it('loads department options from the active filter and sends the selected department_id', async () => {
+    signIn()
+    mock.onPost('/api/v1/users/invitations').reply(201, { success: true, data: rows[0] })
+    renderAt('/invitations/new')
+    await screen.findByRole('option', { name: 'Engineering' })
+    const req = mock.history.get.find((r) => r.url === '/api/v1/departments')
+    expect(req?.params).toMatchObject({ is_active: true, page_size: 100 })
+    await userEvent.type(screen.getByLabelText('Email'), 'new@x.com')
+    await screen.findByRole('option', { name: 'admin' })
+    await userEvent.selectOptions(screen.getByLabelText('Role'), ROLE_ID)
+    await userEvent.selectOptions(screen.getByLabelText('Department (optional)'), DEPT_ID)
+    await userEvent.click(screen.getByRole('button', { name: 'Send invitation' }))
+    await waitFor(() => expect(mock.history.post).toHaveLength(1))
+    expect(JSON.parse(mock.history.post[0].data)).toEqual({ email: 'new@x.com', role_id: ROLE_ID, department_id: DEPT_ID })
+  })
+
+  it('maps DEPARTMENT_INACTIVE to the department field and refetches options', async () => {
+    signIn()
+    const msg = 'Department is inactive'
+    mock.onPost('/api/v1/users/invitations').reply(400, { success: false, error: { code: 'DEPARTMENT_INACTIVE', message: msg } })
+    renderAt('/invitations/new')
+    await screen.findByRole('option', { name: 'Engineering' })
+    await userEvent.type(screen.getByLabelText('Email'), 'new@x.com')
+    await screen.findByRole('option', { name: 'admin' })
+    await userEvent.selectOptions(screen.getByLabelText('Role'), ROLE_ID)
+    await userEvent.selectOptions(screen.getByLabelText('Department (optional)'), DEPT_ID)
+    const before = mock.history.get.filter((r) => r.url === '/api/v1/departments').length
+    await userEvent.click(screen.getByRole('button', { name: 'Send invitation' }))
+    expect(await screen.findByText(msg)).toBeInTheDocument()
+    expect(screen.getByLabelText('Department (optional)')).toHaveAttribute('aria-invalid', 'true')
+    await waitFor(() => expect(mock.history.get.filter((r) => r.url === '/api/v1/departments').length).toBeGreaterThan(before))
+  })
+
+  it('shows an empty state linking to departments when none are active', async () => {
+    signIn()
+    mock.onGet('/api/v1/departments').reply(200, { success: true, data: [], meta: { page: 1, page_size: 100, total_items: 0, total_pages: 0 } })
+    renderAt('/invitations/new')
+    const link = await screen.findByRole('link', { name: 'Create one in Departments' })
+    expect(link).toHaveAttribute('href', '/departments')
+  })
+
+  it('shows an error when departments fail to load', async () => {
+    signIn()
+    mock.onGet('/api/v1/departments').reply(500, { success: false, error: { message: 'boom' } })
+    renderAt('/invitations/new')
+    expect(await screen.findByText(/Could not load departments/)).toBeInTheDocument()
+  })
+
   it('shows an error when roles fail to load', async () => {
     signIn()
     mock.onGet('/api/v1/roles').reply(500, { success: false, error: { message: 'boom' } })
@@ -251,7 +301,6 @@ describe('invitations', () => {
   })
 })
 
-import { waitFor } from '@testing-library/react'
 async function waitForCondition(cond: () => boolean) {
   await waitFor(() => expect(cond()).toBe(true))
 }

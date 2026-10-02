@@ -5,6 +5,7 @@ import (
 
 	"github.com/google/uuid"
 	"gorm.io/gorm"
+	"gorm.io/gorm/clause"
 
 	"github.com/skryfon/employee360/backend/internal/domain/repository"
 	"github.com/skryfon/employee360/backend/internal/infrastructure/database"
@@ -34,6 +35,19 @@ func (r *gormOrgReferenceRepository) exists(c context.Context, table string, ten
 
 func (r *gormOrgReferenceRepository) DepartmentExists(c context.Context, tenantID, id uuid.UUID) (bool, error) {
 	return r.exists(c, "departments", tenantID, id)
+}
+
+func (r *gormOrgReferenceRepository) LockDepartmentShared(c context.Context, tenantID, id uuid.UUID) (found, active bool, err error) {
+	var rows []bool
+	err = database.DBFromContext(c, r.db).
+		Table("departments").
+		Clauses(clause.Locking{Strength: "SHARE"}).
+		Where("id = ? AND tenant_id = ? AND deleted_at IS NULL", id, tenantID).
+		Pluck("is_active", &rows).Error
+	if err != nil || len(rows) == 0 {
+		return false, false, err
+	}
+	return true, rows[0], nil
 }
 
 func (r *gormOrgReferenceRepository) PositionExists(c context.Context, tenantID, id uuid.UUID) (bool, error) {

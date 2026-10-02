@@ -4,7 +4,13 @@ import { getErrorMessage, getErrorCode, EMAIL_DOMAIN_NOT_ALLOWED } from '@employ
 import { inviteUserSchema, type InviteUserFormValues } from '../schemas/invitationSchemas'
 import { useInviteUserMutation, useRolesQuery } from '../queries/invitationQueries'
 import { Card, FormField, SubmitButton } from '@employee360/ui'
+import { Link } from 'react-router-dom'
+import { useQueryClient } from '@tanstack/react-query'
+import { ACTIVE_DEPARTMENTS_KEY, useActiveDepartmentsQuery } from '../../departments/queries/departmentQueries'
 import { useToast } from '../../../hooks/useToast'
+
+/** Backend error codes that refer to the selected department. */
+const DEPARTMENT_ERROR_CODES = ['DEPARTMENT_INACTIVE', 'DEPARTMENT_NOT_FOUND']
 
 const EMPTY: InviteUserFormValues = {
   email: '',
@@ -20,11 +26,15 @@ export function InviteUserForm({ onSuccess, onCancel }: { onSuccess?: () => void
   const mutation = useInviteUserMutation()
   const roles = useRolesQuery()
   const roleOptions = roles.data ?? []
+  const departments = useActiveDepartmentsQuery()
+  const departmentOptions = departments.data ?? []
+  const qc = useQueryClient()
   const {
     register,
     handleSubmit,
     reset,
     setError,
+    setValue,
     formState: { errors },
   } = useForm<InviteUserFormValues>({ resolver: zodResolver(inviteUserSchema), defaultValues: EMPTY })
 
@@ -48,6 +58,14 @@ export function InviteUserForm({ onSuccess, onCancel }: { onSuccess?: () => void
           const message = getErrorMessage(err, 'Could not send invitation.')
           if (getErrorCode(err) === EMAIL_DOMAIN_NOT_ALLOWED) {
             setError('email', { type: 'server', message }, { shouldFocus: true })
+            return
+          }
+          const code = getErrorCode(err)
+          if (code && DEPARTMENT_ERROR_CODES.includes(code)) {
+            setError('departmentId', { type: 'server', message }, { shouldFocus: true })
+            // The selected department is stale: clear it and reload the options.
+            setValue('departmentId', '')
+            void qc.invalidateQueries({ queryKey: ACTIVE_DEPARTMENTS_KEY })
             return
           }
           toast.error(message)
@@ -106,7 +124,48 @@ export function InviteUserForm({ onSuccess, onCancel }: { onSuccess?: () => void
             <div className="grid gap-4 sm:grid-cols-2">
               <FormField label="First name (optional)" error={errors.firstName?.message} {...register('firstName')} />
               <FormField label="Last name (optional)" error={errors.lastName?.message} {...register('lastName')} />
-              <FormField label="Department ID (optional)" error={errors.departmentId?.message} {...register('departmentId')} />
+              <div className="flex flex-col gap-1">
+                <label htmlFor="departmentId" className="text-xs font-medium text-slate-900">
+                  Department (optional)
+                </label>
+                <select
+                  id="departmentId"
+                  aria-invalid={errors.departmentId ? true : undefined}
+                  aria-describedby={errors.departmentId ? 'departmentId-error' : undefined}
+                  disabled={departments.isPending}
+                  className="h-11 w-full rounded-sm border border-slate-300 bg-white px-3 text-base sm:text-sm md:h-9 text-slate-900 focus:border-slate-900 focus:outline-none focus:ring-1 focus:ring-slate-900 aria-[invalid=true]:border-red-600 aria-[invalid=true]:focus:ring-red-600 disabled:bg-slate-100 disabled:text-slate-500"
+                  {...register('departmentId')}
+                >
+                  <option value="">{departments.isPending ? 'Loading departments...' : 'No department'}</option>
+                  {departmentOptions.map((d) => (
+                    <option key={d.id} value={d.id}>
+                      {d.name}
+                    </option>
+                  ))}
+                </select>
+                {departments.isError && (
+                  <p role="alert" className="text-xs text-red-700">
+                    Could not load departments.{' '}
+                    <button type="button" onClick={() => void departments.refetch()} className="underline">
+                      Retry
+                    </button>
+                  </p>
+                )}
+                {departments.isSuccess && departmentOptions.length === 0 && (
+                  <p className="text-xs text-slate-600">
+                    No active departments yet.{' '}
+                    <Link to="/departments" className="font-medium text-slate-900 underline">
+                      Create one in Departments
+                    </Link>
+                    .
+                  </p>
+                )}
+                {errors.departmentId && (
+                  <p id="departmentId-error" role="alert" className="text-xs text-red-700">
+                    {errors.departmentId.message}
+                  </p>
+                )}
+              </div>
               <FormField label="Position ID (optional)" error={errors.positionId?.message} {...register('positionId')} />
             </div>
           </fieldset>

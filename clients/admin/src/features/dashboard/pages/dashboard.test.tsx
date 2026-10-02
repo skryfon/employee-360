@@ -70,7 +70,7 @@ describe('admin dashboard', () => {
     expect(screen.getByRole('status')).toHaveTextContent('Loading dashboard…')
     expect(await screen.findByText('Total users')).toBeInTheDocument()
     expect(screen.getByText('Total users').nextSibling).toHaveTextContent('12')
-    expect(screen.getByText('Departments').nextSibling).toHaveTextContent('4')
+    expect(within(screen.getByRole('main')).getByText('Departments').nextSibling).toHaveTextContent('4')
     expect(screen.queryByText('Invitations by status')).not.toBeInTheDocument()
     expect(screen.queryByText('Recent invitations')).not.toBeInTheDocument()
     expect(screen.queryByRole('table')).not.toBeInTheDocument()

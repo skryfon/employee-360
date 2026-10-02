@@ -52,5 +52,8 @@ var (
 	ErrInvalidEmail            = errors.New("invalid email address")
 	ErrInvalidInvitationFilter = errors.New("invalid invitation list filter")
 	ErrDepartmentNotFound      = errors.New("department not found")
+	ErrDepartmentInactive      = errors.New("department is inactive")
+	ErrDepartmentNameTaken     = errors.New("department name already exists in this tenant")
+	ErrDepartmentInUse         = errors.New("department is currently assigned to users or invitations")
 	ErrPositionNotFound        = errors.New("position not found")
 )

@@ -8,6 +8,9 @@
 
 export * from './getApiV1DashboardAdmin200.ts';
 export * from './getApiV1DashboardSuperAdmin200.ts';
+export * from './getApiV1Departments200.ts';
+export * from './getApiV1DepartmentsId200.ts';
+export * from './getApiV1DepartmentsParams.ts';
 export * from './getApiV1Health200.ts';
 export * from './getApiV1InvitationsValidate200.ts';
 export * from './getApiV1InvitationsValidateParams.ts';
@@ -38,6 +41,9 @@ export * from './githubComSkryfonEmployee360BackendInternalTypesDashboardRoleUse
 export * from './githubComSkryfonEmployee360BackendInternalTypesDashboardSuperAdminDashboardResponse.ts';
 export * from './githubComSkryfonEmployee360BackendInternalTypesDashboardTenantInfoResponse.ts';
 export * from './githubComSkryfonEmployee360BackendInternalTypesDashboardUserCountsResponse.ts';
+export * from './githubComSkryfonEmployee360BackendInternalTypesDepartmentCreateDepartmentRequest.ts';
+export * from './githubComSkryfonEmployee360BackendInternalTypesDepartmentDepartmentResponse.ts';
+export * from './githubComSkryfonEmployee360BackendInternalTypesDepartmentUpdateDepartmentRequest.ts';
 export * from './githubComSkryfonEmployee360BackendInternalTypesInvitationAcceptInvitationRequest.ts';
 export * from './githubComSkryfonEmployee360BackendInternalTypesInvitationInvitationListItemResponse.ts';
 export * from './githubComSkryfonEmployee360BackendInternalTypesInvitationInvitationResponse.ts';
@@ -56,6 +62,8 @@ export * from './patchApiV1Tenant200.ts';
 export * from './patchApiV1TenantDomainsDomainId200.ts';
 export * from './postApiV1AuthLogin200.ts';
 export * from './postApiV1AuthRefresh200.ts';
+export * from './postApiV1Departments201.ts';
 export * from './postApiV1TenantDomains201.ts';
 export * from './postApiV1UsersInvitations201.ts';
 export * from './postApiV1UsersInvitationsIdResend200.ts';
+export * from './putApiV1DepartmentsId200.ts';
