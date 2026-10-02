@@ -106,6 +106,25 @@ func registerRoutes(engine *gin.Engine, c *container.Container) {
 			)
 		}
 
+		// Current-tenant settings (self-hosted: the caller's own tenant only), strictly
+		// super_admin (Auth -> Tenant -> role guard). No tenant id in URL or body.
+		if c.Auth != nil && c.Auth.TenantHandler != nil {
+			th := c.Auth.TenantHandler
+			tg := v1.Group("/tenant",
+				middleware.Auth(c.Auth.TokenService, c.Auth.IdentityVerifier),
+				middleware.Tenant(),
+				middleware.RequireRole(entity.RoleSuperAdmin),
+			)
+			{
+				tg.GET("", th.Get)
+				tg.PATCH("", th.Update)
+				tg.GET("/domains", th.ListDomains)
+				tg.POST("/domains", th.AddDomain)
+				tg.PATCH("/domains/:domainId", th.UpdateDomain)
+				tg.DELETE("/domains/:domainId", th.RemoveDomain)
+			}
+		}
+
 		if c.Auth != nil && c.Auth.InvitationHandler != nil {
 			ih := c.Auth.InvitationHandler
 

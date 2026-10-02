@@ -17,13 +17,14 @@ import (
 // fakeStore is an in-memory stand-in for the DB; snapshot/restore emulate
 // transaction rollback so we can assert the outbox guarantee.
 type fakeStore struct {
-	users       map[uuid.UUID]*entity.User
-	userRoles   []*entity.UserRole
-	invitations map[uuid.UUID]*entity.UserInvitation
-	roles       map[uuid.UUID]*entity.Role
-	events      []event.Event
-	publishErr  error
-	audits      []*entity.AuditLog
+	domainChecks int
+	users        map[uuid.UUID]*entity.User
+	userRoles    []*entity.UserRole
+	invitations  map[uuid.UUID]*entity.UserInvitation
+	roles        map[uuid.UUID]*entity.Role
+	events       []event.Event
+	publishErr   error
+	audits       []*entity.AuditLog
 	// depts/positions map id -> owning tenant.
 	depts     map[uuid.UUID]uuid.UUID
 	positions map[uuid.UUID]uuid.UUID
@@ -270,6 +271,7 @@ func (r fakeTenantDomainRepo) FindTenantByDomain(context.Context, string) (*enti
 	return nil, domainerrors.ErrTenantNotFound
 }
 func (r fakeTenantDomainRepo) DomainBelongsToTenant(_ context.Context, t uuid.UUID, d string) (bool, error) {
+	r.s.domainChecks++
 	owner, ok := r.s.domains[d]
 	return ok && owner == t, nil
 }

@@ -383,3 +383,14 @@ func TestInviteLink_TargetsRoleApp(t *testing.T) {
 	p = f.s.events[len(f.s.events)-1].Payload.(event.UserInvitedPayload)
 	assert.Equal(t, "http://app/accept-invitation?token="+tok, p.InviteURL)
 }
+
+func TestInvite_MultipleOrMisplacedAtRejectedBeforeAnyWork(t *testing.T) {
+	f := newFixture()
+	for _, e := range []string{"x@evil.com@acme.com", "a@@acme.com", "@acme.com", "a@"} {
+		_, err := f.invite().Execute(bg, f.tenantA, f.adminID, invtypes.InviteUserRequest{Email: e, RoleID: f.employeeRl.ID})
+		assert.ErrorIs(t, err, domainerrors.ErrInvalidEmail, e)
+	}
+	assert.Zero(t, f.s.domainChecks)
+	assert.Empty(t, f.s.invitations)
+	assert.Empty(t, f.s.events)
+}

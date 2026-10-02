@@ -14,6 +14,11 @@ var (
 	ErrTenantNotFound        = errors.New("tenant not found")
 	ErrEmailDomainNotAllowed = errors.New("email domain is not registered for this organization")
 	ErrDomainAlreadyExists   = errors.New("domain already registered")
+	ErrDomainNotFound        = errors.New("tenant domain not found")
+	ErrInvalidDomain         = errors.New("invalid domain name")
+	ErrInvalidTenantName     = errors.New("invalid tenant name")
+	// ErrLastDomain is returned when removing a tenant's only live domain.
+	ErrLastDomain = errors.New("cannot remove the last domain of a tenant")
 
 	// User errors
 	ErrUserNotFound       = errors.New("user not found")

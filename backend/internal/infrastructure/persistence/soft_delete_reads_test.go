@@ -71,3 +71,34 @@ func TestSoftDeletedRowsAreHiddenFromReads(t *testing.T) {
 	require.NoError(t, err)
 	require.False(t, ok)
 }
+
+// Soft-deleted tenants and tenant domains must disappear from the management
+// reads and the login/identity paths.
+func TestSoftDeletedTenantsAndDomainsAreHidden(t *testing.T) {
+	db := setupTestDB(t)
+	c := context.Background()
+	tenants := NewGormTenantRepository(db)
+	domains := NewGormTenantDomainManager(db)
+
+	tn := createTestTenant(t, db, "sd-"+uuid.NewString())
+	dom := "sd-" + uuid.NewString()[:8] + ".example.com"
+	live := "sd2-" + uuid.NewString()[:8] + ".example.com"
+	now := time.Now().UTC()
+	for _, d := range []string{dom, live} {
+		require.NoError(t, domains.Create(c, &entity.TenantDomain{ID: uuid.New(), TenantID: tn.ID, Domain: d, CreatedAt: now, UpdatedAt: now}))
+	}
+	require.NoError(t, db.Exec("UPDATE tenant_domains SET deleted_at = NOW() WHERE domain = ?", dom).Error)
+	ds, err := domains.ListByTenantID(c, tn.ID)
+	require.NoError(t, err)
+	require.Len(t, ds, 1)
+	require.Equal(t, live, ds[0].Domain)
+	n, err := domains.CountByTenantID(c, tn.ID)
+	require.NoError(t, err)
+	require.EqualValues(t, 1, n)
+
+	require.NoError(t, db.Exec("UPDATE tenants SET deleted_at = NOW() WHERE id = ?", tn.ID).Error)
+	_, err = tenants.GetByID(c, tn.ID)
+	require.ErrorIs(t, err, domainerrors.ErrTenantNotFound)
+	_, err = tenants.LockByID(c, tn.ID)
+	require.ErrorIs(t, err, domainerrors.ErrTenantNotFound)
+}

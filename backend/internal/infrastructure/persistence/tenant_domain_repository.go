@@ -4,9 +4,11 @@ import (
 	"context"
 	"errors"
 	"strings"
+	"time"
 
 	"github.com/google/uuid"
 	"gorm.io/gorm"
+	"gorm.io/gorm/clause"
 
 	"github.com/skryfon/employee360/backend/internal/infrastructure/database"
 
@@ -27,12 +29,19 @@ type gormTenantDomainRepository struct {
 	db *gorm.DB
 }
 
+// NewGormTenantDomainManager constructs the super_admin management adapter
+// over tenant_domains (same underlying implementation).
+func NewGormTenantDomainManager(db *gorm.DB) repository.TenantDomainManager {
+	return &gormTenantDomainRepository{db: db}
+}
+
 // NewGormTenantDomainRepository constructs a GORM-backed TenantDomainRepository.
 func NewGormTenantDomainRepository(db *gorm.DB) repository.TenantDomainRepository {
 	return &gormTenantDomainRepository{db: db}
 }
 
 var _ repository.TenantDomainRepository = (*gormTenantDomainRepository)(nil)
+var _ repository.TenantDomainManager = (*gormTenantDomainRepository)(nil)
 
 // FindTenantByDomain returns the active tenant that owns the given email domain.
 func (r *gormTenantDomainRepository) FindTenantByDomain(c context.Context, domain string) (*entity.Tenant, error) {
@@ -64,4 +73,104 @@ func (r *gormTenantDomainRepository) DomainBelongsToTenant(c context.Context, te
 		return false, err
 	}
 	return n > 0, nil
+}
+
+// Create registers the domain. tenant_domains carries a UNIQUE (domain)
+// constraint that also covers soft-deleted rows, so a previously removed
+// domain is revived (re-pointed at the tenant) instead of inserted; this
+// keeps "globally unique among live rows" without a schema change. A live
+// owner (or a concurrent writer winning the race) yields ErrDomainAlreadyExists.
+func (r *gormTenantDomainRepository) Create(c context.Context, d *entity.TenantDomain) error {
+	db := database.DBFromContext(c, r.db)
+	var revived []uuid.UUID
+	if err := db.Raw(`UPDATE tenant_domains
+SET tenant_id = ?, deleted_at = NULL, deleted_by = NULL,
+    created_by = ?, updated_by = ?, created_at = ?, updated_at = ?
+WHERE domain = ? AND deleted_at IS NOT NULL
+RETURNING id`, d.TenantID, d.CreatedBy, d.CreatedBy, d.CreatedAt, d.UpdatedAt, d.Domain).
+		Scan(&revived).Error; err != nil {
+		return err
+	}
+	if len(revived) == 1 {
+		d.ID = revived[0]
+		return nil
+	}
+	res := db.Table("tenant_domains").Clauses(clause.OnConflict{DoNothing: true}).Create(d)
+	if res.Error != nil {
+		return res.Error
+	}
+	if res.RowsAffected == 0 {
+		return domainerrors.ErrDomainAlreadyExists
+	}
+	return nil
+}
+
+func (r *gormTenantDomainRepository) ListByTenantID(c context.Context, tenantID uuid.UUID) ([]*entity.TenantDomain, error) {
+	var out []*entity.TenantDomain
+	err := database.DBFromContext(c, r.db).Table("tenant_domains").
+		Where("tenant_id = ? AND deleted_at IS NULL", tenantID).
+		Order("created_at ASC, id ASC").Find(&out).Error
+	return out, err
+}
+
+func (r *gormTenantDomainRepository) CountByTenantID(c context.Context, tenantID uuid.UUID) (int64, error) {
+	var n int64
+	err := database.DBFromContext(c, r.db).Table("tenant_domains").
+		Where("tenant_id = ? AND deleted_at IS NULL", tenantID).Count(&n).Error
+	return n, err
+}
+
+func (r *gormTenantDomainRepository) GetByID(c context.Context, tenantID, id uuid.UUID) (*entity.TenantDomain, error) {
+	var d entity.TenantDomain
+	if err := database.DBFromContext(c, r.db).Table("tenant_domains").
+		Where("id = ? AND tenant_id = ? AND deleted_at IS NULL", id, tenantID).
+		First(&d).Error; err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, domainerrors.ErrDomainNotFound
+		}
+		return nil, err
+	}
+	return &d, nil
+}
+
+func (r *gormTenantDomainRepository) SoftDelete(c context.Context, tenantID, id, actorID uuid.UUID, at time.Time) error {
+	res := database.DBFromContext(c, r.db).Table("tenant_domains").
+		Where("id = ? AND tenant_id = ? AND deleted_at IS NULL", id, tenantID).
+		Updates(map[string]any{"deleted_at": at, "deleted_by": actorID, "updated_at": at, "updated_by": actorID})
+	if res.Error != nil {
+		return res.Error
+	}
+	if res.RowsAffected == 0 {
+		return domainerrors.ErrDomainNotFound
+	}
+	return nil
+}
+
+// UpdateDomain changes the value of the tenant's own live domain. UNIQUE
+// (domain) also covers soft-deleted rows, so a tombstone (another row, already
+// soft-deleted) that still holds the target value is reclaimed first; a live
+// owner surfaces as ErrDomainAlreadyExists. A row of another tenant, or a
+// soft-deleted one, is reported as ErrDomainNotFound (existence not leaked).
+func (r *gormTenantDomainRepository) UpdateDomain(c context.Context, tenantID, id uuid.UUID, domain string, actorID uuid.UUID, at time.Time) error {
+	db := database.DBFromContext(c, r.db)
+	// Reclaim a tombstone only once the caller's own live row is confirmed.
+	if _, err := r.GetByID(c, tenantID, id); err != nil {
+		return err
+	}
+	if err := db.Exec(`DELETE FROM tenant_domains WHERE domain = ? AND deleted_at IS NOT NULL AND id <> ?`, domain, id).Error; err != nil {
+		return err
+	}
+	res := db.Table("tenant_domains").
+		Where("id = ? AND tenant_id = ? AND deleted_at IS NULL", id, tenantID).
+		Updates(map[string]any{"domain": domain, "updated_at": at, "updated_by": actorID})
+	if res.Error != nil {
+		if strings.Contains(res.Error.Error(), "uq_tenant_domains_domain") || strings.Contains(res.Error.Error(), "23505") {
+			return domainerrors.ErrDomainAlreadyExists
+		}
+		return res.Error
+	}
+	if res.RowsAffected == 0 {
+		return domainerrors.ErrDomainNotFound
+	}
+	return nil
 }

@@ -65,11 +65,12 @@ func (u *InviteUserUseCaseImpl) Execute(c context.Context, tenantID, inviterID u
 	}
 
 	email := strings.ToLower(strings.TrimSpace(req.Email))
-	if at := strings.Index(email, "@"); at <= 0 || at == len(email)-1 {
+	at := strings.Index(email, "@")
+	if strings.Count(email, "@") != 1 || at <= 0 || at == len(email)-1 {
 		return nil, domainerrors.ErrInvalidEmail
 	}
 	// The email's domain must be registered to the caller's tenant (never a client-supplied tenant).
-	ok, err := u.tenantDomains.DomainBelongsToTenant(c, tenantID, email[strings.LastIndex(email, "@")+1:])
+	ok, err := u.tenantDomains.DomainBelongsToTenant(c, tenantID, email[at+1:])
 	if err != nil {
 		return nil, err
 	}

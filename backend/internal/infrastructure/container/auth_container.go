@@ -16,6 +16,7 @@ import (
 	dashusecaseimpl "github.com/skryfon/employee360/backend/internal/usecase/implementation/dashboard"
 	invusecaseimpl "github.com/skryfon/employee360/backend/internal/usecase/implementation/invitation"
 	roleusecaseimpl "github.com/skryfon/employee360/backend/internal/usecase/implementation/role"
+	tenantusecaseimpl "github.com/skryfon/employee360/backend/internal/usecase/implementation/tenant"
 	"github.com/skryfon/employee360/backend/internal/usecase/implementation/ucshared"
 	authusecase "github.com/skryfon/employee360/backend/internal/usecase/interface/auth"
 	invusecase "github.com/skryfon/employee360/backend/internal/usecase/interface/invitation"
@@ -46,6 +47,7 @@ type AuthContainer struct {
 	InvitationHandler *handlers.InvitationHandler
 	RoleHandler       *handlers.RoleHandler
 	DashboardHandler  *handlers.DashboardHandler
+	TenantHandler     *handlers.TenantHandler
 
 	ListAssignableRolesUseCase roleusecase.ListAssignableRolesUseCase
 
@@ -160,7 +162,19 @@ func NewAuthContainer(
 		dashusecaseimpl.NewSuperAdminDashboardUseCase(adminDashUC, dashRepo, persistence.NewGormTenantReader(db)),
 	)
 
+	tenantRepo := persistence.NewGormTenantRepository(db)
+	tenantDomainMgr := persistence.NewGormTenantDomainManager(db)
+	tenantHandler := handlers.NewTenantHandler(handlers.TenantUseCases{
+		Get:          tenantusecaseimpl.NewGetTenantUseCase(tenantRepo, tenantDomainMgr),
+		Rename:       tenantusecaseimpl.NewRenameTenantUseCase(tenantRepo, auditRepo, transactor),
+		ListDomains:  tenantusecaseimpl.NewListTenantDomainsUseCase(tenantRepo, tenantDomainMgr),
+		AddDomain:    tenantusecaseimpl.NewAddTenantDomainUseCase(tenantRepo, tenantDomainMgr, auditRepo, transactor),
+		UpdateDomain: tenantusecaseimpl.NewUpdateTenantDomainUseCase(tenantRepo, tenantDomainMgr, auditRepo, transactor),
+		DelDomain:    tenantusecaseimpl.NewRemoveTenantDomainUseCase(tenantRepo, tenantDomainMgr, auditRepo, transactor),
+	})
+
 	return &AuthContainer{
+		TenantHandler:              tenantHandler,
 		RoleHandler:                roleHandler,
 		DashboardHandler:           dashboardHandler,
 		ListAssignableRolesUseCase: listRolesUC,
