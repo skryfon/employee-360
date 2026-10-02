@@ -12,6 +12,7 @@ import (
 
 	"github.com/skryfon/employee360/backend/internal/domain/entity"
 	domainerrors "github.com/skryfon/employee360/backend/internal/domain/errors"
+	"github.com/skryfon/employee360/backend/internal/domain/repository"
 )
 
 // Rows carrying deleted_at must disappear from role, user-role, invitation and
@@ -52,7 +53,7 @@ func TestSoftDeletedRowsAreHiddenFromReads(t *testing.T) {
 	require.ErrorIs(t, err, domainerrors.ErrInvitationNotFound)
 	_, err = f.repo.GetByTokenHash(c, inv.TokenHash)
 	require.ErrorIs(t, err, domainerrors.ErrInvitationNotFound)
-	invs, total, err := f.repo.List(c, tid, 0, 0)
+	invs, total, err := f.repo.List(c, tid, repository.InvitationListFilter{})
 	require.NoError(t, err)
 	require.Zero(t, total)
 	require.Empty(t, invs)

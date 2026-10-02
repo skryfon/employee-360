@@ -298,6 +298,104 @@ const docTemplate = `{
                 }
             }
         },
+        "/api/v1/dashboard/admin": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Counts of users, invitations by status, departments and positions for the caller's tenant, plus the 5 most recent invitations.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "dashboard"
+                ],
+                "summary": "Tenant admin dashboard",
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/github_com_skryfon_employee360_backend_internal_delivery_http_response.Envelope"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/github_com_skryfon_employee360_backend_internal_types_dashboard.AdminDashboardResponse"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/github_com_skryfon_employee360_backend_internal_delivery_http_response.Envelope"
+                        }
+                    },
+                    "403": {
+                        "description": "Forbidden",
+                        "schema": {
+                            "$ref": "#/definitions/github_com_skryfon_employee360_backend_internal_delivery_http_response.Envelope"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v1/dashboard/super-admin": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Organisation overview of the caller's tenant: tenant info, user counts (total/active/inactive/pending-invited and by role), invitations by status, departments, positions and the 5 most recent invitations. super_admin only; no cross-tenant aggregates.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "dashboard"
+                ],
+                "summary": "Super admin dashboard",
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/github_com_skryfon_employee360_backend_internal_delivery_http_response.Envelope"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/github_com_skryfon_employee360_backend_internal_types_dashboard.SuperAdminDashboardResponse"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/github_com_skryfon_employee360_backend_internal_delivery_http_response.Envelope"
+                        }
+                    },
+                    "403": {
+                        "description": "Forbidden",
+                        "schema": {
+                            "$ref": "#/definitions/github_com_skryfon_employee360_backend_internal_delivery_http_response.Envelope"
+                        }
+                    }
+                }
+            }
+        },
         "/api/v1/health": {
             "get": {
                 "description": "Returns application and database connectivity status. Used by load balancers, Kubernetes probes, monitoring, and client SDK smoke tests.",
@@ -519,14 +617,32 @@ const docTemplate = `{
                 "parameters": [
                     {
                         "type": "integer",
-                        "description": "Page (1-based)",
+                        "description": "Page (1-based, default 1)",
                         "name": "page",
                         "in": "query"
                     },
                     {
                         "type": "integer",
-                        "description": "Page size (max 100)",
+                        "description": "Page size (default 20, max 100)",
                         "name": "page_size",
+                        "in": "query"
+                    },
+                    {
+                        "enum": [
+                            "pending",
+                            "accepted",
+                            "expired",
+                            "revoked"
+                        ],
+                        "type": "string",
+                        "description": "Filter by status",
+                        "name": "status",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "Case-insensitive substring match on invitee email (max 100 chars)",
+                        "name": "search",
                         "in": "query"
                     }
                 ],
@@ -544,12 +660,18 @@ const docTemplate = `{
                                         "data": {
                                             "type": "array",
                                             "items": {
-                                                "$ref": "#/definitions/github_com_skryfon_employee360_backend_internal_types_invitation.InvitationResponse"
+                                                "$ref": "#/definitions/github_com_skryfon_employee360_backend_internal_types_invitation.InvitationListItemResponse"
                                             }
                                         }
                                     }
                                 }
                             ]
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/github_com_skryfon_employee360_backend_internal_delivery_http_response.Envelope"
                         }
                     }
                 }
@@ -1005,6 +1127,129 @@ const docTemplate = `{
                 }
             }
         },
+        "github_com_skryfon_employee360_backend_internal_types_dashboard.AdminDashboardResponse": {
+            "type": "object",
+            "properties": {
+                "departments": {
+                    "type": "integer"
+                },
+                "invitations": {
+                    "$ref": "#/definitions/github_com_skryfon_employee360_backend_internal_types_dashboard.InvitationCountsResponse"
+                },
+                "positions": {
+                    "type": "integer"
+                },
+                "recent_invitations": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/github_com_skryfon_employee360_backend_internal_types_invitation.InvitationListItemResponse"
+                    }
+                },
+                "users": {
+                    "$ref": "#/definitions/github_com_skryfon_employee360_backend_internal_types_dashboard.UserCountsResponse"
+                }
+            }
+        },
+        "github_com_skryfon_employee360_backend_internal_types_dashboard.InvitationCountsResponse": {
+            "type": "object",
+            "properties": {
+                "accepted": {
+                    "type": "integer"
+                },
+                "expired": {
+                    "type": "integer"
+                },
+                "pending": {
+                    "type": "integer"
+                },
+                "revoked": {
+                    "type": "integer"
+                }
+            }
+        },
+        "github_com_skryfon_employee360_backend_internal_types_dashboard.RoleUserCountResponse": {
+            "type": "object",
+            "properties": {
+                "active": {
+                    "type": "integer"
+                },
+                "inactive": {
+                    "type": "integer"
+                },
+                "role": {
+                    "type": "string"
+                },
+                "total": {
+                    "type": "integer"
+                }
+            }
+        },
+        "github_com_skryfon_employee360_backend_internal_types_dashboard.SuperAdminDashboardResponse": {
+            "type": "object",
+            "properties": {
+                "departments": {
+                    "type": "integer"
+                },
+                "invitations": {
+                    "$ref": "#/definitions/github_com_skryfon_employee360_backend_internal_types_dashboard.InvitationCountsResponse"
+                },
+                "positions": {
+                    "type": "integer"
+                },
+                "recent_invitations": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/github_com_skryfon_employee360_backend_internal_types_invitation.InvitationListItemResponse"
+                    }
+                },
+                "tenant": {
+                    "$ref": "#/definitions/github_com_skryfon_employee360_backend_internal_types_dashboard.TenantInfoResponse"
+                },
+                "users": {
+                    "$ref": "#/definitions/github_com_skryfon_employee360_backend_internal_types_dashboard.UserCountsResponse"
+                },
+                "users_by_role": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/github_com_skryfon_employee360_backend_internal_types_dashboard.RoleUserCountResponse"
+                    }
+                }
+            }
+        },
+        "github_com_skryfon_employee360_backend_internal_types_dashboard.TenantInfoResponse": {
+            "type": "object",
+            "properties": {
+                "created_at": {
+                    "type": "string"
+                },
+                "id": {
+                    "type": "string"
+                },
+                "is_active": {
+                    "type": "boolean"
+                },
+                "name": {
+                    "type": "string"
+                }
+            }
+        },
+        "github_com_skryfon_employee360_backend_internal_types_dashboard.UserCountsResponse": {
+            "type": "object",
+            "properties": {
+                "active": {
+                    "type": "integer"
+                },
+                "inactive": {
+                    "type": "integer"
+                },
+                "pending_invited": {
+                    "type": "integer"
+                },
+                "total": {
+                    "type": "integer"
+                }
+            }
+        },
         "github_com_skryfon_employee360_backend_internal_types_invitation.AcceptInvitationRequest": {
             "type": "object",
             "properties": {
@@ -1013,6 +1258,50 @@ const docTemplate = `{
                 },
                 "token": {
                     "type": "string"
+                }
+            }
+        },
+        "github_com_skryfon_employee360_backend_internal_types_invitation.InvitationListItemResponse": {
+            "type": "object",
+            "properties": {
+                "accepted_at": {
+                    "type": "string"
+                },
+                "created_at": {
+                    "type": "string"
+                },
+                "department_id": {
+                    "type": "string"
+                },
+                "email": {
+                    "type": "string"
+                },
+                "expires_at": {
+                    "type": "string"
+                },
+                "id": {
+                    "type": "string"
+                },
+                "invited_by": {
+                    "$ref": "#/definitions/github_com_skryfon_employee360_backend_internal_types_invitation.InvitedByResponse"
+                },
+                "invited_on": {
+                    "type": "string"
+                },
+                "position_id": {
+                    "type": "string"
+                },
+                "revoked_at": {
+                    "type": "string"
+                },
+                "role": {
+                    "type": "string"
+                },
+                "role_id": {
+                    "type": "string"
+                },
+                "status": {
+                    "$ref": "#/definitions/github_com_skryfon_employee360_backend_internal_domain_entity.InvitationStatus"
                 }
             }
         },
@@ -1073,6 +1362,20 @@ const docTemplate = `{
                     "type": "string"
                 },
                 "role_id": {
+                    "type": "string"
+                }
+            }
+        },
+        "github_com_skryfon_employee360_backend_internal_types_invitation.InvitedByResponse": {
+            "type": "object",
+            "properties": {
+                "email": {
+                    "type": "string"
+                },
+                "id": {
+                    "type": "string"
+                },
+                "name": {
                     "type": "string"
                 }
             }

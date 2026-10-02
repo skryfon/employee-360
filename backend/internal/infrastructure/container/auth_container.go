@@ -13,6 +13,7 @@ import (
 	"github.com/skryfon/employee360/backend/internal/infrastructure/persistence"
 	infraservice "github.com/skryfon/employee360/backend/internal/infrastructure/service"
 	authusecaseimpl "github.com/skryfon/employee360/backend/internal/usecase/implementation/auth"
+	dashusecaseimpl "github.com/skryfon/employee360/backend/internal/usecase/implementation/dashboard"
 	invusecaseimpl "github.com/skryfon/employee360/backend/internal/usecase/implementation/invitation"
 	roleusecaseimpl "github.com/skryfon/employee360/backend/internal/usecase/implementation/role"
 	"github.com/skryfon/employee360/backend/internal/usecase/implementation/ucshared"
@@ -44,6 +45,7 @@ type AuthContainer struct {
 
 	InvitationHandler *handlers.InvitationHandler
 	RoleHandler       *handlers.RoleHandler
+	DashboardHandler  *handlers.DashboardHandler
 
 	ListAssignableRolesUseCase roleusecase.ListAssignableRolesUseCase
 
@@ -151,9 +153,16 @@ func NewAuthContainer(
 
 	listRolesUC := roleusecaseimpl.NewListAssignableRolesUseCase(roleRepo)
 	roleHandler := handlers.NewRoleHandler(listRolesUC)
+	dashRepo := persistence.NewGormDashboardRepository(db)
+	adminDashUC := dashusecaseimpl.NewAdminDashboardUseCase(dashRepo, invitationRepo)
+	dashboardHandler := handlers.NewDashboardHandler(
+		adminDashUC,
+		dashusecaseimpl.NewSuperAdminDashboardUseCase(adminDashUC, dashRepo, persistence.NewGormTenantReader(db)),
+	)
 
 	return &AuthContainer{
 		RoleHandler:                roleHandler,
+		DashboardHandler:           dashboardHandler,
 		ListAssignableRolesUseCase: listRolesUC,
 		InvitationHandler:          invitationHandler,
 		TokenService:               tokenService,

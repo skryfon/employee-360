@@ -88,6 +88,24 @@ func registerRoutes(engine *gin.Engine, c *container.Container) {
 			)
 		}
 
+		// Dashboards (read-only). Admin: tenant-scoped from the auth context.
+		// Super admin: same tenant-scoped data plus tenant info/users by role, strictly super_admin.
+		if c.Auth != nil && c.Auth.DashboardHandler != nil {
+			dh := c.Auth.DashboardHandler
+			v1.GET("/dashboard/admin",
+				middleware.Auth(c.Auth.TokenService, c.Auth.IdentityVerifier),
+				middleware.Tenant(),
+				middleware.RequireRole(entity.RoleAdmin),
+				dh.Admin,
+			)
+			v1.GET("/dashboard/super-admin",
+				middleware.Auth(c.Auth.TokenService, c.Auth.IdentityVerifier),
+				middleware.Tenant(),
+				middleware.RequireRole(entity.RoleSuperAdmin),
+				dh.SuperAdmin,
+			)
+		}
+
 		if c.Auth != nil && c.Auth.InvitationHandler != nil {
 			ih := c.Auth.InvitationHandler
 

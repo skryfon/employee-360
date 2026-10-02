@@ -195,10 +195,11 @@ func TestList_TenantScoped(t *testing.T) {
 	f.doInvite(t, "l2@acme.com")
 	f.s.invitations[uuid.New()] = &entity.UserInvitation{ID: uuid.New(), TenantID: f.tenantB}
 	uc := NewListInvitationsUseCase(fakeInvRepo{f.s})
-	list, total, err := uc.Execute(bg, f.tenantA, 10, 0)
+	res, err := uc.Execute(bg, f.tenantA, invtypes.ListInvitationsQuery{Page: 1, PageSize: 10})
 	require.NoError(t, err)
-	assert.Equal(t, int64(2), total)
-	for _, i := range list {
+	assert.Equal(t, int64(2), res.Total)
+	assert.Equal(t, 1, res.TotalPages)
+	for _, i := range res.Items {
 		assert.Equal(t, f.tenantA, i.TenantID)
 	}
 }

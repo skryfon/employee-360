@@ -9,6 +9,7 @@ import (
 	"github.com/skryfon/employee360/backend/internal/domain/entity"
 	domainerrors "github.com/skryfon/employee360/backend/internal/domain/errors"
 	"github.com/skryfon/employee360/backend/internal/domain/event"
+	"github.com/skryfon/employee360/backend/internal/domain/repository"
 	domainservice "github.com/skryfon/employee360/backend/internal/domain/service"
 	infraservice "github.com/skryfon/employee360/backend/internal/infrastructure/service"
 )
@@ -250,11 +251,11 @@ func (r fakeInvRepo) MarkRevoked(_ context.Context, t, id, actor uuid.UUID, at t
 	i.UpdatedBy = &actor
 	return nil
 }
-func (r fakeInvRepo) List(_ context.Context, t uuid.UUID, limit, offset int) ([]*entity.UserInvitation, int64, error) {
-	var out []*entity.UserInvitation
+func (r fakeInvRepo) List(_ context.Context, t uuid.UUID, _ repository.InvitationListFilter) ([]*entity.InvitationListItem, int64, error) {
+	var out []*entity.InvitationListItem
 	for _, i := range r.s.invitations {
 		if i.TenantID == t {
-			out = append(out, i)
+			out = append(out, &entity.InvitationListItem{UserInvitation: *i})
 		}
 	}
 	return out, int64(len(out)), nil

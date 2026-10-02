@@ -4,10 +4,13 @@ import (
 	"errors"
 	"net/http"
 	"strconv"
+	"strings"
+	"unicode/utf8"
 
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
 	"github.com/skryfon/employee360/backend/internal/delivery/http/response"
+	"github.com/skryfon/employee360/backend/internal/domain/entity"
 	domainerrors "github.com/skryfon/employee360/backend/internal/domain/errors"
 	invtypes "github.com/skryfon/employee360/backend/internal/types/invitation"
 	invusecase "github.com/skryfon/employee360/backend/internal/usecase/interface/invitation"
@@ -70,6 +73,7 @@ func writeInvitationError(c *gin.Context, err error) {
 		errors.Is(err, domainerrors.ErrPositionNotFound),
 		errors.Is(err, domainerrors.ErrInvalidRole),
 		errors.Is(err, domainerrors.ErrInvalidEmail),
+		errors.Is(err, domainerrors.ErrInvalidInvitationFilter),
 		errors.Is(err, domainerrors.ErrInvalidPassword):
 		response.BadRequest(c, err.Error())
 	default:
@@ -166,40 +170,61 @@ func (h *InvitationHandler) Revoke(c *gin.Context) {
 	response.Success(c, gin.H{"message": "invitation revoked"})
 }
 
-// List returns the caller's tenant invitations (admin only).
+// List returns the caller's tenant invitations (admin only), filtered,
+// searched and paginated.
 //
 // @Summary      List invitations
 // @Tags         invitations
 // @Produce      json
 // @Security     BearerAuth
-// @Param        page       query  int  false  "Page (1-based)"
-// @Param        page_size  query  int  false  "Page size (max 100)"
-// @Success      200  {object}  response.Envelope{data=[]invtypes.InvitationResponse}
+// @Param        page       query  int     false  "Page (1-based, default 1)"
+// @Param        page_size  query  int     false  "Page size (default 20, max 100)"
+// @Param        status     query  string  false  "Filter by status"  Enums(pending, accepted, expired, revoked)
+// @Param        search     query  string  false  "Case-insensitive substring match on invitee email (max 100 chars)"
+// @Success      200  {object}  response.Envelope{data=[]invtypes.InvitationListItemResponse}
+// @Failure      400  {object}  response.Envelope
 // @Router       /api/v1/users/invitations [get]
 func (h *InvitationHandler) List(c *gin.Context) {
 	tenantID, ok := tenantOnly(c)
 	if !ok {
 		return
 	}
-	page, _ := strconv.Atoi(c.DefaultQuery("page", "1"))
-	pageSize, _ := strconv.Atoi(c.DefaultQuery("page_size", "20"))
-	if page < 1 {
-		page = 1
+	q := invtypes.ListInvitationsQuery{Page: 1, PageSize: invtypes.DefaultPageSize}
+	if v := c.Query("page"); v != "" {
+		n, err := strconv.Atoi(v)
+		if err != nil || n < 1 {
+			response.BadRequest(c, "page must be a positive integer")
+			return
+		}
+		q.Page = n
 	}
-	if pageSize < 1 || pageSize > 100 {
-		pageSize = 20
+	if v := c.Query("page_size"); v != "" {
+		n, err := strconv.Atoi(v)
+		if err != nil || n < 1 {
+			response.BadRequest(c, "page_size must be a positive integer")
+			return
+		}
+		if n > invtypes.MaxPageSize {
+			n = invtypes.MaxPageSize
+		}
+		q.PageSize = n
 	}
-	items, total, err := h.listUC.Execute(c.Request.Context(), tenantID, pageSize, (page-1)*pageSize)
+	q.Status = entity.InvitationStatus(strings.ToLower(strings.TrimSpace(c.Query("status"))))
+	q.Search = strings.TrimSpace(c.Query("search"))
+	if utf8.RuneCountInString(q.Search) > invtypes.MaxSearchLen {
+		response.BadRequest(c, "search is too long")
+		return
+	}
+	res, err := h.listUC.Execute(c.Request.Context(), tenantID, q)
 	if err != nil {
 		writeInvitationError(c, err)
 		return
 	}
-	out := make([]invtypes.InvitationResponse, 0, len(items))
-	for _, i := range items {
-		out = append(out, invtypes.ToInvitationResponse(i))
+	out := make([]invtypes.InvitationListItemResponse, 0, len(res.Items))
+	for _, i := range res.Items {
+		out = append(out, invtypes.ToInvitationListItemResponse(i))
 	}
-	totalPages := int((total + int64(pageSize) - 1) / int64(pageSize))
-	response.Paginated(c, out, response.Meta{Page: page, PageSize: pageSize, TotalItems: total, TotalPages: totalPages})
+	response.Paginated(c, out, response.Meta{Page: res.Page, PageSize: res.PageSize, TotalItems: res.Total, TotalPages: res.TotalPages})
 }
 
 // Accept consumes an invitation token and sets the invitee's password (unauthenticated).

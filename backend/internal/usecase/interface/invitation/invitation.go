@@ -31,7 +31,7 @@ type RevokeInvitationUseCase interface {
 
 // ListInvitationsUseCase lists the caller's tenant invitations.
 type ListInvitationsUseCase interface {
-	Execute(ctx context.Context, tenantID uuid.UUID, limit, offset int) ([]*entity.UserInvitation, int64, error)
+	Execute(ctx context.Context, tenantID uuid.UUID, q invtypes.ListInvitationsQuery) (*invtypes.ListInvitationsResult, error)
 }
 
 // ValidateInvitationUseCase verifies that an invitation token exists, is pending, not expired, and ready for acceptance.
