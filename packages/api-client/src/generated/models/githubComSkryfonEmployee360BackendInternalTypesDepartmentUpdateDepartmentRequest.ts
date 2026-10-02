@@ -9,6 +9,8 @@
 export interface GithubComSkryfonEmployee360BackendInternalTypesDepartmentUpdateDepartmentRequest {
   /** @maxLength 500 */
   description?: string;
+  /** IsActive is optional; when omitted the current value is kept. */
+  is_active?: boolean;
   /**
      * @minLength 1
      * @maxLength 100

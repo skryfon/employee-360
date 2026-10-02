@@ -11,6 +11,7 @@ import (
 type CreateDepartmentInput struct {
 	Name        string
 	Description string
+	IsActive    *bool // nil defaults to true
 }
 
 // CreateDepartmentUseCase defines the contract for creating a department within the caller's tenant.

@@ -14,7 +14,10 @@ import (
 type DepartmentRepository interface {
 	Create(ctx context.Context, tenantID, actorID uuid.UUID, department *entity.Department) error
 	GetByID(ctx context.Context, tenantID, id uuid.UUID) (*entity.Department, error)
-	List(ctx context.Context, tenantID uuid.UUID, limit, offset int) ([]*entity.Department, int64, error)
+	// GetByIDForUpdate is GetByID taking a row lock (SELECT ... FOR UPDATE); it must run inside a transaction.
+	GetByIDForUpdate(ctx context.Context, tenantID, id uuid.UUID) (*entity.Department, error)
+	// List returns departments ordered by name; isActive nil returns all, otherwise filters on the flag.
+	List(ctx context.Context, tenantID uuid.UUID, isActive *bool, limit, offset int) ([]*entity.Department, int64, error)
 	Update(ctx context.Context, tenantID, actorID uuid.UUID, department *entity.Department) error
 	Delete(ctx context.Context, tenantID, id, actorID uuid.UUID) error
 	ExistsByName(ctx context.Context, tenantID uuid.UUID, name string) (bool, error)

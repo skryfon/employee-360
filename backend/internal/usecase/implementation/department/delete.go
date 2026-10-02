@@ -41,8 +41,9 @@ func (uc *deleteDepartmentUseCase) Execute(c context.Context, tenantID, actorID 
 	}
 
 	return uc.transactor.WithinTransaction(c, func(txCtx context.Context) error {
-		// Verify department exists in the caller's tenant
-		dept, err := uc.repo.GetByID(txCtx, tenantID, input.ID)
+		// Lock the department row so a concurrent invite cannot attach it
+		// between the reference check and the soft delete.
+		dept, err := uc.repo.GetByIDForUpdate(txCtx, tenantID, input.ID)
 		if err != nil {
 			return err
 		}

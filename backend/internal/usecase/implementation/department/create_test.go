@@ -18,10 +18,11 @@ import (
 type mockDepartmentRepo struct {
 	createFn       func(ctx context.Context, tenantID, actorID uuid.UUID, department *entity.Department) error
 	getByIDFn      func(ctx context.Context, tenantID, id uuid.UUID) (*entity.Department, error)
-	listFn         func(ctx context.Context, tenantID uuid.UUID, limit, offset int) ([]*entity.Department, int64, error)
+	listFn         func(ctx context.Context, tenantID uuid.UUID, isActive *bool, limit, offset int) ([]*entity.Department, int64, error)
 	updateFn       func(ctx context.Context, tenantID, actorID uuid.UUID, department *entity.Department) error
 	deleteFn       func(ctx context.Context, tenantID, id, actorID uuid.UUID) error
 	existsByNameFn func(ctx context.Context, tenantID uuid.UUID, name string) (bool, error)
+	forUpdateCalls int
 	isReferencedFn func(ctx context.Context, tenantID, id uuid.UUID) (bool, error)
 }
 
@@ -39,9 +40,13 @@ func (m *mockDepartmentRepo) GetByID(ctx context.Context, tenantID, id uuid.UUID
 	return nil, nil
 }
 
-func (m *mockDepartmentRepo) List(ctx context.Context, tenantID uuid.UUID, limit, offset int) ([]*entity.Department, int64, error) {
+func (m *mockDepartmentRepo) GetByIDForUpdate(ctx context.Context, tenantID, id uuid.UUID) (*entity.Department, error) {
+	m.forUpdateCalls++
+	return m.GetByID(ctx, tenantID, id)
+}
+func (m *mockDepartmentRepo) List(ctx context.Context, tenantID uuid.UUID, isActive *bool, limit, offset int) ([]*entity.Department, int64, error) {
 	if m.listFn != nil {
-		return m.listFn(ctx, tenantID, limit, offset)
+		return m.listFn(ctx, tenantID, isActive, limit, offset)
 	}
 	return nil, 0, nil
 }
@@ -135,6 +140,41 @@ func TestCreateDepartmentUseCase(t *testing.T) {
 		assert.Equal(t, tenantID, auditRepo.logs[0].TenantID)
 	})
 
+	t.Run("is_active defaults to true when omitted", func(t *testing.T) {
+		auditRepo := &mockAuditRepo{}
+		var persisted bool
+		repo := &mockDepartmentRepo{
+			createFn: func(ctx context.Context, tID, aID uuid.UUID, d *entity.Department) error {
+				persisted = d.IsActive
+				return nil
+			},
+		}
+		dept, err := NewCreateDepartmentUseCase(repo, auditRepo, nil).Execute(bg, tenantID, actorID, deptuc.CreateDepartmentInput{Name: "Ops"})
+		require.NoError(t, err)
+		assert.True(t, dept.IsActive)
+		assert.True(t, persisted)
+		require.Len(t, auditRepo.logs, 1)
+		assert.Contains(t, auditRepo.logs[0].Metadata, `"is_active":true`)
+	})
+
+	t.Run("explicit is_active false is honoured", func(t *testing.T) {
+		auditRepo := &mockAuditRepo{}
+		f := false
+		var persisted = true
+		repo := &mockDepartmentRepo{
+			createFn: func(ctx context.Context, tID, aID uuid.UUID, d *entity.Department) error {
+				persisted = d.IsActive
+				return nil
+			},
+		}
+		dept, err := NewCreateDepartmentUseCase(repo, auditRepo, nil).Execute(bg, tenantID, actorID, deptuc.CreateDepartmentInput{Name: "Ops", IsActive: &f})
+		require.NoError(t, err)
+		assert.False(t, dept.IsActive)
+		assert.False(t, persisted)
+		require.Len(t, auditRepo.logs, 1)
+		assert.Contains(t, auditRepo.logs[0].Metadata, `"is_active":false`)
+	})
+
 	t.Run("empty name returns validation error", func(t *testing.T) {
 		uc := NewCreateDepartmentUseCase(&mockDepartmentRepo{}, nil, nil)
 		_, err := uc.Execute(bg, tenantID, actorID, deptuc.CreateDepartmentInput{Name: "   "})
@@ -152,6 +192,24 @@ func TestCreateDepartmentUseCase(t *testing.T) {
 		_, err := uc.Execute(bg, tenantID, actorID, deptuc.CreateDepartmentInput{
 			Name:        "Valid Name",
 			Description: strings.Repeat("b", 501),
+		})
+		require.ErrorIs(t, err, ErrDescriptionTooLong)
+	})
+
+	t.Run("multibyte name and description are counted in characters", func(t *testing.T) {
+		uc := NewCreateDepartmentUseCase(&mockDepartmentRepo{}, nil, nil)
+		dept, err := uc.Execute(bg, tenantID, actorID, deptuc.CreateDepartmentInput{
+			Name:        strings.Repeat("é", 100),
+			Description: strings.Repeat("日", 500),
+		})
+		require.NoError(t, err)
+		assert.Equal(t, strings.Repeat("é", 100), dept.Name)
+
+		_, err = uc.Execute(bg, tenantID, actorID, deptuc.CreateDepartmentInput{Name: strings.Repeat("é", 101)})
+		require.ErrorIs(t, err, ErrDepartmentNameTooLong)
+		_, err = uc.Execute(bg, tenantID, actorID, deptuc.CreateDepartmentInput{
+			Name:        "Valid",
+			Description: strings.Repeat("日", 501),
 		})
 		require.ErrorIs(t, err, ErrDescriptionTooLong)
 	})

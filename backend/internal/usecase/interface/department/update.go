@@ -12,6 +12,7 @@ type UpdateDepartmentInput struct {
 	ID          uuid.UUID
 	Name        string
 	Description string
+	IsActive    *bool // nil keeps the current value
 }
 
 // UpdateDepartmentUseCase defines the contract for updating a department within the caller's tenant.

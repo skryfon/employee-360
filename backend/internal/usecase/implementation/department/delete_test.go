@@ -42,6 +42,7 @@ func TestDeleteDepartmentUseCase(t *testing.T) {
 		uc := NewDeleteDepartmentUseCase(repo, auditRepo, nil)
 		err := uc.Execute(bg, tenantID, actorID, deptuc.DeleteDepartmentInput{ID: deptID})
 		require.NoError(t, err)
+		assert.Equal(t, 1, repo.forUpdateCalls, "department row must be locked before the reference check")
 
 		require.Len(t, auditRepo.logs, 1)
 		assert.Equal(t, auditActionDelete, auditRepo.logs[0].Action)

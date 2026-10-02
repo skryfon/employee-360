@@ -11,6 +11,7 @@ import (
 type ListDepartmentsInput struct {
 	Page     int
 	PageSize int
+	IsActive *bool // nil returns all departments
 }
 
 // ListDepartmentsOutput contains paginated departments and pagination metadata.

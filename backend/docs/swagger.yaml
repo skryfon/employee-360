@@ -235,6 +235,9 @@ definitions:
       description:
         maxLength: 500
         type: string
+      is_active:
+        description: IsActive is optional and defaults to true when omitted.
+        type: boolean
       name:
         maxLength: 100
         minLength: 1
@@ -250,6 +253,8 @@ definitions:
         type: string
       id:
         type: string
+      is_active:
+        type: boolean
       name:
         type: string
       updated_at:
@@ -260,6 +265,9 @@ definitions:
       description:
         maxLength: 500
         type: string
+      is_active:
+        description: IsActive is optional; when omitted the current value is kept.
+        type: boolean
       name:
         maxLength: 100
         minLength: 1
@@ -702,6 +710,10 @@ paths:
         in: query
         name: page_size
         type: integer
+      - description: Filter by active flag (true/false); omit for all
+        in: query
+        name: is_active
+        type: boolean
       produces:
       - application/json
       responses:
@@ -1355,8 +1367,8 @@ paths:
                   $ref: '#/definitions/github_com_skryfon_employee360_backend_internal_types_invitation.InvitationResponse'
               type: object
         "400":
-          description: Invalid payload, or email domain not registered for the tenant
-            (EMAIL_DOMAIN_NOT_ALLOWED)
+          description: Invalid payload, email domain not registered for the tenant
+            (EMAIL_DOMAIN_NOT_ALLOWED), or inactive department (DEPARTMENT_INACTIVE)
           schema:
             $ref: '#/definitions/github_com_skryfon_employee360_backend_internal_delivery_http_response.Envelope'
         "401":

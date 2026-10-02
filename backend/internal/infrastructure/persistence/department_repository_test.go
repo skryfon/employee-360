@@ -9,9 +9,11 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/require"
+	"gorm.io/gorm"
 
 	"github.com/skryfon/employee360/backend/internal/domain/entity"
 	domainerrors "github.com/skryfon/employee360/backend/internal/domain/errors"
+	"github.com/skryfon/employee360/backend/internal/infrastructure/database"
 )
 
 func TestGormDepartmentRepository_CRUDAndTenantIsolation(t *testing.T) {
@@ -92,13 +94,13 @@ func TestGormDepartmentRepository_CRUDAndTenantIsolation(t *testing.T) {
 	require.ErrorIs(t, err, domainerrors.ErrDepartmentNotFound)
 
 	// 9. List is tenant-scoped
-	listA, totalA, err := repo.List(ctxA, tenantA.ID, 10, 0)
+	listA, totalA, err := repo.List(ctxA, tenantA.ID, nil, 10, 0)
 	require.NoError(t, err)
 	require.Equal(t, int64(1), totalA)
 	require.Len(t, listA, 1)
 	require.Equal(t, deptA.ID, listA[0].ID)
 
-	listB, totalB, err := repo.List(ctxB, tenantB.ID, 10, 0)
+	listB, totalB, err := repo.List(ctxB, tenantB.ID, nil, 10, 0)
 	require.NoError(t, err)
 	require.Equal(t, int64(1), totalB)
 	require.Len(t, listB, 1)
@@ -266,4 +268,148 @@ func TestGormDepartmentRepository_SoftDeletePreservesSoftDeletedUserReferences(t
 	require.NoError(t, db.Table("users").Where("id = ?", user.ID).First(&reloadedUser).Error)
 	require.NotNil(t, reloadedUser.DepartmentID)
 	require.Equal(t, dept.ID, *reloadedUser.DepartmentID)
+}
+
+func TestGormDepartmentRepository_IsReferenced_InvitationStates(t *testing.T) {
+	db := setupTestDB(t)
+	repo := NewGormDepartmentRepository(db)
+
+	tenant := createTestTenant(t, db, "dept-inv-tenant-"+uuid.NewString())
+	actor := uuid.New()
+	c := context.Background()
+	now := time.Now().UTC()
+
+	role := &entity.Role{ID: uuid.New(), TenantID: tenant.ID, Name: "role-" + uuid.NewString(), CreatedAt: now, UpdatedAt: now}
+	require.NoError(t, db.Create(role).Error)
+	inviter := &entity.User{
+		ID: uuid.New(), TenantID: tenant.ID, Email: "inviter-" + uuid.NewString() + "@example.com",
+		FirstName: "Admin", LastName: "User", IsActive: true, CreatedAt: now, UpdatedAt: now,
+	}
+	require.NoError(t, db.Create(inviter).Error)
+
+	past := now.Add(-time.Hour)
+	cases := []struct {
+		name     string
+		mutate   func(*entity.UserInvitation)
+		blocking bool
+	}{
+		{"pending blocks", func(i *entity.UserInvitation) {}, true},
+		{"revoked does not block", func(i *entity.UserInvitation) { i.RevokedAt = &past }, false},
+		{"expired does not block", func(i *entity.UserInvitation) { i.ExpiresAt = past }, false},
+		{"accepted does not block", func(i *entity.UserInvitation) { i.AcceptedAt = &past }, false},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			dept := &entity.Department{Name: "Dept " + uuid.NewString()}
+			require.NoError(t, repo.Create(c, tenant.ID, actor, dept))
+
+			inv := &entity.UserInvitation{
+				ID: uuid.New(), TenantID: tenant.ID, Email: "inv-" + uuid.NewString() + "@example.com",
+				RoleID: role.ID, DepartmentID: &dept.ID, InvitedBy: inviter.ID,
+				TokenHash: "hash-" + uuid.NewString(), ExpiresAt: now.Add(48 * time.Hour),
+				CreatedAt: now, UpdatedAt: now,
+			}
+			tc.mutate(inv)
+			require.NoError(t, db.Create(inv).Error)
+
+			referenced, err := repo.IsReferenced(c, tenant.ID, dept.ID)
+			require.NoError(t, err)
+			require.Equal(t, tc.blocking, referenced)
+		})
+	}
+}
+
+func TestGormDepartmentRepository_RowLocks(t *testing.T) {
+	db := setupTestDB(t)
+	repo := NewGormDepartmentRepository(db)
+	orgRepo := NewGormOrgReferenceRepository(db)
+
+	tenant := createTestTenant(t, db, "dept-lock-tenant-"+uuid.NewString())
+	other := createTestTenant(t, db, "dept-lock-other-"+uuid.NewString())
+	actor := uuid.New()
+	dept := &entity.Department{Name: "Locked"}
+	require.NoError(t, repo.Create(context.Background(), tenant.ID, actor, dept))
+
+	err := db.Transaction(func(tx *gorm.DB) error {
+		c := database.WithTx(context.Background(), tx)
+
+		got, err := repo.GetByIDForUpdate(c, tenant.ID, dept.ID)
+		require.NoError(t, err)
+		require.Equal(t, dept.ID, got.ID)
+
+		// Cross-tenant lookups never see (or lock) the row.
+		_, err = repo.GetByIDForUpdate(c, other.ID, dept.ID)
+		require.ErrorIs(t, err, domainerrors.ErrDepartmentNotFound)
+
+		ok, _, err := orgRepo.LockDepartmentShared(c, tenant.ID, dept.ID)
+		require.NoError(t, err)
+		require.True(t, ok)
+		ok, _, err = orgRepo.LockDepartmentShared(c, other.ID, dept.ID)
+		require.NoError(t, err)
+		require.False(t, ok)
+		return nil
+	})
+	require.NoError(t, err)
+}
+
+func TestGormDepartmentRepository_IsActivePersistenceAndFilter(t *testing.T) {
+	db := setupTestDB(t)
+	repo := NewGormDepartmentRepository(db)
+	orgRepo := NewGormOrgReferenceRepository(db)
+	tenant := createTestTenant(t, db, "dept-active-a-"+uuid.NewString())
+	other := createTestTenant(t, db, "dept-active-b-"+uuid.NewString())
+	actor := uuid.New()
+	c := context.Background()
+
+	active := &entity.Department{Name: "Active", IsActive: true}
+	inactive := &entity.Department{Name: "Inactive", IsActive: false}
+	foreign := &entity.Department{Name: "Foreign Inactive", IsActive: false}
+	require.NoError(t, repo.Create(c, tenant.ID, actor, active))
+	require.NoError(t, repo.Create(c, tenant.ID, actor, inactive))
+	require.NoError(t, repo.Create(c, other.ID, actor, foreign))
+
+	got, err := repo.GetByID(c, tenant.ID, inactive.ID)
+	require.NoError(t, err)
+	require.False(t, got.IsActive)
+
+	tr, fl := true, false
+	all, total, err := repo.List(c, tenant.ID, nil, 10, 0)
+	require.NoError(t, err)
+	require.Equal(t, int64(2), total)
+	require.Len(t, all, 2)
+
+	onlyActive, total, err := repo.List(c, tenant.ID, &tr, 10, 0)
+	require.NoError(t, err)
+	require.Equal(t, int64(1), total)
+	require.Equal(t, active.ID, onlyActive[0].ID)
+
+	onlyInactive, total, err := repo.List(c, tenant.ID, &fl, 10, 0)
+	require.NoError(t, err)
+	require.Equal(t, int64(1), total)
+	require.Equal(t, inactive.ID, onlyInactive[0].ID)
+
+	// Toggle via Update.
+	got.IsActive = true
+	require.NoError(t, repo.Update(c, tenant.ID, actor, got))
+	got, err = repo.GetByID(c, tenant.ID, inactive.ID)
+	require.NoError(t, err)
+	require.True(t, got.IsActive)
+
+	// Org reference lock reports the active flag, tenant-scoped.
+	err = db.Transaction(func(tx *gorm.DB) error {
+		tc := database.WithTx(c, tx)
+		found, isActive, err := orgRepo.LockDepartmentShared(tc, tenant.ID, active.ID)
+		require.NoError(t, err)
+		require.True(t, found)
+		require.True(t, isActive)
+		found, isActive, err = orgRepo.LockDepartmentShared(tc, other.ID, foreign.ID)
+		require.NoError(t, err)
+		require.True(t, found)
+		require.False(t, isActive)
+		found, _, err = orgRepo.LockDepartmentShared(tc, tenant.ID, foreign.ID)
+		require.NoError(t, err)
+		require.False(t, found)
+		return nil
+	})
+	require.NoError(t, err)
 }

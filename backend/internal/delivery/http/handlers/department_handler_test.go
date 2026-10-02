@@ -255,6 +255,79 @@ func TestDepartmentHandler_List(t *testing.T) {
 		assert.True(t, resp.Success)
 		assert.NotNil(t, resp.Meta)
 	})
+
+	t.Run("non-numeric page or page_size returns 400", func(t *testing.T) {
+		called := false
+		listUC := &mockListDepartmentsUC{
+			executeFn: func(ctx context.Context, tenantID uuid.UUID, input deptuc.ListDepartmentsInput) (*deptuc.ListDepartmentsOutput, error) {
+				called = true
+				return &deptuc.ListDepartmentsOutput{}, nil
+			},
+		}
+		h := NewDepartmentHandler(&mockCreateDepartmentUC{}, &mockGetDepartmentUC{}, listUC, &mockUpdateDepartmentUC{}, &mockDeleteDepartmentUC{})
+		r := setupDepartmentTestRouter(h)
+
+		for _, q := range []string{"page=abc", "page_size=xyz", "page=1.5"} {
+			req := httptest.NewRequest(http.MethodGet, "/api/v1/departments?"+q, nil)
+			rec := httptest.NewRecorder()
+			r.ServeHTTP(rec, req)
+			require.Equal(t, http.StatusBadRequest, rec.Code, q)
+		}
+		assert.False(t, called)
+	})
+
+	t.Run("is_active filter parsed", func(t *testing.T) {
+		for q, want := range map[string]*bool{"": nil, "?is_active=true": boolP(true), "?is_active=false": boolP(false)} {
+			var got *bool
+			listUC := &mockListDepartmentsUC{
+				executeFn: func(ctx context.Context, tenantID uuid.UUID, input deptuc.ListDepartmentsInput) (*deptuc.ListDepartmentsOutput, error) {
+					got = input.IsActive
+					return &deptuc.ListDepartmentsOutput{Page: 1, PageSize: 20}, nil
+				},
+			}
+			h := NewDepartmentHandler(&mockCreateDepartmentUC{}, &mockGetDepartmentUC{}, listUC, &mockUpdateDepartmentUC{}, &mockDeleteDepartmentUC{})
+			r := setupDepartmentTestRouter(h)
+			rec := httptest.NewRecorder()
+			r.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/api/v1/departments"+q, nil))
+			require.Equal(t, http.StatusOK, rec.Code, q)
+			assert.Equal(t, want, got, q)
+		}
+	})
+
+	t.Run("invalid is_active returns 400", func(t *testing.T) {
+		called := false
+		listUC := &mockListDepartmentsUC{
+			executeFn: func(ctx context.Context, tenantID uuid.UUID, input deptuc.ListDepartmentsInput) (*deptuc.ListDepartmentsOutput, error) {
+				called = true
+				return &deptuc.ListDepartmentsOutput{}, nil
+			},
+		}
+		h := NewDepartmentHandler(&mockCreateDepartmentUC{}, &mockGetDepartmentUC{}, listUC, &mockUpdateDepartmentUC{}, &mockDeleteDepartmentUC{})
+		r := setupDepartmentTestRouter(h)
+		for _, v := range []string{"maybe", "1", "T", "yes"} {
+			rec := httptest.NewRecorder()
+			r.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/api/v1/departments?is_active="+v, nil))
+			require.Equal(t, http.StatusBadRequest, rec.Code, v)
+		}
+		assert.False(t, called)
+	})
+
+	t.Run("empty page params use defaults", func(t *testing.T) {
+		listUC := &mockListDepartmentsUC{
+			executeFn: func(ctx context.Context, tenantID uuid.UUID, input deptuc.ListDepartmentsInput) (*deptuc.ListDepartmentsOutput, error) {
+				assert.Equal(t, 1, input.Page)
+				assert.Equal(t, 20, input.PageSize)
+				return &deptuc.ListDepartmentsOutput{Page: 1, PageSize: 20}, nil
+			},
+		}
+		h := NewDepartmentHandler(&mockCreateDepartmentUC{}, &mockGetDepartmentUC{}, listUC, &mockUpdateDepartmentUC{}, &mockDeleteDepartmentUC{})
+		r := setupDepartmentTestRouter(h)
+
+		req := httptest.NewRequest(http.MethodGet, "/api/v1/departments?page=&page_size=", nil)
+		rec := httptest.NewRecorder()
+		r.ServeHTTP(rec, req)
+		require.Equal(t, http.StatusOK, rec.Code)
+	})
 }
 
 func TestDepartmentHandler_Update(t *testing.T) {
@@ -360,3 +433,5 @@ func TestDepartmentHandler_Delete(t *testing.T) {
 		require.Equal(t, http.StatusNotFound, rec.Code)
 	})
 }
+
+func boolP(b bool) *bool { return &b }

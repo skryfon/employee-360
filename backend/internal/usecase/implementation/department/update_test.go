@@ -106,6 +106,48 @@ func TestUpdateDepartmentUseCase(t *testing.T) {
 		assert.Equal(t, "old name", updated.Name)
 	})
 
+	t.Run("is_active toggle persists and logs a distinct audit action", func(t *testing.T) {
+		for _, tc := range []struct {
+			name       string
+			before     bool
+			input      *bool
+			wantActive bool
+			wantAction string
+		}{
+			{"deactivate", true, boolPtr(false), false, auditActionDeactivate},
+			{"activate", false, boolPtr(true), true, auditActionActivate},
+			{"nil keeps active", true, nil, true, ""},
+			{"nil keeps inactive", false, nil, false, ""},
+			{"same value is not a toggle", true, boolPtr(true), true, ""},
+		} {
+			t.Run(tc.name, func(t *testing.T) {
+				auditRepo := &mockAuditRepo{}
+				var persisted bool
+				repo := &mockDepartmentRepo{
+					getByIDFn: func(ctx context.Context, tID, id uuid.UUID) (*entity.Department, error) {
+						return &entity.Department{ID: deptID, TenantID: tenantID, Name: "Same", IsActive: tc.before}, nil
+					},
+					updateFn: func(ctx context.Context, tID, aID uuid.UUID, d *entity.Department) error {
+						persisted = d.IsActive
+						return nil
+					},
+				}
+				out, err := NewUpdateDepartmentUseCase(repo, auditRepo, nil).Execute(bg, tenantID, actorID, deptuc.UpdateDepartmentInput{ID: deptID, Name: "Same", IsActive: tc.input})
+				require.NoError(t, err)
+				assert.Equal(t, tc.wantActive, out.IsActive)
+				assert.Equal(t, tc.wantActive, persisted)
+				require.NotEmpty(t, auditRepo.logs)
+				assert.Equal(t, auditActionUpdate, auditRepo.logs[0].Action)
+				if tc.wantAction == "" {
+					assert.Len(t, auditRepo.logs, 1)
+				} else {
+					require.Len(t, auditRepo.logs, 2)
+					assert.Equal(t, tc.wantAction, auditRepo.logs[1].Action)
+				}
+			})
+		}
+	})
+
 	t.Run("name taken returns conflict", func(t *testing.T) {
 		repo := &mockDepartmentRepo{
 			getByIDFn: func(ctx context.Context, tID, id uuid.UUID) (*entity.Department, error) {
@@ -165,6 +207,25 @@ func TestUpdateDepartmentUseCase(t *testing.T) {
 		require.ErrorIs(t, err, ErrDepartmentNameTooLong)
 	})
 
+	t.Run("multibyte name and description are counted in characters", func(t *testing.T) {
+		repo := &mockDepartmentRepo{
+			getByIDFn: func(ctx context.Context, tID, id uuid.UUID) (*entity.Department, error) {
+				return &entity.Department{ID: deptID, TenantID: tenantID, Name: "Old"}, nil
+			},
+		}
+		uc := NewUpdateDepartmentUseCase(repo, nil, nil)
+		dept, err := uc.Execute(bg, tenantID, actorID, deptuc.UpdateDepartmentInput{
+			ID:          deptID,
+			Name:        strings.Repeat("é", 100),
+			Description: strings.Repeat("日", 500),
+		})
+		require.NoError(t, err)
+		assert.Equal(t, strings.Repeat("é", 100), dept.Name)
+
+		_, err = uc.Execute(bg, tenantID, actorID, deptuc.UpdateDepartmentInput{ID: deptID, Name: strings.Repeat("é", 101)})
+		require.ErrorIs(t, err, ErrDepartmentNameTooLong)
+	})
+
 	t.Run("nil tenant or actor returns unauthorized", func(t *testing.T) {
 		uc := NewUpdateDepartmentUseCase(&mockDepartmentRepo{}, nil, nil)
 		_, err := uc.Execute(bg, uuid.Nil, actorID, deptuc.UpdateDepartmentInput{
@@ -180,3 +241,5 @@ func TestUpdateDepartmentUseCase(t *testing.T) {
 		require.ErrorIs(t, err, domainerrors.ErrUnauthorized)
 	})
 }
+
+func boolPtr(b bool) *bool { return &b }

@@ -16,6 +16,8 @@ const (
 	auditActionCreate     = "department.create"
 	auditActionUpdate     = "department.update"
 	auditActionDelete     = "department.delete"
+	auditActionActivate   = "department.activate"
+	auditActionDeactivate = "department.deactivate"
 )
 
 // writeAudit records an admin mutation for department operations.

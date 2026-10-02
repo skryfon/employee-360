@@ -9,6 +9,8 @@
 export interface GithubComSkryfonEmployee360BackendInternalTypesDepartmentCreateDepartmentRequest {
   /** @maxLength 500 */
   description?: string;
+  /** IsActive is optional and defaults to true when omitted. */
+  is_active?: boolean;
   /**
      * @minLength 1
      * @maxLength 100

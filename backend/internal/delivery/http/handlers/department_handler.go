@@ -90,6 +90,7 @@ func (h *DepartmentHandler) Create(c *gin.Context) {
 	dept, err := h.createUC.Execute(c.Request.Context(), tenantID, actorID, deptuc.CreateDepartmentInput{
 		Name:        req.Name,
 		Description: req.Description,
+		IsActive:    req.IsActive,
 	})
 	if err != nil {
 		writeDepartmentError(c, err)
@@ -141,6 +142,7 @@ func (h *DepartmentHandler) GetByID(c *gin.Context) {
 // @Security     BearerAuth
 // @Param        page       query     int  false  "Page number (default 1)"
 // @Param        page_size  query     int  false  "Page size (default 20, max 100)"
+// @Param        is_active  query     bool false  "Filter by active flag (true/false); omit for all"
 // @Success      200        {object}  response.Envelope{data=[]depttypes.DepartmentResponse}
 // @Failure      400        {object}  response.Envelope
 // @Failure      401        {object}  response.Envelope
@@ -152,12 +154,31 @@ func (h *DepartmentHandler) List(c *gin.Context) {
 		return
 	}
 
-	page, _ := strconv.Atoi(c.DefaultQuery("page", "1"))
-	pageSize, _ := strconv.Atoi(c.DefaultQuery("page_size", "20"))
+	page, err := intQuery(c, "page", 1)
+	if err != nil {
+		response.BadRequest(c, "page must be an integer")
+		return
+	}
+	pageSize, err := intQuery(c, "page_size", 20)
+	if err != nil {
+		response.BadRequest(c, "page_size must be an integer")
+		return
+	}
+
+	var isActive *bool
+	if raw := c.Query("is_active"); raw != "" {
+		v, err := strconv.ParseBool(raw)
+		if err != nil || (raw != "true" && raw != "false") {
+			response.BadRequest(c, "is_active must be true or false")
+			return
+		}
+		isActive = &v
+	}
 
 	out, err := h.listUC.Execute(c.Request.Context(), tenantID, deptuc.ListDepartmentsInput{
 		Page:     page,
 		PageSize: pageSize,
+		IsActive: isActive,
 	})
 	if err != nil {
 		writeDepartmentError(c, err)
@@ -216,6 +237,7 @@ func (h *DepartmentHandler) Update(c *gin.Context) {
 		ID:          id,
 		Name:        req.Name,
 		Description: req.Description,
+		IsActive:    req.IsActive,
 	})
 	if err != nil {
 		writeDepartmentError(c, err)
@@ -257,4 +279,13 @@ func (h *DepartmentHandler) Delete(c *gin.Context) {
 	}
 
 	response.Success(c, gin.H{"message": "department deleted successfully"})
+}
+
+// intQuery parses an integer query parameter; a missing or empty value yields def.
+func intQuery(c *gin.Context, key string, def int) (int, error) {
+	raw := c.Query(key)
+	if raw == "" {
+		return def, nil
+	}
+	return strconv.Atoi(raw)
 }

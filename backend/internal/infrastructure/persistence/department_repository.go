@@ -9,6 +9,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5/pgconn"
 	"gorm.io/gorm"
+	"gorm.io/gorm/clause"
 
 	"github.com/skryfon/employee360/backend/internal/domain/entity"
 	domainerrors "github.com/skryfon/employee360/backend/internal/domain/errors"
@@ -39,13 +40,7 @@ func isUniqueViolation(err error) bool {
 		return true
 	}
 	var pgErr *pgconn.PgError
-	if errors.As(err, &pgErr) && pgErr.Code == "23505" {
-		return true
-	}
-	if err != nil && (strings.Contains(err.Error(), "23505") || strings.Contains(strings.ToLower(err.Error()), "duplicate key")) {
-		return true
-	}
-	return false
+	return errors.As(err, &pgErr) && pgErr.Code == "23505"
 }
 
 // Create persists a new department row scoped to the caller's tenant and records created_by and updated_by.
@@ -77,6 +72,26 @@ func (r *gormDepartmentRepository) Create(c context.Context, tenantID, actorID u
 	return nil
 }
 
+// GetByIDForUpdate looks up a department within the caller's tenant and locks the
+// row (FOR UPDATE) until the surrounding transaction ends.
+func (r *gormDepartmentRepository) GetByIDForUpdate(c context.Context, tenantID, id uuid.UUID) (*entity.Department, error) {
+	if tenantID == uuid.Nil || id == uuid.Nil {
+		return nil, domainerrors.ErrDepartmentNotFound
+	}
+
+	var dept entity.Department
+	err := r.scoped(c, tenantID).
+		Clauses(clause.Locking{Strength: "UPDATE"}).
+		Where("id = ?", id).First(&dept).Error
+	if err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, domainerrors.ErrDepartmentNotFound
+		}
+		return nil, err
+	}
+	return &dept, nil
+}
+
 // GetByID looks up a department by ID within the caller's tenant.
 func (r *gormDepartmentRepository) GetByID(c context.Context, tenantID, id uuid.UUID) (*entity.Department, error) {
 	if tenantID == uuid.Nil || id == uuid.Nil {
@@ -95,7 +110,7 @@ func (r *gormDepartmentRepository) GetByID(c context.Context, tenantID, id uuid.
 }
 
 // List returns a paginated slice of departments for the caller's tenant.
-func (r *gormDepartmentRepository) List(c context.Context, tenantID uuid.UUID, limit, offset int) ([]*entity.Department, int64, error) {
+func (r *gormDepartmentRepository) List(c context.Context, tenantID uuid.UUID, isActive *bool, limit, offset int) ([]*entity.Department, int64, error) {
 	if tenantID == uuid.Nil {
 		return []*entity.Department{}, 0, nil
 	}
@@ -106,6 +121,9 @@ func (r *gormDepartmentRepository) List(c context.Context, tenantID uuid.UUID, l
 	)
 
 	db := r.scoped(c, tenantID).Model(&entity.Department{})
+	if isActive != nil {
+		db = db.Where("is_active = ?", *isActive)
+	}
 	if err := db.Count(&total).Error; err != nil {
 		return nil, 0, err
 	}
@@ -140,6 +158,7 @@ func (r *gormDepartmentRepository) Update(c context.Context, tenantID, actorID u
 		Updates(map[string]interface{}{
 			"name":        department.Name,
 			"description": department.Description,
+			"is_active":   department.IsActive,
 			"updated_at":  department.UpdatedAt,
 			"updated_by":  actorID,
 		})
@@ -200,7 +219,8 @@ func (r *gormDepartmentRepository) ExistsByName(c context.Context, tenantID uuid
 	return count > 0, nil
 }
 
-// IsReferenced checks whether any active users or user_invitations reference this department.
+// IsReferenced checks whether any active users or pending user_invitations
+// (not accepted, revoked or expired) reference this department.
 func (r *gormDepartmentRepository) IsReferenced(c context.Context, tenantID, id uuid.UUID) (bool, error) {
 	if tenantID == uuid.Nil || id == uuid.Nil {
 		return false, nil
@@ -220,7 +240,8 @@ func (r *gormDepartmentRepository) IsReferenced(c context.Context, tenantID, id 
 
 	var invitationCount int64
 	if err := db.Table("user_invitations").
-		Where("department_id = ? AND tenant_id = ? AND deleted_at IS NULL", id, tenantID).
+		Where("department_id = ? AND tenant_id = ? AND deleted_at IS NULL AND accepted_at IS NULL AND revoked_at IS NULL AND expires_at > ?",
+			id, tenantID, time.Now().UTC()).
 		Count(&invitationCount).Error; err != nil {
 		return false, err
 	}

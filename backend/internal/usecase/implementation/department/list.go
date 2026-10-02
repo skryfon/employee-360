@@ -36,7 +36,7 @@ func (uc *listDepartmentsUseCase) Execute(c context.Context, tenantID uuid.UUID,
 	limit := pageSize
 	offset := (page - 1) * pageSize
 
-	items, total, err := uc.repo.List(c, tenantID, limit, offset)
+	items, total, err := uc.repo.List(c, tenantID, input.IsActive, limit, offset)
 	if err != nil {
 		return nil, err
 	}

@@ -15,4 +15,8 @@ page?: number;
  * Page size (default 20, max 100)
  */
 page_size?: number;
+/**
+ * Filter by active flag (true/false); omit for all
+ */
+is_active?: boolean;
 };

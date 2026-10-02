@@ -5,6 +5,7 @@ import (
 	"errors"
 	"strings"
 	"time"
+	"unicode/utf8"
 
 	"github.com/google/uuid"
 	"github.com/skryfon/employee360/backend/internal/domain/entity"
@@ -51,13 +52,18 @@ func (uc *createDepartmentUseCase) Execute(c context.Context, tenantID, actorID 
 	if name == "" {
 		return nil, ErrDepartmentNameRequired
 	}
-	if len(name) > 100 {
+	if utf8.RuneCountInString(name) > 100 {
 		return nil, ErrDepartmentNameTooLong
 	}
 
 	description := strings.TrimSpace(input.Description)
-	if len(description) > 500 {
+	if utf8.RuneCountInString(description) > 500 {
 		return nil, ErrDescriptionTooLong
+	}
+
+	isActive := true
+	if input.IsActive != nil {
+		isActive = *input.IsActive
 	}
 
 	now := time.Now().UTC()
@@ -66,6 +72,7 @@ func (uc *createDepartmentUseCase) Execute(c context.Context, tenantID, actorID 
 		TenantID:    tenantID,
 		Name:        name,
 		Description: description,
+		IsActive:    isActive,
 		CreatedAt:   now,
 		UpdatedAt:   now,
 	}
@@ -84,7 +91,8 @@ func (uc *createDepartmentUseCase) Execute(c context.Context, tenantID, actorID 
 		}
 
 		return writeAudit(txCtx, uc.auditRepo, tenantID, actorID, dept.ID, auditActionCreate, map[string]any{
-			"name": dept.Name,
+			"name":      dept.Name,
+			"is_active": dept.IsActive,
 		})
 	})
 	if err != nil {

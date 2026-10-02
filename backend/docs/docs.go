@@ -422,6 +422,12 @@ const docTemplate = `{
                         "description": "Page size (default 20, max 100)",
                         "name": "page_size",
                         "in": "query"
+                    },
+                    {
+                        "type": "boolean",
+                        "description": "Filter by active flag (true/false); omit for all",
+                        "name": "is_active",
+                        "in": "query"
                     }
                 ],
                 "responses": {
@@ -1493,7 +1499,7 @@ const docTemplate = `{
                         }
                     },
                     "400": {
-                        "description": "Invalid payload, or email domain not registered for the tenant (EMAIL_DOMAIN_NOT_ALLOWED)",
+                        "description": "Invalid payload, email domain not registered for the tenant (EMAIL_DOMAIN_NOT_ALLOWED), or inactive department (DEPARTMENT_INACTIVE)",
                         "schema": {
                             "$ref": "#/definitions/github_com_skryfon_employee360_backend_internal_delivery_http_response.Envelope"
                         }
@@ -2030,6 +2036,10 @@ const docTemplate = `{
                     "type": "string",
                     "maxLength": 500
                 },
+                "is_active": {
+                    "description": "IsActive is optional and defaults to true when omitted.",
+                    "type": "boolean"
+                },
                 "name": {
                     "type": "string",
                     "maxLength": 100,
@@ -2049,6 +2059,9 @@ const docTemplate = `{
                 "id": {
                     "type": "string"
                 },
+                "is_active": {
+                    "type": "boolean"
+                },
                 "name": {
                     "type": "string"
                 },
@@ -2066,6 +2079,10 @@ const docTemplate = `{
                 "description": {
                     "type": "string",
                     "maxLength": 500
+                },
+                "is_active": {
+                    "description": "IsActive is optional; when omitted the current value is kept.",
+                    "type": "boolean"
                 },
                 "name": {
                     "type": "string",

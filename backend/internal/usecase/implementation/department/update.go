@@ -4,6 +4,7 @@ import (
 	"context"
 	"strings"
 	"time"
+	"unicode/utf8"
 
 	"github.com/google/uuid"
 	"github.com/skryfon/employee360/backend/internal/domain/entity"
@@ -47,12 +48,12 @@ func (uc *updateDepartmentUseCase) Execute(c context.Context, tenantID, actorID 
 	if name == "" {
 		return nil, ErrDepartmentNameRequired
 	}
-	if len(name) > 100 {
+	if utf8.RuneCountInString(name) > 100 {
 		return nil, ErrDepartmentNameTooLong
 	}
 
 	description := strings.TrimSpace(input.Description)
-	if len(description) > 500 {
+	if utf8.RuneCountInString(description) > 500 {
 		return nil, ErrDescriptionTooLong
 	}
 
@@ -75,15 +76,32 @@ func (uc *updateDepartmentUseCase) Execute(c context.Context, tenantID, actorID 
 			}
 		}
 
+		wasActive := existing.IsActive
 		existing.Name = name
 		existing.Description = description
+		if input.IsActive != nil {
+			existing.IsActive = *input.IsActive
+		}
 		existing.UpdatedAt = time.Now().UTC()
 
 		if err := uc.repo.Update(txCtx, tenantID, actorID, existing); err != nil {
 			return err
 		}
 
-		return writeAudit(txCtx, uc.auditRepo, tenantID, actorID, existing.ID, auditActionUpdate, map[string]any{
+		if err := writeAudit(txCtx, uc.auditRepo, tenantID, actorID, existing.ID, auditActionUpdate, map[string]any{
+			"name":      existing.Name,
+			"is_active": existing.IsActive,
+		}); err != nil {
+			return err
+		}
+		if wasActive == existing.IsActive {
+			return nil
+		}
+		action := auditActionDeactivate
+		if existing.IsActive {
+			action = auditActionActivate
+		}
+		return writeAudit(txCtx, uc.auditRepo, tenantID, actorID, existing.ID, action, map[string]any{
 			"name": existing.Name,
 		})
 	})

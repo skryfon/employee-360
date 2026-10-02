@@ -20,7 +20,7 @@ func TestListDepartmentsUseCase(t *testing.T) {
 
 	t.Run("default pagination", func(t *testing.T) {
 		repo := &mockDepartmentRepo{
-			listFn: func(ctx context.Context, tID uuid.UUID, limit, offset int) ([]*entity.Department, int64, error) {
+			listFn: func(ctx context.Context, tID uuid.UUID, isActive *bool, limit, offset int) ([]*entity.Department, int64, error) {
 				assert.Equal(t, tenantID, tID)
 				assert.Equal(t, 20, limit)
 				assert.Equal(t, 0, offset)
@@ -39,9 +39,22 @@ func TestListDepartmentsUseCase(t *testing.T) {
 		assert.Len(t, out.Departments, 1)
 	})
 
+	t.Run("is_active filter is passed to the repository", func(t *testing.T) {
+		f := false
+		repo := &mockDepartmentRepo{
+			listFn: func(ctx context.Context, tID uuid.UUID, isActive *bool, limit, offset int) ([]*entity.Department, int64, error) {
+				require.NotNil(t, isActive)
+				assert.False(t, *isActive)
+				return []*entity.Department{}, 0, nil
+			},
+		}
+		_, err := NewListDepartmentsUseCase(repo).Execute(bg, tenantID, deptuc.ListDepartmentsInput{IsActive: &f})
+		require.NoError(t, err)
+	})
+
 	t.Run("custom pagination", func(t *testing.T) {
 		repo := &mockDepartmentRepo{
-			listFn: func(ctx context.Context, tID uuid.UUID, limit, offset int) ([]*entity.Department, int64, error) {
+			listFn: func(ctx context.Context, tID uuid.UUID, isActive *bool, limit, offset int) ([]*entity.Department, int64, error) {
 				assert.Equal(t, tenantID, tID)
 				assert.Equal(t, 10, limit)
 				assert.Equal(t, 20, offset) // page 3 with size 10 -> offset 20
@@ -69,7 +82,7 @@ func TestListDepartmentsUseCase(t *testing.T) {
 	t.Run("repo error propagated", func(t *testing.T) {
 		boom := errors.New("database error")
 		repo := &mockDepartmentRepo{
-			listFn: func(ctx context.Context, tID uuid.UUID, limit, offset int) ([]*entity.Department, int64, error) {
+			listFn: func(ctx context.Context, tID uuid.UUID, isActive *bool, limit, offset int) ([]*entity.Department, int64, error) {
 				return nil, 0, boom
 			},
 		}

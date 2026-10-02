@@ -278,6 +278,19 @@ func TestInvite_DepartmentPositionMustBelongToTenant(t *testing.T) {
 	assert.Equal(t, &ownDept, inv.DepartmentID)
 }
 
+func TestInvite_RejectsInactiveDepartment(t *testing.T) {
+	f := newFixture()
+	dept := uuid.New()
+	f.s.depts[dept] = f.tenantA
+	f.s.inactiveDepts[dept] = true
+
+	_, err := f.invite().Execute(bg, f.tenantA, f.adminID, invtypes.InviteUserRequest{Email: "i@acme.com", RoleID: f.employeeRl.ID, DepartmentID: &dept})
+	assert.ErrorIs(t, err, domainerrors.ErrDepartmentInactive)
+	assert.Empty(t, f.s.users)
+	assert.Empty(t, f.s.invitations)
+	assert.Empty(t, f.s.audits)
+}
+
 func TestRevoke_RemovesPendingUserAndAllowsReinvite(t *testing.T) {
 	f := newFixture()
 	inv, _ := f.doInvite(t, "again@acme.com")
