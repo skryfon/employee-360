@@ -150,12 +150,121 @@ definitions:
       token_type:
         type: string
     type: object
+  github_com_skryfon_employee360_backend_internal_types_dashboard.AdminDashboardResponse:
+    properties:
+      departments:
+        type: integer
+      invitations:
+        $ref: '#/definitions/github_com_skryfon_employee360_backend_internal_types_dashboard.InvitationCountsResponse'
+      positions:
+        type: integer
+      recent_invitations:
+        items:
+          $ref: '#/definitions/github_com_skryfon_employee360_backend_internal_types_invitation.InvitationListItemResponse'
+        type: array
+      users:
+        $ref: '#/definitions/github_com_skryfon_employee360_backend_internal_types_dashboard.UserCountsResponse'
+    type: object
+  github_com_skryfon_employee360_backend_internal_types_dashboard.InvitationCountsResponse:
+    properties:
+      accepted:
+        type: integer
+      expired:
+        type: integer
+      pending:
+        type: integer
+      revoked:
+        type: integer
+    type: object
+  github_com_skryfon_employee360_backend_internal_types_dashboard.RoleUserCountResponse:
+    properties:
+      active:
+        type: integer
+      inactive:
+        type: integer
+      role:
+        type: string
+      total:
+        type: integer
+    type: object
+  github_com_skryfon_employee360_backend_internal_types_dashboard.SuperAdminDashboardResponse:
+    properties:
+      departments:
+        type: integer
+      invitations:
+        $ref: '#/definitions/github_com_skryfon_employee360_backend_internal_types_dashboard.InvitationCountsResponse'
+      positions:
+        type: integer
+      recent_invitations:
+        items:
+          $ref: '#/definitions/github_com_skryfon_employee360_backend_internal_types_invitation.InvitationListItemResponse'
+        type: array
+      tenant:
+        $ref: '#/definitions/github_com_skryfon_employee360_backend_internal_types_dashboard.TenantInfoResponse'
+      users:
+        $ref: '#/definitions/github_com_skryfon_employee360_backend_internal_types_dashboard.UserCountsResponse'
+      users_by_role:
+        items:
+          $ref: '#/definitions/github_com_skryfon_employee360_backend_internal_types_dashboard.RoleUserCountResponse'
+        type: array
+    type: object
+  github_com_skryfon_employee360_backend_internal_types_dashboard.TenantInfoResponse:
+    properties:
+      created_at:
+        type: string
+      id:
+        type: string
+      is_active:
+        type: boolean
+      name:
+        type: string
+    type: object
+  github_com_skryfon_employee360_backend_internal_types_dashboard.UserCountsResponse:
+    properties:
+      active:
+        type: integer
+      inactive:
+        type: integer
+      pending_invited:
+        type: integer
+      total:
+        type: integer
+    type: object
   github_com_skryfon_employee360_backend_internal_types_invitation.AcceptInvitationRequest:
     properties:
       password:
         type: string
       token:
         type: string
+    type: object
+  github_com_skryfon_employee360_backend_internal_types_invitation.InvitationListItemResponse:
+    properties:
+      accepted_at:
+        type: string
+      created_at:
+        type: string
+      department_id:
+        type: string
+      email:
+        type: string
+      expires_at:
+        type: string
+      id:
+        type: string
+      invited_by:
+        $ref: '#/definitions/github_com_skryfon_employee360_backend_internal_types_invitation.InvitedByResponse'
+      invited_on:
+        type: string
+      position_id:
+        type: string
+      revoked_at:
+        type: string
+      role:
+        type: string
+      role_id:
+        type: string
+      status:
+        $ref: '#/definitions/github_com_skryfon_employee360_backend_internal_domain_entity.InvitationStatus'
     type: object
   github_com_skryfon_employee360_backend_internal_types_invitation.InvitationResponse:
     properties:
@@ -197,6 +306,15 @@ definitions:
       role_id:
         type: string
     type: object
+  github_com_skryfon_employee360_backend_internal_types_invitation.InvitedByResponse:
+    properties:
+      email:
+        type: string
+      id:
+        type: string
+      name:
+        type: string
+    type: object
   github_com_skryfon_employee360_backend_internal_types_invitation.ValidateInvitationResponse:
     properties:
       email:
@@ -212,6 +330,69 @@ definitions:
       id:
         type: string
       name:
+        type: string
+    type: object
+  github_com_skryfon_employee360_backend_internal_types_tenant.AddDomainRequest:
+    properties:
+      domain:
+        description: Fully qualified domain with at least two labels, e.g. example.com;
+          single-label hosts like localhost are not supported.
+        example: acme.io
+        type: string
+    type: object
+  github_com_skryfon_employee360_backend_internal_types_tenant.TenantDetailResponse:
+    properties:
+      created_at:
+        type: string
+      domains:
+        items:
+          $ref: '#/definitions/github_com_skryfon_employee360_backend_internal_types_tenant.TenantDomainResponse'
+        type: array
+      id:
+        type: string
+      is_active:
+        type: boolean
+      name:
+        type: string
+      updated_at:
+        type: string
+    type: object
+  github_com_skryfon_employee360_backend_internal_types_tenant.TenantDomainResponse:
+    properties:
+      created_at:
+        type: string
+      domain:
+        type: string
+      id:
+        type: string
+      tenant_id:
+        type: string
+    type: object
+  github_com_skryfon_employee360_backend_internal_types_tenant.TenantResponse:
+    properties:
+      created_at:
+        type: string
+      id:
+        type: string
+      is_active:
+        type: boolean
+      name:
+        type: string
+      updated_at:
+        type: string
+    type: object
+  github_com_skryfon_employee360_backend_internal_types_tenant.UpdateDomainRequest:
+    properties:
+      domain:
+        description: Fully qualified domain with at least two labels, e.g. example.com;
+          single-label hosts like localhost are not supported.
+        example: acme.io
+        type: string
+    type: object
+  github_com_skryfon_employee360_backend_internal_types_tenant.UpdateTenantRequest:
+    properties:
+      name:
+        example: Acme Corporation
         type: string
     type: object
   internal_delivery_http_handlers.HealthResponse:
@@ -413,6 +594,66 @@ paths:
       summary: Reset password
       tags:
       - auth
+  /api/v1/dashboard/admin:
+    get:
+      description: Counts of users, invitations by status, departments and positions
+        for the caller's tenant, plus the 5 most recent invitations.
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            allOf:
+            - $ref: '#/definitions/github_com_skryfon_employee360_backend_internal_delivery_http_response.Envelope'
+            - properties:
+                data:
+                  $ref: '#/definitions/github_com_skryfon_employee360_backend_internal_types_dashboard.AdminDashboardResponse'
+              type: object
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/github_com_skryfon_employee360_backend_internal_delivery_http_response.Envelope'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/github_com_skryfon_employee360_backend_internal_delivery_http_response.Envelope'
+      security:
+      - BearerAuth: []
+      summary: Tenant admin dashboard
+      tags:
+      - dashboard
+  /api/v1/dashboard/super-admin:
+    get:
+      description: 'Organisation overview of the caller''s tenant: tenant info, user
+        counts (total/active/inactive/pending-invited and by role), invitations by
+        status, departments, positions and the 5 most recent invitations. super_admin
+        only; no cross-tenant aggregates.'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            allOf:
+            - $ref: '#/definitions/github_com_skryfon_employee360_backend_internal_delivery_http_response.Envelope'
+            - properties:
+                data:
+                  $ref: '#/definitions/github_com_skryfon_employee360_backend_internal_types_dashboard.SuperAdminDashboardResponse'
+              type: object
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/github_com_skryfon_employee360_backend_internal_delivery_http_response.Envelope'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/github_com_skryfon_employee360_backend_internal_delivery_http_response.Envelope'
+      security:
+      - BearerAuth: []
+      summary: Super admin dashboard
+      tags:
+      - dashboard
   /api/v1/health:
     get:
       description: Returns application and database connectivity status. Used by load
@@ -537,17 +778,84 @@ paths:
       summary: List assignable roles
       tags:
       - roles
-  /api/v1/users/invitations:
+  /api/v1/tenant:
     get:
+      description: Returns the caller's own tenant and its live domains (super_admin
+        only). The tenant is taken from the auth context.
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            allOf:
+            - $ref: '#/definitions/github_com_skryfon_employee360_backend_internal_delivery_http_response.Envelope'
+            - properties:
+                data:
+                  $ref: '#/definitions/github_com_skryfon_employee360_backend_internal_types_tenant.TenantDetailResponse'
+              type: object
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/github_com_skryfon_employee360_backend_internal_delivery_http_response.Envelope'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/github_com_skryfon_employee360_backend_internal_delivery_http_response.Envelope'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/github_com_skryfon_employee360_backend_internal_delivery_http_response.Envelope'
+      security:
+      - BearerAuth: []
+      summary: Get current tenant
+      tags:
+      - tenant
+    patch:
+      consumes:
+      - application/json
       parameters:
-      - description: Page (1-based)
-        in: query
-        name: page
-        type: integer
-      - description: Page size (max 100)
-        in: query
-        name: page_size
-        type: integer
+      - description: New name
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/github_com_skryfon_employee360_backend_internal_types_tenant.UpdateTenantRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            allOf:
+            - $ref: '#/definitions/github_com_skryfon_employee360_backend_internal_delivery_http_response.Envelope'
+            - properties:
+                data:
+                  $ref: '#/definitions/github_com_skryfon_employee360_backend_internal_types_tenant.TenantResponse'
+              type: object
+        "400":
+          description: Invalid payload or INVALID_NAME
+          schema:
+            $ref: '#/definitions/github_com_skryfon_employee360_backend_internal_delivery_http_response.Envelope'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/github_com_skryfon_employee360_backend_internal_delivery_http_response.Envelope'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/github_com_skryfon_employee360_backend_internal_delivery_http_response.Envelope'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/github_com_skryfon_employee360_backend_internal_delivery_http_response.Envelope'
+      security:
+      - BearerAuth: []
+      summary: Rename current tenant
+      tags:
+      - tenant
+  /api/v1/tenant/domains:
+    get:
       produces:
       - application/json
       responses:
@@ -559,9 +867,212 @@ paths:
             - properties:
                 data:
                   items:
-                    $ref: '#/definitions/github_com_skryfon_employee360_backend_internal_types_invitation.InvitationResponse'
+                    $ref: '#/definitions/github_com_skryfon_employee360_backend_internal_types_tenant.TenantDomainResponse'
                   type: array
               type: object
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/github_com_skryfon_employee360_backend_internal_delivery_http_response.Envelope'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/github_com_skryfon_employee360_backend_internal_delivery_http_response.Envelope'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/github_com_skryfon_employee360_backend_internal_delivery_http_response.Envelope'
+      security:
+      - BearerAuth: []
+      summary: List current tenant domains
+      tags:
+      - tenant
+    post:
+      consumes:
+      - application/json
+      parameters:
+      - description: Domain
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/github_com_skryfon_employee360_backend_internal_types_tenant.AddDomainRequest'
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Created
+          schema:
+            allOf:
+            - $ref: '#/definitions/github_com_skryfon_employee360_backend_internal_delivery_http_response.Envelope'
+            - properties:
+                data:
+                  $ref: '#/definitions/github_com_skryfon_employee360_backend_internal_types_tenant.TenantDomainResponse'
+              type: object
+        "400":
+          description: Invalid payload or INVALID_DOMAIN
+          schema:
+            $ref: '#/definitions/github_com_skryfon_employee360_backend_internal_delivery_http_response.Envelope'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/github_com_skryfon_employee360_backend_internal_delivery_http_response.Envelope'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/github_com_skryfon_employee360_backend_internal_delivery_http_response.Envelope'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/github_com_skryfon_employee360_backend_internal_delivery_http_response.Envelope'
+        "409":
+          description: DOMAIN_ALREADY_EXISTS
+          schema:
+            $ref: '#/definitions/github_com_skryfon_employee360_backend_internal_delivery_http_response.Envelope'
+      security:
+      - BearerAuth: []
+      summary: Add current tenant domain
+      tags:
+      - tenant
+  /api/v1/tenant/domains/{domainId}:
+    delete:
+      description: The tenant's last remaining domain cannot be removed (409 LAST_DOMAIN).
+      parameters:
+      - description: Domain ID
+        in: path
+        name: domainId
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/github_com_skryfon_employee360_backend_internal_delivery_http_response.Envelope'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/github_com_skryfon_employee360_backend_internal_delivery_http_response.Envelope'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/github_com_skryfon_employee360_backend_internal_delivery_http_response.Envelope'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/github_com_skryfon_employee360_backend_internal_delivery_http_response.Envelope'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/github_com_skryfon_employee360_backend_internal_delivery_http_response.Envelope'
+        "409":
+          description: LAST_DOMAIN or DOMAIN_IN_USE
+          schema:
+            $ref: '#/definitions/github_com_skryfon_employee360_backend_internal_delivery_http_response.Envelope'
+      security:
+      - BearerAuth: []
+      summary: Remove current tenant domain
+      tags:
+      - tenant
+    patch:
+      consumes:
+      - application/json
+      description: Same normalisation and global uniqueness rules as add. Setting
+        the current value is a no-op. A domain that is not the caller's tenant's (or
+        is removed) is 404.
+      parameters:
+      - description: Domain ID
+        in: path
+        name: domainId
+        required: true
+        type: string
+      - description: New domain value
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/github_com_skryfon_employee360_backend_internal_types_tenant.UpdateDomainRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            allOf:
+            - $ref: '#/definitions/github_com_skryfon_employee360_backend_internal_delivery_http_response.Envelope'
+            - properties:
+                data:
+                  $ref: '#/definitions/github_com_skryfon_employee360_backend_internal_types_tenant.TenantDomainResponse'
+              type: object
+        "400":
+          description: Invalid payload, invalid id or INVALID_DOMAIN
+          schema:
+            $ref: '#/definitions/github_com_skryfon_employee360_backend_internal_delivery_http_response.Envelope'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/github_com_skryfon_employee360_backend_internal_delivery_http_response.Envelope'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/github_com_skryfon_employee360_backend_internal_delivery_http_response.Envelope'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/github_com_skryfon_employee360_backend_internal_delivery_http_response.Envelope'
+        "409":
+          description: DOMAIN_ALREADY_EXISTS or DOMAIN_IN_USE
+          schema:
+            $ref: '#/definitions/github_com_skryfon_employee360_backend_internal_delivery_http_response.Envelope'
+      security:
+      - BearerAuth: []
+      summary: Update current tenant domain
+      tags:
+      - tenant
+  /api/v1/users/invitations:
+    get:
+      parameters:
+      - description: Page (1-based, default 1)
+        in: query
+        name: page
+        type: integer
+      - description: Page size (1-100, default 20); values above 100 are rejected
+          with 400
+        in: query
+        name: page_size
+        type: integer
+      - description: Filter by status
+        enum:
+        - pending
+        - accepted
+        - expired
+        - revoked
+        in: query
+        name: status
+        type: string
+      - description: Case-insensitive substring match on invitee email (max 100 chars)
+        in: query
+        name: search
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            allOf:
+            - $ref: '#/definitions/github_com_skryfon_employee360_backend_internal_delivery_http_response.Envelope'
+            - properties:
+                data:
+                  items:
+                    $ref: '#/definitions/github_com_skryfon_employee360_backend_internal_types_invitation.InvitationListItemResponse'
+                  type: array
+              type: object
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/github_com_skryfon_employee360_backend_internal_delivery_http_response.Envelope'
       security:
       - BearerAuth: []
       summary: List invitations
@@ -590,7 +1101,8 @@ paths:
                   $ref: '#/definitions/github_com_skryfon_employee360_backend_internal_types_invitation.InvitationResponse'
               type: object
         "400":
-          description: Bad Request
+          description: Invalid payload, or email domain not registered for the tenant
+            (EMAIL_DOMAIN_NOT_ALLOWED)
           schema:
             $ref: '#/definitions/github_com_skryfon_employee360_backend_internal_delivery_http_response.Envelope'
         "401":

@@ -180,13 +180,27 @@ FK column. See the `create-migration` skill for the full invariant checklist.
 
 ### Onboarding Invitation Usecases (`backend/internal/usecase/{interface,implementation}/invitation/`)
 
-- [ ] `InviteUserUseCase` — admin invites by email + role (+ optional department/position); creates a pending `users` row (`is_active = false`, no password) and an invitation row; publishes a `UserInvited` event (same transaction) instead of emailing directly. Tenant-scoped: an admin can only invite into their own tenant.
+- [ ] `InviteUserUseCase` — admin invites by email + role (+ optional department/position); creates a pending `users` row (`is_active = false`, no password) and an invitation row; publishes a `UserInvited` event (same transaction) instead of emailing directly. Tenant-scoped: an admin can only invite into their own tenant. The transaction first takes the tenant row lock (`TenantRepository.LockByID`) and only then validates the email domain (`DomainBelongsToTenant`), so an invite serialises with tenant domain removal/update and cannot create a user on a just-removed domain.
 - [ ] `AcceptInvitationUseCase` — consumes the invitation token; invitee (admin or employee) sets a password and the user is activated
 - [ ] `ResendInvitationUseCase` — reissues token + publishes an `InvitationResent` event, only while pending
 - [ ] `RevokeInvitationUseCase` — admin cancels a pending invitation
 - [ ] `ListInvitationsUseCase` — tenant-scoped list for the admin UI (later cycle)
+- [ ] `AdminDashboardUseCase` / `SuperAdminDashboardUseCase`
+  (`usecase/{interface,implementation}/dashboard/`) — read-only, tenant-scoped aggregates
+  for the admin landing page: user counts (total/active/pending-invited), invitation counts
+  by status, department and position counts, 5 most recent invitations; the super-admin
+  variant adds tenant info and a per-role user breakdown (still the caller's tenant only —
+  no cross-tenant aggregates). Added during the UI-fix work to give the admin shell a real
+  landing page.
+- [ ] Current-tenant settings usecases (`usecase/{interface,implementation}/tenant/`) — super_admin
+  only. The product is self-hosted (one deployment per organisation), so there is **no tenant
+  creation, listing, or cross-tenant management**: a super admin views and renames **their
+  own (current) tenant** and has full CRUD (list/add/update/remove) over **that tenant's
+  domains**. The tenant ID always comes from the auth context via the handler, never from the
+  URL or body (Invariant 1). Guards: domains are normalised to lowercase and globally unique
+  (`ErrDomainAlreadyExists`); the tenant's last domain cannot be removed; and a domain cannot be removed or changed while any non-soft-deleted user of the tenant still has an email on it (`ErrDomainInUse`, 409 `DOMAIN_IN_USE`), since login resolves the tenant from the email domain. Every mutation
+  writes an audit log entry.
 
-### Middleware (`backend/internal/delivery/http/middleware/`)
 
 - [ ] `auth.go` — real JWT validation + role extraction, replacing Cycle 1's stub
 - [ ] `tenant.go` — real tenant resolution from JWT claims into `context.Context`, replacing Cycle 1's stub
@@ -197,7 +211,15 @@ FK column. See the `create-migration` skill for the full invariant checklist.
 - [ ] `invitation_handler.go` (or fold into `user_handler.go`) — `POST /api/v1/users/invitations` (admin-only), `POST /api/v1/users/invitations/:id/resend`, `DELETE /api/v1/users/invitations/:id`, `GET /api/v1/users/invitations`, and an unauthenticated `POST /api/v1/invitations/accept`
   - Added during EMPLOYEE36-23: unauthenticated `GET /api/v1/invitations/validate?token=` (same rate limiter as accept). Success returns `{email, role}` where `role` is the invitee's role name (`admin` | `employee` | ...); tenant and role are derived from the invitation row, never from input.
   - Distinct failure states (the endpoint is unauthenticated and the ticket waives enumeration-safety), returned by **both** validate and accept when the token hash matches a row: `INVITATION_EXPIRED` (410), `INVITATION_REVOKED` (403), `INVITATION_ACCEPTED` (409; also when the user is already active). An unknown/empty token stays `INVALID_TOKEN` (400). Clients must branch on the envelope `error.code`, not on message text.
+  - Added during the UI-fix review: `InviteUserUseCase` requires the invitee's email domain to be a registered `tenant_domains` entry of the caller's tenant (case-insensitive; soft-deleted domains and inactive tenants don't count), otherwise `400 EMAIL_DOMAIN_NOT_ALLOWED`; emails with more than one `@` are rejected as `ErrInvalidEmail`. Consequence: a tenant must have `tenant_domains` rows for every domain it invites from (login already depends on the same table).
 - [ ] `role_handler.go` — `GET /api/v1/roles` (admin/super_admin only; Auth → Tenant → `RequireRole`): lists the caller-tenant roles an admin may assign, excluding `super_admin`, returning `{id, name}` only. Added during EMPLOYEE36-21 because the invite form needs a `role_id` and no endpoint exposed role IDs. Department/position list endpoints are not yet built (the invite form takes raw UUIDs until a follow-up cycle adds them)
+- [ ] `dashboard_handler.go` — `GET /api/v1/dashboard/admin` (`RequireRole(admin)`) and
+  `GET /api/v1/dashboard/super-admin` (`RequireRole(super_admin)`); Auth → Tenant → role
+  guard; tenant from the auth context only
+- [ ] `tenant_handler.go` — all `RequireRole(super_admin)` (Auth → Tenant → role guard), acting
+  on the caller's own tenant: `GET /api/v1/tenant`, `PATCH /api/v1/tenant` (rename),
+  `GET /api/v1/tenant/domains`, `POST /api/v1/tenant/domains`,
+  `PATCH /api/v1/tenant/domains/:domainId`, `DELETE /api/v1/tenant/domains/:domainId`
 - [ ] Wire `auth.go`/`tenant.go` middleware onto every route above except login/refresh/forgot-password/reset-password/invitation-accept
 
 ### Seeding (`backend/internal/infrastructure/database/seeder/`, run via `cmd/bootstrap`)
@@ -224,6 +246,10 @@ frontend item before its backend endpoint is callable.
   optional department/position), invitations list (pending/accepted/revoked), resend and
   revoke actions; the list is the landing page at `/invitations`, the form lives on
   `/invitations/new`; the role select is fed by `GET /api/v1/roles`
+- [ ] `clients/admin/src/features/tenants/` — super_admin-only "Organization" settings nav item
+  and page (`/settings/organization`): view and rename the current tenant, and a domains
+  manager (list/add/edit/remove). No tenant list or create screens (self-hosted). Depends on
+  the tenant endpoints above.
 - [ ] `clients/admin/` app shell — collapsible sidebar + top header (nav links from
   `components/layout/navItems.ts`, UI state in a Zustand `uiStore`); added during
   EMPLOYEE36-21 so later admin features have somewhere to register navigation

@@ -63,3 +63,14 @@ func (i *UserInvitation) Status(now time.Time) InvitationStatus {
 		return InvitationStatusPending
 	}
 }
+
+// InvitationListItem is a read model for the admin listing: an invitation
+// joined with its role name and inviting user (both resolved within the
+// invitation's tenant).
+type InvitationListItem struct {
+	UserInvitation
+	RoleName       string
+	InvitedByFirst string
+	InvitedByLast  string
+	InvitedByEmail string
+}

@@ -5,6 +5,7 @@
 package invitation
 
 import (
+	"strings"
 	"time"
 
 	"github.com/google/uuid"
@@ -48,6 +49,66 @@ func ToInvitationResponse(i *entity.UserInvitation) InvitationResponse {
 		ID: i.ID, Email: i.Email, RoleID: i.RoleID, DepartmentID: i.DepartmentID,
 		PositionID: i.PositionID, InvitedBy: i.InvitedBy, Status: i.Status(time.Now()),
 		ExpiresAt: i.ExpiresAt, AcceptedAt: i.AcceptedAt, RevokedAt: i.RevokedAt, CreatedAt: i.CreatedAt,
+	}
+}
+
+// Listing limits.
+const (
+	DefaultPageSize = 20
+	MaxPageSize     = 100
+	MaxSearchLen    = 100
+)
+
+// ListInvitationsQuery is the validated input of the admin listing.
+type ListInvitationsQuery struct {
+	Page     int
+	PageSize int
+	Status   entity.InvitationStatus // empty = all
+	Search   string
+}
+
+// ListInvitationsResult is one page of the listing plus pagination totals.
+type ListInvitationsResult struct {
+	Items      []*entity.InvitationListItem
+	Total      int64
+	Page       int
+	PageSize   int
+	TotalPages int
+}
+
+// InvitedByResponse identifies the admin who sent an invitation.
+type InvitedByResponse struct {
+	ID    uuid.UUID `json:"id"`
+	Name  string    `json:"name"`
+	Email string    `json:"email"`
+}
+
+// InvitationListItemResponse is one row of the admin invitation listing.
+type InvitationListItemResponse struct {
+	ID           uuid.UUID               `json:"id"`
+	Email        string                  `json:"email"`
+	Role         string                  `json:"role"`
+	RoleID       uuid.UUID               `json:"role_id"`
+	DepartmentID *uuid.UUID              `json:"department_id,omitempty"`
+	PositionID   *uuid.UUID              `json:"position_id,omitempty"`
+	InvitedBy    InvitedByResponse       `json:"invited_by"`
+	InvitedOn    time.Time               `json:"invited_on"`
+	Status       entity.InvitationStatus `json:"status"`
+	ExpiresAt    time.Time               `json:"expires_at"`
+	AcceptedAt   *time.Time              `json:"accepted_at,omitempty"`
+	RevokedAt    *time.Time              `json:"revoked_at,omitempty"`
+	CreatedAt    time.Time               `json:"created_at"`
+}
+
+// ToInvitationListItemResponse maps a listing row to its API representation.
+func ToInvitationListItemResponse(i *entity.InvitationListItem) InvitationListItemResponse {
+	name := strings.TrimSpace(i.InvitedByFirst + " " + i.InvitedByLast)
+	return InvitationListItemResponse{
+		ID: i.ID, Email: i.Email, Role: i.RoleName, RoleID: i.RoleID,
+		DepartmentID: i.DepartmentID, PositionID: i.PositionID,
+		InvitedBy: InvitedByResponse{ID: i.InvitedBy, Name: name, Email: i.InvitedByEmail},
+		InvitedOn: i.CreatedAt, Status: i.Status(time.Now()), ExpiresAt: i.ExpiresAt,
+		AcceptedAt: i.AcceptedAt, RevokedAt: i.RevokedAt, CreatedAt: i.CreatedAt,
 	}
 }
 

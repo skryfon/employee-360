@@ -16,7 +16,7 @@ import (
 )
 
 func (f *fixture) invite() *InviteUserUseCaseImpl {
-	return NewInviteUserUseCase(f.s, fakeUserRoleRepo{f.s}, fakeRoleRepo{f.s}, fakeInvRepo{f.s}, fakeOrgRepo{f.s}, fakeAuditRepo{f.s}, f.hash, f.s, f.s, AppURLs{Default: "http://app/", Admin: "http://admin.app/"})
+	return NewInviteUserUseCase(f.s, fakeUserRoleRepo{f.s}, fakeRoleRepo{f.s}, fakeInvRepo{f.s}, fakeOrgRepo{f.s}, fakeTenantDomainRepo{f.s}, fakeTenantRepo{f.s}, fakeAuditRepo{f.s}, f.hash, f.s, f.s, AppURLs{Default: "http://app/", Admin: "http://admin.app/"})
 }
 func (f *fixture) resend() *ResendInvitationUseCaseImpl {
 	return NewResendInvitationUseCase(fakeRoleRepo{f.s}, fakeInvRepo{f.s}, fakeAuditRepo{f.s}, f.hash, f.s, f.s, AppURLs{Default: "http://app"})
@@ -71,6 +71,52 @@ func TestInvite_RejectsSuperAdminRoleAndDuplicate(t *testing.T) {
 	f.doInvite(t, "dup@acme.com")
 	_, err = f.invite().Execute(bg, f.tenantA, f.adminID, invtypes.InviteUserRequest{Email: "dup@acme.com", RoleID: f.employeeRl.ID})
 	assert.ErrorIs(t, err, domainerrors.ErrEmailAlreadyExists)
+}
+
+func TestInvite_EmailDomainMustBelongToTenant(t *testing.T) {
+	f := newFixture()
+	req := func(email string) invtypes.InviteUserRequest {
+		return invtypes.InviteUserRequest{Email: email, RoleID: f.employeeRl.ID}
+	}
+	// Allowed domain succeeds.
+	_, err := f.invite().Execute(bg, f.tenantA, f.adminID, req("ok@acme.com"))
+	require.NoError(t, err)
+	// Case-insensitive.
+	_, err = f.invite().Execute(bg, f.tenantA, f.adminID, req("  Mixed@ACME.Com "))
+	require.NoError(t, err)
+	// Unregistered domain rejected; nothing persisted.
+	_, err = f.invite().Execute(bg, f.tenantA, f.adminID, req("x@other.com"))
+	assert.ErrorIs(t, err, domainerrors.ErrEmailDomainNotAllowed)
+	// Domain registered to a different tenant rejected.
+	_, err = f.invite().Execute(bg, f.tenantA, f.adminID, req("x@b.com"))
+	assert.ErrorIs(t, err, domainerrors.ErrEmailDomainNotAllowed)
+	assert.Len(t, f.s.invitations, 2)
+}
+
+// The tenant row lock must be taken before the domain check so the check
+// serialises with tenant domain removal/update.
+func TestInvite_LocksTenantBeforeDomainCheck(t *testing.T) {
+	f := newFixture()
+	_, err := f.invite().Execute(bg, f.tenantA, f.adminID, invtypes.InviteUserRequest{Email: "l@acme.com", RoleID: f.employeeRl.ID})
+	require.NoError(t, err)
+	assert.Equal(t, []string{"lock", "domain_check"}, f.s.calls)
+
+	// A rejected domain is still checked after the lock, and nothing persists.
+	f.s.calls = nil
+	_, err = f.invite().Execute(bg, f.tenantA, f.adminID, invtypes.InviteUserRequest{Email: "x@gone.com", RoleID: f.employeeRl.ID})
+	assert.ErrorIs(t, err, domainerrors.ErrEmailDomainNotAllowed)
+	assert.Equal(t, []string{"lock", "domain_check"}, f.s.calls)
+	assert.Len(t, f.s.invitations, 1)
+	assert.Len(t, f.s.users, 1)
+}
+
+func TestInvite_MissingTenantSurfacesNotFound(t *testing.T) {
+	f := newFixture()
+	delete(f.s.tenants, f.tenantA)
+	_, err := f.invite().Execute(bg, f.tenantA, f.adminID, invtypes.InviteUserRequest{Email: "m@acme.com", RoleID: f.employeeRl.ID})
+	assert.ErrorIs(t, err, domainerrors.ErrTenantNotFound)
+	assert.Zero(t, f.s.domainChecks)
+	assert.Empty(t, f.s.users)
 }
 
 // AC2: only hashes stored.
@@ -195,10 +241,11 @@ func TestList_TenantScoped(t *testing.T) {
 	f.doInvite(t, "l2@acme.com")
 	f.s.invitations[uuid.New()] = &entity.UserInvitation{ID: uuid.New(), TenantID: f.tenantB}
 	uc := NewListInvitationsUseCase(fakeInvRepo{f.s})
-	list, total, err := uc.Execute(bg, f.tenantA, 10, 0)
+	res, err := uc.Execute(bg, f.tenantA, invtypes.ListInvitationsQuery{Page: 1, PageSize: 10})
 	require.NoError(t, err)
-	assert.Equal(t, int64(2), total)
-	for _, i := range list {
+	assert.Equal(t, int64(2), res.Total)
+	assert.Equal(t, 1, res.TotalPages)
+	for _, i := range res.Items {
 		assert.Equal(t, f.tenantA, i.TenantID)
 	}
 }
@@ -361,4 +408,15 @@ func TestInviteLink_TargetsRoleApp(t *testing.T) {
 	_, tok := f.doInvite(t, "emp@acme.com")
 	p = f.s.events[len(f.s.events)-1].Payload.(event.UserInvitedPayload)
 	assert.Equal(t, "http://app/accept-invitation?token="+tok, p.InviteURL)
+}
+
+func TestInvite_MultipleOrMisplacedAtRejectedBeforeAnyWork(t *testing.T) {
+	f := newFixture()
+	for _, e := range []string{"x@evil.com@acme.com", "a@@acme.com", "@acme.com", "a@"} {
+		_, err := f.invite().Execute(bg, f.tenantA, f.adminID, invtypes.InviteUserRequest{Email: e, RoleID: f.employeeRl.ID})
+		assert.ErrorIs(t, err, domainerrors.ErrInvalidEmail, e)
+	}
+	assert.Zero(t, f.s.domainChecks)
+	assert.Empty(t, f.s.invitations)
+	assert.Empty(t, f.s.events)
 }

@@ -19,6 +19,7 @@ import { AuthLayout } from '../components/AuthLayout'
 import { FormField } from '../components/FormField'
 import { SubmitButton } from '../components/SubmitButton'
 import { InlineAlert } from '../components/InlineAlert'
+import { Skeleton, SkeletonRegion } from '../../layout/Skeleton'
 
 export interface AcceptInvitationPageProps {
   /** Which portal is rendering this page. */
@@ -91,12 +92,12 @@ function ProblemView({ problem }: { problem: InvitationProblem }) {
         {problem.signIn ? (
           <Link
             to="/login"
-            className="inline-flex h-9 items-center justify-center gap-2 rounded-sm bg-slate-900 px-4 text-sm font-semibold text-white hover:bg-slate-800 active:bg-slate-950"
+            className="inline-flex h-11 md:h-9 items-center justify-center gap-2 rounded-sm bg-slate-900 px-4 text-sm font-semibold text-white hover:bg-slate-800 active:bg-slate-950"
           >
             Sign in
           </Link>
         ) : (
-          <Link to="/login" className="text-sm text-slate-900 underline hover:text-slate-700">
+          <Link to="/login" className="inline-flex min-h-11 w-fit items-center text-sm text-slate-900 hover:text-slate-700">
             Return to sign in
           </Link>
         )}
@@ -159,13 +160,11 @@ export function AcceptInvitationPage({
   if (validateQuery.isLoading) {
     return (
       <AuthLayout title="Verifying invitation">
-        <div className="flex flex-col items-center justify-center gap-3 py-6" role="status" aria-busy="true">
-          <svg className="h-6 w-6 animate-spin text-slate-900" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-            <circle cx="12" cy="12" r="9" stroke="currentColor" strokeWidth="3" opacity="0.25" />
-            <path d="M21 12a9 9 0 0 0-9-9" stroke="currentColor" strokeWidth="3" />
-          </svg>
-          <p className="text-sm text-slate-600">Verifying your invitation link...</p>
-        </div>
+        <SkeletonRegion label="Verifying your invitation link…" className="flex flex-col gap-4">
+          <div className="flex flex-col gap-1"><Skeleton className="h-4 w-24" /><Skeleton className="h-9 w-full" /></div>
+          <div className="flex flex-col gap-1"><Skeleton className="h-4 w-24" /><Skeleton className="h-9 w-full" /></div>
+          <Skeleton className="h-9 w-full" />
+        </SkeletonRegion>
       </AuthLayout>
     )
   }
@@ -179,7 +178,7 @@ export function AcceptInvitationPage({
           <InlineAlert tone="error">
             {getErrorMessage(validateQuery.error, 'Unable to verify this invitation. Please try again.')}
           </InlineAlert>
-          <Link to="/login" className="text-sm text-slate-900 underline hover:text-slate-700">
+          <Link to="/login" className="inline-flex min-h-11 w-fit items-center text-sm text-slate-900 hover:text-slate-700">
             Return to sign in
           </Link>
         </div>
@@ -191,7 +190,7 @@ export function AcceptInvitationPage({
     return (
       <Notice title="Redirecting">
         This invitation is for the {otherPortalName}. Redirecting you now...{' '}
-        <a href={redirect.url} className="underline">
+        <a href={redirect.url} className="font-medium">
           Continue
         </a>
       </Notice>
@@ -218,7 +217,7 @@ export function AcceptInvitationPage({
             <Link
               to="/login"
               state={{ invitationAccepted: true }}
-              className="inline-flex h-9 items-center justify-center gap-2 rounded-sm bg-slate-900 px-4 text-sm font-semibold text-white hover:bg-slate-800 active:bg-slate-950"
+              className="inline-flex h-11 md:h-9 items-center justify-center gap-2 rounded-sm bg-slate-900 px-4 text-sm font-semibold text-white hover:bg-slate-800 active:bg-slate-950"
             >
               {signInLabel}
             </Link>
@@ -276,7 +275,7 @@ export function AcceptInvitationPage({
           {...register('confirmPassword')}
         />
         <SubmitButton loading={mutation.isPending}>Set password & accept</SubmitButton>
-        <Link to="/login" className="text-sm text-slate-900 underline hover:text-slate-700">
+        <Link to="/login" className="inline-flex min-h-11 w-fit items-center text-sm text-slate-900 hover:text-slate-700">
           Already accepted? Sign in
         </Link>
       </form>

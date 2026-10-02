@@ -16,7 +16,7 @@ export {
 
 export { unwrapSingleEntity, unwrapListResponse } from './unwrap.ts';
 export type { ApiEnvelope } from './unwrap.ts';
-export { getErrorMessage, getErrorCode, INVITATION_ERROR_CODES } from './errors.ts';
+export { getErrorMessage, getErrorCode, INVITATION_ERROR_CODES, EMAIL_DOMAIN_NOT_ALLOWED, TENANT_ERROR_CODES } from './errors.ts';
 export { resolveInvitationRedirect, invitationAppForRole } from './invitationRouting.ts';
 export type { InvitationApp, InvitationRedirect } from './invitationRouting.ts';
 
@@ -43,6 +43,7 @@ export type {
   AcceptInvitationRequest,
   ValidateInvitationResponse,
   Invitation,
+  InvitationListItem,
   PageMeta,
   ListInvitationsParams,
   RoleOption,
@@ -53,3 +54,16 @@ export type { HealthResponse } from './health.ts';
 
 export * from './generated/models/index.ts';
 export * from './generated/hooks/index.ts';
+
+export { fetchAdminDashboard, fetchSuperAdminDashboard } from './dashboard.ts';
+export type { AdminDashboard, SuperAdminDashboard, RoleUserCount, TenantInfo } from './dashboard.ts';
+
+export {
+  getTenant,
+  renameTenant,
+  listTenantDomains,
+  addTenantDomain,
+  updateTenantDomain,
+  removeTenantDomain,
+} from './tenants.ts';
+export type { Tenant, TenantDetail, TenantDomain } from './tenants.ts';

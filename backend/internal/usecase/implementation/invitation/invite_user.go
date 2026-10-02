@@ -24,6 +24,8 @@ type InviteUserUseCaseImpl struct {
 	roleRepo       repository.RoleRepository
 	invitationRepo repository.UserInvitationRepository
 	orgRefRepo     repository.OrgReferenceRepository
+	tenantDomains  repository.TenantDomainRepository
+	tenantRepo     repository.TenantRepository
 	auditRepo      repository.AuditRepository
 	hashService    service.HashService
 	eventPublisher service.EventPublisher
@@ -41,6 +43,8 @@ func NewInviteUserUseCase(
 	roleRepo repository.RoleRepository,
 	invitationRepo repository.UserInvitationRepository,
 	orgRefRepo repository.OrgReferenceRepository,
+	tenantDomains repository.TenantDomainRepository,
+	tenantRepo repository.TenantRepository,
 	auditRepo repository.AuditRepository,
 	hashService service.HashService,
 	eventPublisher service.EventPublisher,
@@ -49,7 +53,7 @@ func NewInviteUserUseCase(
 ) *InviteUserUseCaseImpl {
 	return &InviteUserUseCaseImpl{
 		userRepo: userRepo, userRoleRepo: userRoleRepo, roleRepo: roleRepo,
-		invitationRepo: invitationRepo, orgRefRepo: orgRefRepo, auditRepo: auditRepo, hashService: hashService,
+		invitationRepo: invitationRepo, orgRefRepo: orgRefRepo, tenantDomains: tenantDomains, tenantRepo: tenantRepo, auditRepo: auditRepo, hashService: hashService,
 		eventPublisher: eventPublisher, transactor: transactor,
 		expiry:  defaultInvitationExpiry,
 		appURLs: appURLs,
@@ -63,10 +67,10 @@ func (u *InviteUserUseCaseImpl) Execute(c context.Context, tenantID, inviterID u
 	}
 
 	email := strings.ToLower(strings.TrimSpace(req.Email))
-	if at := strings.Index(email, "@"); at <= 0 || at == len(email)-1 {
+	at := strings.Index(email, "@")
+	if strings.Count(email, "@") != 1 || at <= 0 || at == len(email)-1 {
 		return nil, domainerrors.ErrInvalidEmail
 	}
-
 	// The role must belong to the caller's tenant; super_admin is never invitable.
 	role, err := u.roleRepo.GetByID(c, tenantID, req.RoleID)
 	if err != nil || role == nil || role.TenantID != tenantID {
@@ -154,6 +158,21 @@ func (u *InviteUserUseCaseImpl) Execute(c context.Context, tenantID, inviterID u
 	}
 
 	if err := u.transactor.WithinTransaction(c, func(txCtx context.Context) error {
+		// Serialise with tenant domain removal/update, which lock the same row
+		// before checking for users on the domain. The domain check must come
+		// after the lock so it cannot validate a domain that is concurrently
+		// being removed.
+		if _, err := u.tenantRepo.LockByID(txCtx, tenantID); err != nil {
+			return err
+		}
+		// The email's domain must be registered to the caller's tenant (never a client-supplied tenant).
+		ok, err := u.tenantDomains.DomainBelongsToTenant(txCtx, tenantID, email[at+1:])
+		if err != nil {
+			return err
+		}
+		if !ok {
+			return domainerrors.ErrEmailDomainNotAllowed
+		}
 		if err := u.userRepo.Create(txCtx, user); err != nil {
 			return err
 		}

@@ -5,14 +5,23 @@
  * REST API for Employee360, an open-source, self-hostable, multi-tenant employee platform. Includes unversioned operational endpoints (health checks) and the versioned client-facing API under /api/v1.
  * OpenAPI spec version: 1.0
  */
+import type { GetApiV1UsersInvitationsStatus } from './getApiV1UsersInvitationsStatus.ts';
 
 export type GetApiV1UsersInvitationsParams = {
 /**
- * Page (1-based)
+ * Page (1-based, default 1)
  */
 page?: number;
 /**
- * Page size (max 100)
+ * Page size (1-100, default 20); values above 100 are rejected with 400
  */
 page_size?: number;
+/**
+ * Filter by status
+ */
+status?: GetApiV1UsersInvitationsStatus;
+/**
+ * Case-insensitive substring match on invitee email (max 100 chars)
+ */
+search?: string;
 };

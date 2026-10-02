@@ -5,6 +5,7 @@ package persistence
 import (
 	"context"
 	"errors"
+	"strings"
 	"testing"
 
 	"github.com/google/uuid"
@@ -112,4 +113,31 @@ func TestGormTenantDomainRepository_FindTenantByDomain(t *testing.T) {
 			t.Fatalf("expected ErrTenantNotFound for soft-deleted domain, got tenant=%v err=%v", got, err)
 		}
 	})
+}
+
+func TestGormTenantDomainRepository_DomainBelongsToTenant(t *testing.T) {
+	db := setupTestDB(t)
+	repo := NewGormTenantDomainRepository(db)
+	c := context.Background()
+
+	suffix := uuid.NewString()
+	tenantA := createTestTenant(t, db, "tdb-a-"+suffix)
+	tenantB := createTestTenant(t, db, "tdb-b-"+suffix)
+	domainA := "a-" + suffix + ".example.com"
+	createTestTenantDomain(t, db, tenantA.ID, domainA)
+
+	ok, err := repo.DomainBelongsToTenant(c, tenantA.ID, domainA)
+	require.NoError(t, err)
+	require.True(t, ok)
+	ok, err = repo.DomainBelongsToTenant(c, tenantA.ID, strings.ToUpper(domainA))
+	require.NoError(t, err)
+	require.True(t, ok, "case-insensitive")
+	ok, err = repo.DomainBelongsToTenant(c, tenantB.ID, domainA)
+	require.NoError(t, err)
+	require.False(t, ok, "other tenant's domain")
+
+	require.NoError(t, db.Exec("UPDATE tenant_domains SET deleted_at = NOW() WHERE domain = ?", domainA).Error)
+	ok, err = repo.DomainBelongsToTenant(c, tenantA.ID, domainA)
+	require.NoError(t, err)
+	require.False(t, ok, "soft-deleted domain")
 }

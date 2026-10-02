@@ -12,6 +12,7 @@ import (
 
 	"github.com/skryfon/employee360/backend/internal/domain/entity"
 	domainerrors "github.com/skryfon/employee360/backend/internal/domain/errors"
+	"github.com/skryfon/employee360/backend/internal/domain/repository"
 )
 
 // Rows carrying deleted_at must disappear from role, user-role, invitation and
@@ -52,7 +53,7 @@ func TestSoftDeletedRowsAreHiddenFromReads(t *testing.T) {
 	require.ErrorIs(t, err, domainerrors.ErrInvitationNotFound)
 	_, err = f.repo.GetByTokenHash(c, inv.TokenHash)
 	require.ErrorIs(t, err, domainerrors.ErrInvitationNotFound)
-	invs, total, err := f.repo.List(c, tid, 0, 0)
+	invs, total, err := f.repo.List(c, tid, repository.InvitationListFilter{})
 	require.NoError(t, err)
 	require.Zero(t, total)
 	require.Empty(t, invs)
@@ -69,4 +70,35 @@ func TestSoftDeletedRowsAreHiddenFromReads(t *testing.T) {
 	ok, err = org.PositionExists(c, tid, pos)
 	require.NoError(t, err)
 	require.False(t, ok)
+}
+
+// Soft-deleted tenants and tenant domains must disappear from the management
+// reads and the login/identity paths.
+func TestSoftDeletedTenantsAndDomainsAreHidden(t *testing.T) {
+	db := setupTestDB(t)
+	c := context.Background()
+	tenants := NewGormTenantRepository(db)
+	domains := NewGormTenantDomainManager(db)
+
+	tn := createTestTenant(t, db, "sd-"+uuid.NewString())
+	dom := "sd-" + uuid.NewString()[:8] + ".example.com"
+	live := "sd2-" + uuid.NewString()[:8] + ".example.com"
+	now := time.Now().UTC()
+	for _, d := range []string{dom, live} {
+		require.NoError(t, domains.Create(c, &entity.TenantDomain{ID: uuid.New(), TenantID: tn.ID, Domain: d, CreatedAt: now, UpdatedAt: now}))
+	}
+	require.NoError(t, db.Exec("UPDATE tenant_domains SET deleted_at = NOW() WHERE domain = ?", dom).Error)
+	ds, err := domains.ListByTenantID(c, tn.ID)
+	require.NoError(t, err)
+	require.Len(t, ds, 1)
+	require.Equal(t, live, ds[0].Domain)
+	n, err := domains.CountByTenantID(c, tn.ID)
+	require.NoError(t, err)
+	require.EqualValues(t, 1, n)
+
+	require.NoError(t, db.Exec("UPDATE tenants SET deleted_at = NOW() WHERE id = ?", tn.ID).Error)
+	_, err = tenants.GetByID(c, tn.ID)
+	require.ErrorIs(t, err, domainerrors.ErrTenantNotFound)
+	_, err = tenants.LockByID(c, tn.ID)
+	require.ErrorIs(t, err, domainerrors.ErrTenantNotFound)
 }

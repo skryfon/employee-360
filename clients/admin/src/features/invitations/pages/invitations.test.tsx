@@ -13,7 +13,7 @@ let mock: MockAdapter
 const ROLE_ID = '11111111-1111-4111-8111-111111111111'
 
 const inv = (id: string, email: string, status: string) => ({ id, email, status, created_at: '2026-01-01T00:00:00Z' })
-let rows = [inv('i1', 'p@x.com', 'pending'), inv('i2', 'a@x.com', 'accepted'), inv('i3', 'r@x.com', 'revoked')]
+let rows: Record<string, unknown>[] = [inv('i1', 'p@x.com', 'pending'), inv('i2', 'a@x.com', 'accepted'), inv('i3', 'r@x.com', 'revoked')]
 
 function renderAt(path: string) {
   const qc = new QueryClient({ defaultOptions: { queries: { retry: false }, mutations: { retry: false } } })
@@ -52,13 +52,78 @@ describe('invitations', () => {
     expect(screen.getByRole('heading', { name: /sign in/i })).toBeInTheDocument()
   })
 
+  it('shows a skeleton while pending, then replaces it with rows', async () => {
+    signIn()
+    renderAt('/invitations')
+    const region = screen.getByRole('status')
+    expect(region).toHaveAttribute('aria-busy', 'true')
+    expect(region).toHaveTextContent('Loading invitations…')
+    expect(await screen.findByText('p@x.com')).toBeInTheDocument()
+    expect(screen.queryByRole('status')).toBeNull()
+  })
+
   it('shows resend/revoke only for pending invitations', async () => {
     signIn()
     renderAt('/invitations')
     expect(await screen.findByText('p@x.com')).toBeInTheDocument()
     expect(screen.getAllByRole('button', { name: /^Resend/ })).toHaveLength(1)
     expect(screen.getAllByRole('button', { name: /^Revoke/ })).toHaveLength(1)
-    expect(screen.getByText('Accepted')).toBeInTheDocument()
+    expect(within(screen.getByRole('table')).getByText('Accepted')).toBeInTheDocument()
+  })
+
+  it('renders role, invited by and invited on columns', async () => {
+    signIn()
+    rows = [
+      { ...inv('i1', 'p@x.com', 'pending'), role: 'admin', invited_by: { id: 'u1', name: 'Alice Admin', email: 'alice@x.com' }, invited_on: '2026-02-03T00:00:00Z' },
+    ]
+    renderAt('/invitations')
+    expect(await screen.findByText('Alice Admin')).toBeInTheDocument()
+    const table = screen.getByRole('table')
+    for (const h of ['Email', 'Role', 'Invited by', 'Invited on', 'Status']) {
+      expect(within(table).getByRole('columnheader', { name: h })).toBeInTheDocument()
+    }
+    expect(within(table).getByText('admin')).toBeInTheDocument()
+  })
+
+  it('sends status filter and debounced search, resetting to page 1', async () => {
+    signIn()
+    renderAt('/invitations?page=3')
+    await screen.findByText('p@x.com')
+    expect(mock.history.get.find((r) => r.url === '/api/v1/users/invitations')?.params).toMatchObject({ page: 3, page_size: 20 })
+    await userEvent.selectOptions(screen.getByLabelText('Status'), 'pending')
+    await waitForCondition(() => mock.history.get.some((r) => r.params?.status === 'pending' && r.params?.page === 1))
+    await userEvent.type(screen.getByLabelText('Search'), 'p@x')
+    await waitForCondition(() => mock.history.get.some((r) => r.params?.search === 'p@x'))
+    const searches = mock.history.get.filter((r) => r.params?.search)
+    expect(searches.every((r) => r.params.search === 'p@x')).toBe(true)
+  })
+
+  it('shows range, paginates and changes page size', async () => {
+    signIn()
+    mock.onGet('/api/v1/users/invitations').reply((cfg) => [
+      200,
+      { success: true, data: rows, meta: { page: cfg.params.page, page_size: cfg.params.page_size, total_items: 45, total_pages: 3 } },
+    ])
+    renderAt('/invitations')
+    expect(await screen.findByText('Showing 1–20 of 45')).toBeInTheDocument()
+    await userEvent.click(screen.getByRole('button', { name: 'Next' }))
+    expect(await screen.findByText('Showing 21–40 of 45')).toBeInTheDocument()
+    await userEvent.selectOptions(screen.getByLabelText('Rows per page'), '50')
+    await waitForCondition(() => mock.history.get.some((r) => r.params?.page_size === 50 && r.params?.page === 1))
+  })
+
+  it('shows an empty state when filters match nothing and an error state on failure', async () => {
+    signIn()
+    mock.onGet('/api/v1/users/invitations').reply(200, { success: true, data: [], meta: { total_items: 0, total_pages: 0 } })
+    renderAt('/invitations?status=expired')
+    expect(await screen.findByText('No invitations match your filters')).toBeInTheDocument()
+  })
+
+  it('shows an error when the list fails to load', async () => {
+    signIn()
+    mock.onGet('/api/v1/users/invitations').reply(500, { success: false, error: { message: 'List exploded' } })
+    renderAt('/invitations')
+    expect(await screen.findByText('List exploded')).toBeInTheDocument()
   })
 
   it('revokes after confirmation and refreshes the list', async () => {
@@ -94,7 +159,10 @@ describe('invitations', () => {
     await userEvent.click(await screen.findByRole('link', { name: 'Create invitation' }))
     expect(await screen.findByRole('heading', { name: 'Create invitation' })).toBeInTheDocument()
     expect(screen.getByRole('form', { name: 'Invite user' })).toBeInTheDocument()
-    expect(screen.getByRole('link', { name: 'Invitations' })).toHaveAttribute('aria-current', 'page')
+    const sidebar = screen.getByRole('complementary', { name: 'Sidebar' })
+    expect(within(sidebar).getByRole('link', { name: 'Invitations' })).toHaveAttribute('aria-current', 'page')
+    const crumbs = screen.getByRole('navigation', { name: 'Breadcrumb' })
+    expect(within(crumbs).getByRole('link', { name: 'Invitations' })).toHaveAttribute('href', '/invitations')
   })
 
   it('redirects unauthenticated users from /invitations/new to login', () => {
@@ -102,13 +170,10 @@ describe('invitations', () => {
     expect(screen.getByRole('heading', { name: /sign in/i })).toBeInTheDocument()
   })
 
-  it('cancel and back links return to the list', async () => {
+  it('cancel returns to the list', async () => {
     signIn()
     renderAt('/invitations/new')
     await userEvent.click(await screen.findByRole('button', { name: 'Cancel' }))
-    expect(await screen.findByRole('link', { name: 'Create invitation' })).toBeInTheDocument()
-    await userEvent.click(screen.getByRole('link', { name: 'Create invitation' }))
-    await userEvent.click(await screen.findByRole('link', { name: 'Back to invitations' }))
     expect(await screen.findByRole('link', { name: 'Create invitation' })).toBeInTheDocument()
   })
 
@@ -127,6 +192,20 @@ describe('invitations', () => {
     expect(await screen.findByText('p@x.com')).toBeInTheDocument()
     expect(await screen.findByText('Invitation sent to new@x.com.')).toBeInTheDocument()
     expect(JSON.parse(mock.history.post[0].data)).toEqual({ email: 'new@x.com', role_id: ROLE_ID })
+  })
+
+  it('shows EMAIL_DOMAIN_NOT_ALLOWED inline on the email field without a toast', async () => {
+    signIn()
+    const msg = 'Email domain is not registered for this organization'
+    mock.onPost('/api/v1/users/invitations').reply(400, { success: false, error: { code: 'EMAIL_DOMAIN_NOT_ALLOWED', message: msg } })
+    renderAt('/invitations/new')
+    await userEvent.type(await screen.findByLabelText('Email'), 'new@other.com')
+    await screen.findByRole('option', { name: 'admin' })
+    await userEvent.selectOptions(screen.getByLabelText('Role'), ROLE_ID)
+    await userEvent.click(screen.getByRole('button', { name: 'Send invitation' }))
+    expect(await screen.findByText(msg)).toBeInTheDocument()
+    expect(screen.getByLabelText('Email')).toHaveAttribute('aria-invalid', 'true')
+    expect(screen.getByRole('form', { name: 'Invite user' })).toBeInTheDocument()
   })
 
   it('shows an error when roles fail to load', async () => {

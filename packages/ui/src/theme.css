@@ -1,0 +1,31 @@
+/*
+ * Shared Employee360 theme tokens. Flat solid colors only (see design-system skill).
+ * Imported by both clients after `@import "tailwindcss"`. Aliases map onto the slate
+ * palette so a palette / per-tenant change is a one-file edit.
+ */
+@theme inline {
+  --font-sans: ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+
+  --color-canvas: var(--color-slate-50);
+  --color-surface: #ffffff;
+  --color-surface-subtle: var(--color-slate-100);
+  --color-surface-selected: var(--color-slate-200);
+  --color-line: var(--color-slate-200);
+  --color-line-strong: var(--color-slate-300);
+  --color-ink: var(--color-slate-900);
+  --color-ink-muted: var(--color-slate-600);
+  --color-accent: var(--color-slate-900);
+  --color-accent-hover: var(--color-slate-800);
+}
+
+@layer base {
+  html {
+    -webkit-font-smoothing: antialiased;
+    text-rendering: optimizeLegibility;
+  }
+  body {
+    background-color: var(--color-slate-50);
+    color: var(--color-slate-900);
+    font-family: var(--font-sans);
+  }
+}

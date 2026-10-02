@@ -2,11 +2,13 @@ package invitation
 
 import (
 	"context"
+	"time"
 
 	"github.com/google/uuid"
 	"github.com/skryfon/employee360/backend/internal/domain/entity"
 	domainerrors "github.com/skryfon/employee360/backend/internal/domain/errors"
 	"github.com/skryfon/employee360/backend/internal/domain/repository"
+	invtypes "github.com/skryfon/employee360/backend/internal/types/invitation"
 	invusecase "github.com/skryfon/employee360/backend/internal/usecase/interface/invitation"
 )
 
@@ -22,16 +24,37 @@ func NewListInvitationsUseCase(invitationRepo repository.UserInvitationRepositor
 	return &ListInvitationsUseCaseImpl{invitationRepo: invitationRepo}
 }
 
-// Execute lists invitations for the caller's tenant only.
-func (u *ListInvitationsUseCaseImpl) Execute(c context.Context, tenantID uuid.UUID, limit, offset int) ([]*entity.UserInvitation, int64, error) {
+// Execute lists invitations for the caller's tenant only. Paging is
+// normalised (page >= 1, page size defaulted/capped) and the status filter
+// validated here so every caller gets the same rules.
+func (u *ListInvitationsUseCaseImpl) Execute(c context.Context, tenantID uuid.UUID, q invtypes.ListInvitationsQuery) (*invtypes.ListInvitationsResult, error) {
 	if tenantID == uuid.Nil {
-		return nil, 0, domainerrors.ErrUnauthorized
+		return nil, domainerrors.ErrUnauthorized
 	}
-	if limit <= 0 || limit > 100 {
-		limit = 20
+	switch q.Status {
+	case "", entity.InvitationStatusPending, entity.InvitationStatusAccepted,
+		entity.InvitationStatusExpired, entity.InvitationStatusRevoked:
+	default:
+		return nil, domainerrors.ErrInvalidInvitationFilter
 	}
-	if offset < 0 {
-		offset = 0
+	if q.Page < 1 {
+		q.Page = 1
 	}
-	return u.invitationRepo.List(c, tenantID, limit, offset)
+	if q.PageSize < 1 {
+		q.PageSize = invtypes.DefaultPageSize
+	}
+	if q.PageSize > invtypes.MaxPageSize {
+		q.PageSize = invtypes.MaxPageSize
+	}
+	items, total, err := u.invitationRepo.List(c, tenantID, repository.InvitationListFilter{
+		Status: q.Status, Search: q.Search, Now: time.Now(),
+		Limit: q.PageSize, Offset: (q.Page - 1) * q.PageSize,
+	})
+	if err != nil {
+		return nil, err
+	}
+	return &invtypes.ListInvitationsResult{
+		Items: items, Total: total, Page: q.Page, PageSize: q.PageSize,
+		TotalPages: int((total + int64(q.PageSize) - 1) / int64(q.PageSize)),
+	}, nil
 }

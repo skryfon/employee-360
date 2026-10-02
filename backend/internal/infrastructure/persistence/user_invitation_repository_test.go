@@ -14,6 +14,7 @@ import (
 
 	"github.com/skryfon/employee360/backend/internal/domain/entity"
 	domainerrors "github.com/skryfon/employee360/backend/internal/domain/errors"
+	"github.com/skryfon/employee360/backend/internal/domain/repository"
 	"github.com/skryfon/employee360/backend/internal/infrastructure/database"
 )
 
@@ -65,7 +66,7 @@ func TestGormUserInvitationRepository_TenantIsolation(t *testing.T) {
 	_, err = f.repo.GetByID(c, f.tenantB.ID, inv.ID)
 	require.ErrorIs(t, err, domainerrors.ErrInvitationNotFound)
 
-	list, total, err := f.repo.List(c, f.tenantB.ID, 10, 0)
+	list, total, err := f.repo.List(c, f.tenantB.ID, repository.InvitationListFilter{Limit: 10})
 	require.NoError(t, err)
 	require.Empty(t, list)
 	require.EqualValues(t, 0, total)
@@ -142,14 +143,14 @@ func TestGormUserInvitationRepository_ListPagination(t *testing.T) {
 	// A row in tenant B must not be counted.
 	// (created via raw insert: role/inviter FKs belong to tenant A's rows, which is fine for FK purposes.)
 
-	page1, total, err := f.repo.List(c, f.tenantA.ID, 2, 0)
+	page1, total, err := f.repo.List(c, f.tenantA.ID, repository.InvitationListFilter{Limit: 2})
 	require.NoError(t, err)
 	require.EqualValues(t, 5, total)
 	require.Len(t, page1, 2)
 	require.Equal(t, ids[4], page1[0].ID, "newest first")
 	require.Equal(t, ids[3], page1[1].ID)
 
-	page3, total, err := f.repo.List(c, f.tenantA.ID, 2, 4)
+	page3, total, err := f.repo.List(c, f.tenantA.ID, repository.InvitationListFilter{Limit: 2, Offset: 4})
 	require.NoError(t, err)
 	require.EqualValues(t, 5, total)
 	require.Len(t, page3, 1)
@@ -204,4 +205,81 @@ func TestGormOrgReferenceRepository_TenantScoped(t *testing.T) {
 	ok, err = repo.PositionExists(c, tA.ID, dept)
 	require.NoError(t, err)
 	require.False(t, ok, "a department id is not a position")
+}
+
+func TestGormUserInvitationRepository_ListFilterSearchJoins(t *testing.T) {
+	f := newInvFixture(t)
+	c := context.Background()
+	now := time.Now().UTC()
+
+	mk := func(email string, mut func(*entity.UserInvitation)) *entity.UserInvitation {
+		inv := f.newInv(now.Add(-time.Minute))
+		inv.Email = email
+		if mut != nil {
+			mut(inv)
+		}
+		require.NoError(t, f.repo.Create(c, inv))
+		return inv
+	}
+	past := now.Add(-time.Hour)
+	pending := mk("pending@x.com", nil)
+	mk("expired@x.com", func(i *entity.UserInvitation) { i.ExpiresAt = past })
+	mk("accepted@x.com", func(i *entity.UserInvitation) { i.AcceptedAt = &past })
+	mk("revoked@x.com", func(i *entity.UserInvitation) { i.RevokedAt = &past })
+	mk("50%_off@x.com", nil)
+	mk("50xxoff@x.com", nil)
+
+	for st, want := range map[entity.InvitationStatus]int{
+		entity.InvitationStatusPending: 3, entity.InvitationStatusExpired: 1,
+		entity.InvitationStatusAccepted: 1, entity.InvitationStatusRevoked: 1,
+	} {
+		_, total, err := f.repo.List(c, f.tenantA.ID, repository.InvitationListFilter{Status: st, Now: now, Limit: 50})
+		require.NoError(t, err)
+		require.EqualValues(t, want, total, st)
+	}
+
+	items, total, err := f.repo.List(c, f.tenantA.ID, repository.InvitationListFilter{Search: "PENDING@", Limit: 10})
+	require.NoError(t, err)
+	require.EqualValues(t, 1, total)
+	require.Equal(t, pending.ID, items[0].ID)
+	require.Equal(t, "admin", items[0].RoleName)
+	require.NotEmpty(t, items[0].InvitedByEmail)
+
+	// LIKE wildcards are literal.
+	_, total, err = f.repo.List(c, f.tenantA.ID, repository.InvitationListFilter{Search: "50%_off", Limit: 10})
+	require.NoError(t, err)
+	require.EqualValues(t, 1, total)
+	_, total, err = f.repo.List(c, f.tenantA.ID, repository.InvitationListFilter{Search: "%", Limit: 10})
+	require.NoError(t, err)
+	require.EqualValues(t, 1, total)
+
+	// Tenant B sees nothing of tenant A's, even with a matching search.
+	_, total, err = f.repo.List(c, f.tenantB.ID, repository.InvitationListFilter{Search: "pending", Limit: 10})
+	require.NoError(t, err)
+	require.EqualValues(t, 0, total)
+}
+
+func TestGormUserInvitationRepository_ListHidesSoftDeletedJoinNames(t *testing.T) {
+	f := newInvFixture(t)
+	c := context.Background()
+	now := time.Now().UTC()
+
+	inv := f.mustCreate(t, now)
+	items, _, err := f.repo.List(c, f.tenantA.ID, repository.InvitationListFilter{Limit: 10})
+	require.NoError(t, err)
+	require.Len(t, items, 1)
+	require.Equal(t, "admin", items[0].RoleName)
+	require.NotEmpty(t, items[0].InvitedByEmail)
+
+	require.NoError(t, f.db.Exec("UPDATE roles SET deleted_at = NOW() WHERE id = ?", f.roleA).Error)
+	require.NoError(t, f.db.Exec("UPDATE users SET deleted_at = NOW() WHERE id = ?", f.inviterA).Error)
+
+	items, total, err := f.repo.List(c, f.tenantA.ID, repository.InvitationListFilter{Limit: 10})
+	require.NoError(t, err)
+	require.EqualValues(t, 1, total, "invitation must still be listed")
+	require.Equal(t, inv.ID, items[0].ID)
+	require.Empty(t, items[0].RoleName)
+	require.Empty(t, items[0].InvitedByFirst)
+	require.Empty(t, items[0].InvitedByLast)
+	require.Empty(t, items[0].InvitedByEmail)
 }

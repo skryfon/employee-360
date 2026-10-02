@@ -27,10 +27,10 @@ type ErrorInfo struct {
 
 // Meta carries auxiliary response metadata, e.g. pagination.
 type Meta struct {
-	Page       int   `json:"page,omitempty"`
-	PageSize   int   `json:"page_size,omitempty"`
-	TotalItems int64 `json:"total_items,omitempty"`
-	TotalPages int   `json:"total_pages,omitempty"`
+	Page       int   `json:"page"`
+	PageSize   int   `json:"page_size"`
+	TotalItems int64 `json:"total_items"`
+	TotalPages int   `json:"total_pages"`
 }
 
 // Success writes a 200 OK envelope carrying data.

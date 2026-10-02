@@ -23,6 +23,7 @@ import (
 	"github.com/skryfon/employee360/backend/internal/infrastructure/container"
 	infraservice "github.com/skryfon/employee360/backend/internal/infrastructure/service"
 	authtypes "github.com/skryfon/employee360/backend/internal/types/auth"
+	dashtypes "github.com/skryfon/employee360/backend/internal/types/dashboard"
 	invtypes "github.com/skryfon/employee360/backend/internal/types/invitation"
 	usecaseinterface "github.com/skryfon/employee360/backend/internal/usecase/interface"
 	"github.com/skryfon/employee360/backend/shared"
@@ -338,8 +339,9 @@ func (f fakeRevoke) Execute(context.Context, uuid.UUID, uuid.UUID, uuid.UUID) er
 
 type fakeList struct{}
 
-func (fakeList) Execute(context.Context, uuid.UUID, int, int) ([]*entity.UserInvitation, int64, error) {
-	return []*entity.UserInvitation{{ID: uuid.New(), ExpiresAt: time.Now().Add(time.Hour)}}, 1, nil
+func (fakeList) Execute(context.Context, uuid.UUID, invtypes.ListInvitationsQuery) (*invtypes.ListInvitationsResult, error) {
+	items := []*entity.InvitationListItem{{UserInvitation: entity.UserInvitation{ID: uuid.New(), ExpiresAt: time.Now().Add(time.Hour)}}}
+	return &invtypes.ListInvitationsResult{Items: items, Total: 1, Page: 1, PageSize: 20, TotalPages: 1}, nil
 }
 
 type fakeValidate struct{}
@@ -611,5 +613,86 @@ func TestPreAuthRoutes_DoNotVerifyIdentity(t *testing.T) {
 	engine := SetupRouter(cfg, zerolog.Nop(), ctr)
 	if rec := do(engine, http.MethodGet, "/api/v1/invitations/validate?token=t", "", ""); rec.Code != http.StatusOK {
 		t.Fatalf("validate: got %d: %s", rec.Code, rec.Body.String())
+	}
+}
+
+type fakeAdminDash struct{ gotTenant uuid.UUID }
+
+func (f *fakeAdminDash) Execute(_ context.Context, tenantID uuid.UUID) (*dashtypes.AdminDashboardResult, error) {
+	f.gotTenant = tenantID
+	return &dashtypes.AdminDashboardResult{
+		Counts:            &entity.TenantDashboardCounts{UsersTotal: 4, UsersActive: 3, UsersPendingInvited: 1, Departments: 2, Positions: 5, Invitations: entity.InvitationStatusCounts{Pending: 1}},
+		RecentInvitations: []*entity.InvitationListItem{{UserInvitation: entity.UserInvitation{ID: uuid.New(), ExpiresAt: time.Now().Add(time.Hour)}}},
+	}, nil
+}
+
+type fakeSuperDash struct{ gotTenant uuid.UUID }
+
+func (f *fakeSuperDash) Execute(_ context.Context, tenantID uuid.UUID) (*dashtypes.SuperAdminDashboardResult, error) {
+	f.gotTenant = tenantID
+	return &dashtypes.SuperAdminDashboardResult{
+		AdminDashboardResult: dashtypes.AdminDashboardResult{Counts: &entity.TenantDashboardCounts{UsersTotal: 9, UsersActive: 7}},
+		Tenant:               &entity.Tenant{ID: tenantID, Name: "Acme", IsActive: true},
+		UsersByRole:          []entity.RoleUserCount{{Role: "admin", Total: 1, Active: 1}},
+	}, nil
+}
+
+func dashboardEngine(t *testing.T, admin *fakeAdminDash, super *fakeSuperDash) (*gin.Engine, domainservice.TokenService) {
+	t.Helper()
+	gin.SetMode(gin.TestMode)
+	jwtSvc := setupTestTokenService(t)
+	cfg := &config.Config{CORS: config.CORSConfig{AllowedOrigins: []string{"*"}}}
+	ctr := testContainer(t, cfg, nil, nil)
+	ctr.Auth = &container.AuthContainer{
+		TokenService:     jwtSvc,
+		IdentityVerifier: verifierOf(jwtSvc),
+		DashboardHandler: handlers.NewDashboardHandler(admin, super),
+	}
+	return SetupRouter(cfg, zerolog.Nop(), ctr), jwtSvc
+}
+
+func TestDashboardRoutes_RoleGuards(t *testing.T) {
+	admin, super := &fakeAdminDash{}, &fakeSuperDash{}
+	engine, jwtSvc := dashboardEngine(t, admin, super)
+	tenant := uuid.New()
+	const adminPath, superPath = "/api/v1/dashboard/admin", "/api/v1/dashboard/super-admin"
+
+	for _, p := range []string{adminPath, superPath} {
+		if rec := do(engine, http.MethodGet, p, "", ""); rec.Code != http.StatusUnauthorized {
+			t.Errorf("%s no token: want 401, got %d", p, rec.Code)
+		}
+	}
+	// admin: 200 on admin route, 403 on super-admin route.
+	if rec := do(engine, http.MethodGet, superPath, bearer(t, jwtSvc, tenant, entity.RoleAdmin), ""); rec.Code != http.StatusForbidden {
+		t.Errorf("admin on super-admin route: want 403, got %d", rec.Code)
+	}
+	if rec := do(engine, http.MethodGet, adminPath, bearer(t, jwtSvc, tenant, entity.RoleAdmin), ""); rec.Code != http.StatusOK {
+		t.Fatalf("admin on admin route: want 200, got %d: %s", rec.Code, rec.Body.String())
+	}
+	if admin.gotTenant != tenant {
+		t.Errorf("usecase got tenant %s, want auth-context tenant %s", admin.gotTenant, tenant)
+	}
+	// employee: 403 on both.
+	for _, p := range []string{adminPath, superPath} {
+		if rec := do(engine, http.MethodGet, p, bearer(t, jwtSvc, tenant, entity.RoleEmployee), ""); rec.Code != http.StatusForbidden {
+			t.Errorf("employee on %s: want 403, got %d", p, rec.Code)
+		}
+	}
+	// super_admin: 200 on super-admin route, 403 on tenant admin route.
+	rec := do(engine, http.MethodGet, superPath, bearer(t, jwtSvc, tenant, entity.RoleSuperAdmin), "")
+	if rec.Code != http.StatusOK {
+		t.Fatalf("super_admin on super-admin route: want 200, got %d: %s", rec.Code, rec.Body.String())
+	}
+	var env struct {
+		Data dashtypes.SuperAdminDashboardResponse `json:"data"`
+	}
+	if err := json.Unmarshal(rec.Body.Bytes(), &env); err != nil {
+		t.Fatal(err)
+	}
+	if env.Data.Tenant.Name != "Acme" || env.Data.Users.Total != 9 || env.Data.Users.Inactive != 2 || len(env.Data.UsersByRole) != 1 || super.gotTenant != tenant {
+		t.Errorf("unexpected payload: %s", rec.Body.String())
+	}
+	if rec := do(engine, http.MethodGet, adminPath, bearer(t, jwtSvc, tenant, entity.RoleSuperAdmin), ""); rec.Code != http.StatusForbidden {
+		t.Errorf("super_admin on admin route: want 403, got %d", rec.Code)
 	}
 }
