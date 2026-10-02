@@ -11,8 +11,9 @@ var (
 	ErrInternal      = errors.New("internal error")
 
 	// Tenant errors
-	ErrTenantNotFound      = errors.New("tenant not found")
-	ErrDomainAlreadyExists = errors.New("domain already registered")
+	ErrTenantNotFound        = errors.New("tenant not found")
+	ErrEmailDomainNotAllowed = errors.New("email domain is not registered for this organization")
+	ErrDomainAlreadyExists   = errors.New("domain already registered")
 
 	// User errors
 	ErrUserNotFound       = errors.New("user not found")

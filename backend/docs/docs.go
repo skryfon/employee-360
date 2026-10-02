@@ -723,7 +723,7 @@ const docTemplate = `{
                         }
                     },
                     "400": {
-                        "description": "Bad Request",
+                        "description": "Invalid payload, or email domain not registered for the tenant (EMAIL_DOMAIN_NOT_ALLOWED)",
                         "schema": {
                             "$ref": "#/definitions/github_com_skryfon_employee360_backend_internal_delivery_http_response.Envelope"
                         }

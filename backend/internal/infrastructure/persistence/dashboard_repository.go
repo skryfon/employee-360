@@ -67,8 +67,10 @@ func (r *gormDashboardRepository) TenantCounts(c context.Context, tenantID uuid.
 	out := &entity.TenantDashboardCounts{}
 
 	// pending_invited: an inactive user with no password that still has an open
-	// (not deleted, accepted or revoked) invitation for the same email in the
-	// same tenant. Deactivated users without an open invitation are not counted.
+	// (not deleted, accepted, revoked or expired) invitation for the same email
+	// in the same tenant. Deactivated users without an open invitation are not
+	// counted. Email match is exact: InviteUserUseCase lowercases/trims emails
+	// before storing both the user and the invitation.
 	var users struct {
 		Total          int64
 		Active         int64
@@ -80,7 +82,7 @@ func (r *gormDashboardRepository) TenantCounts(c context.Context, tenantID uuid.
 		COUNT(*) FILTER (WHERE NOT is_active AND password_hash IS NULL AND EXISTS (
 			SELECT 1 FROM user_invitations i
 			WHERE i.tenant_id = users.tenant_id AND i.email = users.email
-				AND i.deleted_at IS NULL AND i.accepted_at IS NULL AND i.revoked_at IS NULL)) AS pending_invited`).
+				AND i.deleted_at IS NULL AND i.accepted_at IS NULL AND i.revoked_at IS NULL AND i.expires_at > ?)) AS pending_invited`, now).
 		Where("tenant_id = ? AND deleted_at IS NULL", tenantID).Scan(&users).Error; err != nil {
 		return nil, err
 	}

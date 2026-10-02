@@ -27,6 +27,8 @@ type fakeStore struct {
 	// depts/positions map id -> owning tenant.
 	depts     map[uuid.UUID]uuid.UUID
 	positions map[uuid.UUID]uuid.UUID
+	// domains maps lowercased domain -> owning tenant.
+	domains map[string]uuid.UUID
 }
 
 func newFakeStore() *fakeStore {
@@ -36,6 +38,7 @@ func newFakeStore() *fakeStore {
 		roles:       map[uuid.UUID]*entity.Role{},
 		depts:       map[uuid.UUID]uuid.UUID{},
 		positions:   map[uuid.UUID]uuid.UUID{},
+		domains:     map[string]uuid.UUID{},
 	}
 }
 
@@ -261,6 +264,16 @@ func (r fakeInvRepo) List(_ context.Context, t uuid.UUID, _ repository.Invitatio
 	return out, int64(len(out)), nil
 }
 
+type fakeTenantDomainRepo struct{ s *fakeStore }
+
+func (r fakeTenantDomainRepo) FindTenantByDomain(context.Context, string) (*entity.Tenant, error) {
+	return nil, domainerrors.ErrTenantNotFound
+}
+func (r fakeTenantDomainRepo) DomainBelongsToTenant(_ context.Context, t uuid.UUID, d string) (bool, error) {
+	owner, ok := r.s.domains[d]
+	return ok && owner == t, nil
+}
+
 // fixture helpers
 type fixture struct {
 	s          *fakeStore
@@ -275,6 +288,8 @@ func newFixture() *fixture {
 	f := &fixture{s: newFakeStore(), tenantA: uuid.New(), tenantB: uuid.New(), adminID: uuid.New(), hash: infraservice.NewHashService(4)}
 	f.employeeRl = &entity.Role{ID: uuid.New(), TenantID: f.tenantA, Name: "employee"}
 	f.s.roles[f.employeeRl.ID] = f.employeeRl
+	f.s.domains["acme.com"] = f.tenantA
+	f.s.domains["b.com"] = f.tenantB
 	return f
 }
 

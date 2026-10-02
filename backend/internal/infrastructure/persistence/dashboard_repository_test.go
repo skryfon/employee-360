@@ -35,6 +35,9 @@ func TestGormDashboardRepository_TenantScopedCounts(t *testing.T) {
 	// Deactivated never-logged-in user without an open invitation: not counted.
 	deact := createTestUser(t, db, a.ID, "deact+"+uuid.NewString()+"@example.com")
 	require.NoError(t, db.Exec("UPDATE users SET is_active = false, password_hash = NULL WHERE id = ?", deact.ID).Error)
+	// Deactivated no-password user whose only invitation is expired: not counted.
+	expiredUser := createTestUser(t, db, a.ID, "expd+"+uuid.NewString()+"@example.com")
+	require.NoError(t, db.Exec("UPDATE users SET is_active = false, password_hash = NULL WHERE id = ?", expiredUser.ID).Error)
 	// Same shape in tenant B with an open invitation in tenant A for its email: not counted for A or B.
 	crossEmail := "cross+" + uuid.NewString() + "@example.com"
 	cross := createTestUser(t, db, b.ID, crossEmail)
@@ -60,13 +63,14 @@ func TestGormDashboardRepository_TenantScopedCounts(t *testing.T) {
 	mkInv(a.ID, func(i *entity.UserInvitation) { i.AcceptedAt = &now })
 	mkInv(a.ID, func(i *entity.UserInvitation) { i.RevokedAt = &now })
 	mkInv(a.ID, func(i *entity.UserInvitation) { i.ExpiresAt = now.Add(-time.Hour) })
+	mkInv(a.ID, func(i *entity.UserInvitation) { i.Email = expiredUser.Email; i.ExpiresAt = now.Add(-time.Hour) })
 
 	counts, err := repo.TenantCounts(c, a.ID, now)
 	require.NoError(t, err)
-	require.EqualValues(t, 4, counts.UsersTotal)
+	require.EqualValues(t, 5, counts.UsersTotal)
 	require.EqualValues(t, 1, counts.UsersActive)
 	require.EqualValues(t, 1, counts.UsersPendingInvited)
-	require.Equal(t, entity.InvitationStatusCounts{Pending: 2, Accepted: 1, Expired: 1, Revoked: 2}, counts.Invitations)
+	require.Equal(t, entity.InvitationStatusCounts{Pending: 2, Accepted: 1, Expired: 2, Revoked: 2}, counts.Invitations)
 
 	other, err := repo.TenantCounts(c, b.ID, now)
 	require.NoError(t, err)

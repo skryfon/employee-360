@@ -32,6 +32,7 @@ func TestInviteUser_RollbackLeavesNothing(t *testing.T) {
 	tenantID, adminID, roleID := uuid.New(), uuid.New(), uuid.New()
 	require.NoError(t, db.Create(&entity.Tenant{ID: tenantID, Name: "invrb-" + uuid.NewString()[:8], IsActive: true}).Error)
 	t.Cleanup(func() { db.Exec("DELETE FROM tenants WHERE id = ?", tenantID) })
+	require.NoError(t, db.Exec("INSERT INTO tenant_domains (id, tenant_id, domain) VALUES (?, ?, ?)", uuid.New(), tenantID, "invrb.test").Error)
 	require.NoError(t, db.Create(&entity.Role{ID: roleID, TenantID: tenantID, Name: entity.RoleEmployee}).Error)
 	adminRole := uuid.New()
 	require.NoError(t, db.Create(&entity.Role{ID: adminRole, TenantID: tenantID, Name: entity.RoleAdmin}).Error)
@@ -42,7 +43,7 @@ func TestInviteUser_RollbackLeavesNothing(t *testing.T) {
 		return invimpl.NewInviteUserUseCase(
 			persistence.NewGormUserRepository(db), persistence.NewGormUserRoleRepository(db),
 			persistence.NewGormRoleRepository(db), persistence.NewGormUserInvitationRepository(db),
-			persistence.NewGormOrgReferenceRepository(db), persistence.NewGormAuditRepository(db),
+			persistence.NewGormOrgReferenceRepository(db), persistence.NewGormTenantDomainRepository(db), persistence.NewGormAuditRepository(db),
 			infraservice.NewHashService(), pub, database.NewGormTransactor(db), invimpl.AppURLs{Default: "http://frontend.test"})
 	}
 	bg := context.Background()

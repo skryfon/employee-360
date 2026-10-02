@@ -16,7 +16,7 @@ import (
 )
 
 func (f *fixture) invite() *InviteUserUseCaseImpl {
-	return NewInviteUserUseCase(f.s, fakeUserRoleRepo{f.s}, fakeRoleRepo{f.s}, fakeInvRepo{f.s}, fakeOrgRepo{f.s}, fakeAuditRepo{f.s}, f.hash, f.s, f.s, AppURLs{Default: "http://app/", Admin: "http://admin.app/"})
+	return NewInviteUserUseCase(f.s, fakeUserRoleRepo{f.s}, fakeRoleRepo{f.s}, fakeInvRepo{f.s}, fakeOrgRepo{f.s}, fakeTenantDomainRepo{f.s}, fakeAuditRepo{f.s}, f.hash, f.s, f.s, AppURLs{Default: "http://app/", Admin: "http://admin.app/"})
 }
 func (f *fixture) resend() *ResendInvitationUseCaseImpl {
 	return NewResendInvitationUseCase(fakeRoleRepo{f.s}, fakeInvRepo{f.s}, fakeAuditRepo{f.s}, f.hash, f.s, f.s, AppURLs{Default: "http://app"})
@@ -71,6 +71,26 @@ func TestInvite_RejectsSuperAdminRoleAndDuplicate(t *testing.T) {
 	f.doInvite(t, "dup@acme.com")
 	_, err = f.invite().Execute(bg, f.tenantA, f.adminID, invtypes.InviteUserRequest{Email: "dup@acme.com", RoleID: f.employeeRl.ID})
 	assert.ErrorIs(t, err, domainerrors.ErrEmailAlreadyExists)
+}
+
+func TestInvite_EmailDomainMustBelongToTenant(t *testing.T) {
+	f := newFixture()
+	req := func(email string) invtypes.InviteUserRequest {
+		return invtypes.InviteUserRequest{Email: email, RoleID: f.employeeRl.ID}
+	}
+	// Allowed domain succeeds.
+	_, err := f.invite().Execute(bg, f.tenantA, f.adminID, req("ok@acme.com"))
+	require.NoError(t, err)
+	// Case-insensitive.
+	_, err = f.invite().Execute(bg, f.tenantA, f.adminID, req("  Mixed@ACME.Com "))
+	require.NoError(t, err)
+	// Unregistered domain rejected; nothing persisted.
+	_, err = f.invite().Execute(bg, f.tenantA, f.adminID, req("x@other.com"))
+	assert.ErrorIs(t, err, domainerrors.ErrEmailDomainNotAllowed)
+	// Domain registered to a different tenant rejected.
+	_, err = f.invite().Execute(bg, f.tenantA, f.adminID, req("x@b.com"))
+	assert.ErrorIs(t, err, domainerrors.ErrEmailDomainNotAllowed)
+	assert.Len(t, f.s.invitations, 2)
 }
 
 // AC2: only hashes stored.

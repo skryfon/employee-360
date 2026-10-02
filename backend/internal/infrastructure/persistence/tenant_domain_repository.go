@@ -5,6 +5,7 @@ import (
 	"errors"
 	"strings"
 
+	"github.com/google/uuid"
 	"gorm.io/gorm"
 
 	"github.com/skryfon/employee360/backend/internal/infrastructure/database"
@@ -47,4 +48,20 @@ func (r *gormTenantDomainRepository) FindTenantByDomain(c context.Context, domai
 		return nil, err
 	}
 	return &tenant, nil
+}
+
+// DomainBelongsToTenant reports whether domain is a live (not soft-deleted)
+// domain of the given active, not soft-deleted tenant. tenant_domains has no
+// is_active/verified column.
+func (r *gormTenantDomainRepository) DomainBelongsToTenant(c context.Context, tenantID uuid.UUID, domain string) (bool, error) {
+	var n int64
+	if err := database.DBFromContext(c, r.db).
+		Table("tenant_domains").
+		Joins("JOIN tenants ON tenants.id = tenant_domains.tenant_id").
+		Where("tenant_domains.tenant_id = ? AND tenant_domains.domain = ? AND tenant_domains.deleted_at IS NULL AND tenants.is_active = TRUE AND tenants.deleted_at IS NULL",
+			tenantID, strings.ToLower(strings.TrimSpace(domain))).
+		Count(&n).Error; err != nil {
+		return false, err
+	}
+	return n > 0, nil
 }

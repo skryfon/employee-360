@@ -124,6 +124,11 @@ func (m *mockTenantDomainRepository) with(domain string, tenantID uuid.UUID) *mo
 	return m
 }
 
+func (m *mockTenantDomainRepository) DomainBelongsToTenant(_ context.Context, tenantID uuid.UUID, domain string) (bool, error) {
+	t, ok := m.tenantsByDomain[domain]
+	return ok && t.ID == tenantID, nil
+}
+
 func (m *mockTenantDomainRepository) FindTenantByDomain(ctx context.Context, domain string) (*entity.Tenant, error) {
 	if m.err != nil {
 		return nil, m.err
