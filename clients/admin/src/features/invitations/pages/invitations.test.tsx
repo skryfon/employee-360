@@ -52,6 +52,16 @@ describe('invitations', () => {
     expect(screen.getByRole('heading', { name: /sign in/i })).toBeInTheDocument()
   })
 
+  it('shows a skeleton while pending, then replaces it with rows', async () => {
+    signIn()
+    renderAt('/invitations')
+    const region = screen.getByRole('status')
+    expect(region).toHaveAttribute('aria-busy', 'true')
+    expect(region).toHaveTextContent('Loading invitations…')
+    expect(await screen.findByText('p@x.com')).toBeInTheDocument()
+    expect(screen.queryByRole('status')).toBeNull()
+  })
+
   it('shows resend/revoke only for pending invitations', async () => {
     signIn()
     renderAt('/invitations')

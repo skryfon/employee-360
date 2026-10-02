@@ -1,6 +1,7 @@
 import { Navigate, Outlet, useLocation, useNavigate } from 'react-router-dom'
 import { getErrorMessage } from '@employee360/api-client'
-import { Card, InlineAlert, PageContainer, PageHeader, Tabs } from '@employee360/ui'
+import { InlineAlert, PageContainer, PageHeader, Tabs } from '@employee360/ui'
+import { OrganizationSkeleton } from '../components/OrganizationSkeleton'
 import { useTenantQuery } from '../queries/tenantQueries'
 import { ORGANIZATION_BASE, ORGANIZATION_TABS } from '../tabs'
 
@@ -24,9 +25,7 @@ export default function OrganizationPage() {
       >
         <div className="w-full max-w-3xl">
           {isPending && (
-            <Card>
-              <p className="text-sm text-ink-muted" role="status">Loading organization...</p>
-            </Card>
+            <OrganizationSkeleton tab={active.path} />
           )}
           {isError && <InlineAlert tone="error">{getErrorMessage(error, 'Could not load organization.')}</InlineAlert>}
           {tenant && <Outlet context={tenant} />}

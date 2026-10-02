@@ -2,6 +2,7 @@ import { Link } from 'react-router-dom'
 import { getErrorMessage } from '@employee360/api-client'
 import { useInvitationsQuery } from '../queries/invitationQueries'
 import { useInvitationListParams } from '../hooks/useInvitationListParams'
+import { InvitationsTableSkeleton } from '../components/InvitationsTableSkeleton'
 import { InvitationsTable } from '../components/InvitationsTable'
 import { InvitationsToolbar } from '../components/InvitationsToolbar'
 import { InvitationsPagination } from '../components/InvitationsPagination'
@@ -39,7 +40,7 @@ export default function InvitationsPage() {
           }
           onSearchChange={(search) => update({ search })}
         />
-        {isPending && <p className="p-4 text-sm text-slate-600">Loading invitations...</p>}
+        {isPending && <InvitationsTableSkeleton />}
         {isError && (
           <div className="p-4">
             <InlineAlert tone="error">{getErrorMessage(error, 'Could not load invitations.')}</InlineAlert>

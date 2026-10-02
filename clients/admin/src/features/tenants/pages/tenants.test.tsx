@@ -80,6 +80,23 @@ describe('organization page', () => {
     expect(screen.getByRole('tab', { name: 'General' })).toHaveAttribute('aria-selected', 'true')
   })
 
+  it('shows the general skeleton while the tenant loads, then the form', async () => {
+    signIn(['super_admin'])
+    renderAt('/settings/organization/general')
+    expect(screen.getByRole('status')).toHaveTextContent('Loading organization…')
+    expect(screen.queryByLabelText('Name')).toBeNull()
+    expect(await screen.findByLabelText('Name')).toHaveValue('Acme')
+    expect(screen.queryByText('Loading organization…')).toBeNull()
+  })
+
+  it('shows the domains skeleton while the tenant loads, then the domains', async () => {
+    signIn(['super_admin'])
+    renderAt('/settings/organization/domains')
+    expect(screen.getByRole('status')).toHaveTextContent('Loading organization…')
+    expect(await screen.findByText('acme.com')).toBeInTheDocument()
+    expect(screen.queryByText('Loading organization…')).toBeNull()
+  })
+
   it('renders the domains section at /domains', async () => {
     signIn(['super_admin'])
     renderAt('/settings/organization/domains')

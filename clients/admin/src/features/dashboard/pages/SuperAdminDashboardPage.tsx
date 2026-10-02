@@ -12,7 +12,7 @@ export default function SuperAdminDashboardPage() {
     <PageContainer>
       <PageHeader title="Dashboard" description="Organisation overview" actions={<InviteUserLink />} />
       {q.isPending ? (
-        <DashboardSkeleton />
+        <DashboardSkeleton withOrganisation />
       ) : q.isError ? (
         <DashboardError error={q.error} onRetry={() => void q.refetch()} />
       ) : (

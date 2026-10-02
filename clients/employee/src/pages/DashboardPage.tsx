@@ -1,5 +1,5 @@
 import { useHealth } from '@employee360/api-client'
-import { Card, PageContainer, PageHeader } from '@employee360/ui'
+import { Card, PageContainer, PageHeader, Skeleton, SkeletonRegion } from '@employee360/ui'
 import { useAuthStore } from '../stores/authStore'
 
 export default function DashboardPage() {
@@ -14,7 +14,16 @@ export default function DashboardPage() {
 
       <Card>
         <h2 className="text-base font-semibold text-slate-900">System Status</h2>
-        {isPending && <p className="mt-2 text-sm text-slate-600">Checking API health…</p>}
+        {isPending && (
+          <SkeletonRegion label="Checking API health…" className="mt-4 grid grid-cols-1 gap-4 sm:grid-cols-3">
+            {Array.from({ length: 3 }, (_, i) => (
+              <div key={i} className="rounded-sm border border-slate-200 bg-slate-100 p-4">
+                <Skeleton className="h-4 w-16 bg-slate-300" />
+                <Skeleton className="mt-2 h-5 w-24 bg-slate-300" />
+              </div>
+            ))}
+          </SkeletonRegion>
+        )}
         {isError && (
           <p className="mt-2 text-sm text-red-700">
             API health check failed: {error instanceof Error ? error.message : 'Unknown error'}

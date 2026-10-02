@@ -67,7 +67,7 @@ describe('admin dashboard', () => {
     signIn(['admin'])
     renderAt()
 
-    expect(screen.getByRole('status', { name: /loading dashboard/i })).toBeInTheDocument()
+    expect(screen.getByRole('status')).toHaveTextContent('Loading dashboard…')
     expect(await screen.findByText('Total users')).toBeInTheDocument()
     expect(screen.getByText('Total users').nextSibling).toHaveTextContent('12')
     expect(screen.getByText('Departments').nextSibling).toHaveTextContent('4')
@@ -128,7 +128,7 @@ describe('super admin dashboard', () => {
     mock.onGet(SUPER_URL).reply(500)
     signIn(['super_admin'])
     renderAt()
-    expect(screen.getByRole('status', { name: /loading dashboard/i })).toBeInTheDocument()
+    expect(screen.getByRole('status')).toHaveTextContent('Loading dashboard…')
     expect(await screen.findByRole('alert')).toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'Retry' })).toBeInTheDocument()
   })
