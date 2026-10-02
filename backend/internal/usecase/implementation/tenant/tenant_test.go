@@ -23,6 +23,7 @@ type fakeStore struct {
 	tenants   map[uuid.UUID]*entity.Tenant
 	domains   []*entity.TenantDomain // includes soft-deleted
 	audits    []*entity.AuditLog
+	users     []*entity.User // tenant users (may be soft-deleted)
 	failAudit bool
 }
 
@@ -145,6 +146,18 @@ func (r domainRepoFake) UpdateDomain(c context.Context, tid, id uuid.UUID, domai
 	}
 	d.Domain, d.UpdatedBy, d.UpdatedAt = domain, &actor, at
 	return nil
+}
+func (r domainRepoFake) CountUsersOnDomain(_ context.Context, tid uuid.UUID, domain string) (int64, error) {
+	var n int64
+	for _, u := range r.s.users {
+		if u.TenantID != tid || u.DeletedAt != nil {
+			continue
+		}
+		if i := strings.LastIndex(u.Email, "@"); i >= 0 && strings.EqualFold(u.Email[i+1:], domain) {
+			n++
+		}
+	}
+	return n, nil
 }
 func (r domainRepoFake) SoftDelete(c context.Context, tid, id, actor uuid.UUID, at time.Time) error {
 	d, err := r.GetByID(c, tid, id)
@@ -415,4 +428,78 @@ func TestDomains_AddRemove_AuditFailureRollsBack(t *testing.T) {
 	assert.Len(t, e.s.domains, 2)
 	require.Error(t, NewRemoveTenantDomainUseCase(e.tr, e.dr, e.ar, e.tx).Execute(e.c, e.actor, id, e.s.domains[0].ID))
 	assert.Nil(t, e.s.domains[0].DeletedAt)
+}
+
+func (e *env) seedUser(tid uuid.UUID, email string, active bool) *entity.User {
+	u := &entity.User{ID: uuid.New(), TenantID: tid, Email: email, IsActive: active}
+	e.s.users = append(e.s.users, u)
+	return u
+}
+
+func TestDomains_Remove_BlockedWhileUsersOnDomain(t *testing.T) {
+	e := newEnv()
+	id := e.seedTenant(true, "a.com", "b.com")
+	other := e.seedTenant(true, "c.com")
+	aID := e.s.domains[0].ID
+	rm := NewRemoveTenantDomainUseCase(e.tr, e.dr, e.ar, e.tx)
+
+	// A user of ANOTHER tenant on the same domain value does not block.
+	e.seedUser(other, "x@a.com", true)
+	// A lookalike domain does not block either.
+	e.seedUser(id, "x@evila.com", true)
+	e.seedUser(id, "x@a.com.evil.io", true)
+
+	// Inactive/invited users of this tenant do block (case-insensitive).
+	u := e.seedUser(id, "Bob@A.COM", false)
+	require.ErrorIs(t, rm.Execute(e.c, e.actor, id, aID), domainerrors.ErrDomainInUse)
+	assert.Nil(t, e.s.domains[0].DeletedAt)
+	assert.Empty(t, e.s.audits)
+
+	// Once the user is soft-deleted the removal goes through.
+	now := time.Now()
+	u.DeletedAt = &now
+	require.NoError(t, rm.Execute(e.c, e.actor, id, aID))
+	assert.NotNil(t, e.s.domains[0].DeletedAt)
+}
+
+func TestDomains_Remove_InUseCheckedBeforeLastDomain(t *testing.T) {
+	e := newEnv()
+	id := e.seedTenant(true, "a.com")
+	e.seedUser(id, "x@a.com", true)
+	rm := NewRemoveTenantDomainUseCase(e.tr, e.dr, e.ar, e.tx)
+	require.ErrorIs(t, rm.Execute(e.c, e.actor, id, e.s.domains[0].ID), domainerrors.ErrDomainInUse)
+	// not found still wins over in-use
+	require.ErrorIs(t, rm.Execute(e.c, e.actor, id, uuid.New()), domainerrors.ErrDomainNotFound)
+	e.s.users[0].DeletedAt = new(time.Time)
+	require.ErrorIs(t, rm.Execute(e.c, e.actor, id, e.s.domains[0].ID), domainerrors.ErrLastDomain)
+}
+
+func TestDomains_Update_BlockedWhileUsersOnOldDomain(t *testing.T) {
+	e := newEnv()
+	id := e.seedTenant(true, "a.com")
+	other := e.seedTenant(true, "c.com")
+	aID := e.s.domains[0].ID
+	upd := NewUpdateTenantDomainUseCase(e.tr, e.dr, e.ar, e.tx)
+	req := func(d string) tenanttypes.UpdateDomainRequest { return tenanttypes.UpdateDomainRequest{Domain: d} }
+
+	e.seedUser(other, "x@a.com", true) // other tenant: no effect
+	got, err := upd.Execute(e.c, e.actor, id, aID, req("a.com"))
+	require.NoError(t, err) // same value: no-op
+	assert.Equal(t, "a.com", got.Domain)
+
+	u := e.seedUser(id, "bob@a.com", false)
+	// same value stays a no-op even with users on the domain (no check)
+	_, err = upd.Execute(e.c, e.actor, id, aID, req("A.com"))
+	require.NoError(t, err)
+	// a real change is blocked
+	_, err = upd.Execute(e.c, e.actor, id, aID, req("new.com"))
+	require.ErrorIs(t, err, domainerrors.ErrDomainInUse)
+	assert.Equal(t, "a.com", e.s.domains[0].Domain)
+	assert.Empty(t, e.s.audits)
+
+	now := time.Now()
+	u.DeletedAt = &now
+	got, err = upd.Execute(e.c, e.actor, id, aID, req("new.com"))
+	require.NoError(t, err)
+	assert.Equal(t, "new.com", got.Domain)
 }

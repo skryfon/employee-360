@@ -183,7 +183,8 @@ func NewUpdateTenantDomainUseCase(tenantRepo repository.TenantRepository, domain
 // Execute changes the value of one of the tenant's live domains (same
 // normalisation and global uniqueness as add). A domain that does not belong to
 // the tenant, or is soft-deleted, is ErrDomainNotFound. Setting the current
-// value is a no-op (no write, no audit entry).
+// value is a no-op (no write, no audit entry); an actual change is refused
+// with ErrDomainInUse while users of the tenant still sign in on the old value.
 func (u *UpdateTenantDomainUseCaseImpl) Execute(c context.Context, actorID, tenantID, domainID uuid.UUID, req tenanttypes.UpdateDomainRequest) (*entity.TenantDomain, error) {
 	if err := requireActor(actorID); err != nil {
 		return nil, err
@@ -211,6 +212,9 @@ func (u *UpdateTenantDomainUseCaseImpl) Execute(c context.Context, actorID, tena
 		old := d.Domain
 		if old == domain {
 			return nil
+		}
+		if err := ensureDomainUnused(txCtx, u.domainRepo, tenantID, old); err != nil {
+			return err
 		}
 		now := time.Now().UTC()
 		if err := u.domainRepo.UpdateDomain(txCtx, tenantID, domainID, domain, actorID, now); err != nil {
@@ -241,7 +245,8 @@ func NewRemoveTenantDomainUseCase(tenantRepo repository.TenantRepository, domain
 	return &RemoveTenantDomainUseCaseImpl{tenantRepo: tenantRepo, domainRepo: domainRepo, auditRepo: auditRepo, transactor: transactor}
 }
 
-// Execute soft-deletes the domain unless it is the tenant's last live one. The
+// Execute soft-deletes the domain unless users still sign in with it
+// (ErrDomainInUse, checked first) or it is the tenant's last live one. The
 // tenant row is locked first so two concurrent removals cannot both pass the check.
 func (u *RemoveTenantDomainUseCaseImpl) Execute(c context.Context, actorID, tenantID, domainID uuid.UUID) error {
 	if err := requireActor(actorID); err != nil {
@@ -259,6 +264,9 @@ func (u *RemoveTenantDomainUseCaseImpl) Execute(c context.Context, actorID, tena
 		}
 		d, err := u.domainRepo.GetByID(txCtx, tenantID, domainID)
 		if err != nil {
+			return err
+		}
+		if err := ensureDomainUnused(txCtx, u.domainRepo, tenantID, d.Domain); err != nil {
 			return err
 		}
 		n, err := u.domainRepo.CountByTenantID(txCtx, tenantID)

@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+	"github.com/jackc/pgx/v5/pgconn"
 	"gorm.io/gorm"
 	"gorm.io/gorm/clause"
 
@@ -146,25 +147,52 @@ func (r *gormTenantDomainRepository) SoftDelete(c context.Context, tenantID, id,
 	return nil
 }
 
+// CountUsersOnDomain counts the tenant's non-soft-deleted users (any
+// is_active state) whose email domain, i.e. the part after the last '@',
+// equals domain case-insensitively. Exact comparison, not a suffix match, so
+// evilacme.com does not count against acme.com.
+func (r *gormTenantDomainRepository) CountUsersOnDomain(c context.Context, tenantID uuid.UUID, domain string) (int64, error) {
+	var n int64
+	err := database.DBFromContext(c, r.db).Table("users").
+		Where("tenant_id = ? AND deleted_at IS NULL AND lower(substring(email from '[^@]*$')) = ?",
+			tenantID, strings.ToLower(strings.TrimSpace(domain))).
+		Count(&n).Error
+	return n, err
+}
+
+// isUniqueViolation reports whether err is a PostgreSQL unique_violation (23505).
+func isUniqueViolation(err error) bool {
+	var pgErr *pgconn.PgError
+	return errors.As(err, &pgErr) && pgErr.Code == "23505"
+}
+
+// tombstonePlaceholderSuffix marks a soft-deleted domain row whose value was
+// handed to another row. "<domain>#deleted-<id>" is not a valid hostname, so
+// it can never be matched by a lookup nor revived by Create.
+const tombstonePlaceholderSuffix = "#deleted-"
+
 // UpdateDomain changes the value of the tenant's own live domain. UNIQUE
 // (domain) also covers soft-deleted rows, so a tombstone (another row, already
-// soft-deleted) that still holds the target value is reclaimed first; a live
-// owner surfaces as ErrDomainAlreadyExists. A row of another tenant, or a
-// soft-deleted one, is reported as ErrDomainNotFound (existence not leaked).
+// soft-deleted) that still holds the target value is not destroyed but renamed
+// to a non-colliding placeholder (domain || '#deleted-' || id), keeping its
+// audit/history; this happens only once the caller's own live row is
+// confirmed. A live owner surfaces as ErrDomainAlreadyExists. A row of another
+// tenant, or a soft-deleted one, is reported as ErrDomainNotFound (existence
+// not leaked).
 func (r *gormTenantDomainRepository) UpdateDomain(c context.Context, tenantID, id uuid.UUID, domain string, actorID uuid.UUID, at time.Time) error {
 	db := database.DBFromContext(c, r.db)
-	// Reclaim a tombstone only once the caller's own live row is confirmed.
 	if _, err := r.GetByID(c, tenantID, id); err != nil {
 		return err
 	}
-	if err := db.Exec(`DELETE FROM tenant_domains WHERE domain = ? AND deleted_at IS NOT NULL AND id <> ?`, domain, id).Error; err != nil {
+	if err := db.Exec(`UPDATE tenant_domains SET domain = domain || '`+tombstonePlaceholderSuffix+`' || id::text
+WHERE domain = ? AND deleted_at IS NOT NULL AND id <> ?`, domain, id).Error; err != nil {
 		return err
 	}
 	res := db.Table("tenant_domains").
 		Where("id = ? AND tenant_id = ? AND deleted_at IS NULL", id, tenantID).
 		Updates(map[string]any{"domain": domain, "updated_at": at, "updated_by": actorID})
 	if res.Error != nil {
-		if strings.Contains(res.Error.Error(), "uq_tenant_domains_domain") || strings.Contains(res.Error.Error(), "23505") {
+		if isUniqueViolation(res.Error) {
 			return domainerrors.ErrDomainAlreadyExists
 		}
 		return res.Error

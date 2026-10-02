@@ -918,7 +918,7 @@ const docTemplate = `{
                         }
                     },
                     "409": {
-                        "description": "LAST_DOMAIN",
+                        "description": "LAST_DOMAIN or DOMAIN_IN_USE",
                         "schema": {
                             "$ref": "#/definitions/github_com_skryfon_employee360_backend_internal_delivery_http_response.Envelope"
                         }
@@ -1004,7 +1004,7 @@ const docTemplate = `{
                         }
                     },
                     "409": {
-                        "description": "DOMAIN_ALREADY_EXISTS",
+                        "description": "DOMAIN_ALREADY_EXISTS or DOMAIN_IN_USE",
                         "schema": {
                             "$ref": "#/definitions/github_com_skryfon_employee360_backend_internal_delivery_http_response.Envelope"
                         }
@@ -1819,6 +1819,7 @@ const docTemplate = `{
             "type": "object",
             "properties": {
                 "domain": {
+                    "description": "Fully qualified domain with at least two labels, e.g. example.com; single-label hosts like localhost are not supported.",
                     "type": "string",
                     "example": "acme.io"
                 }
@@ -1891,6 +1892,7 @@ const docTemplate = `{
             "type": "object",
             "properties": {
                 "domain": {
+                    "description": "Fully qualified domain with at least two labels, e.g. example.com; single-label hosts like localhost are not supported.",
                     "type": "string",
                     "example": "acme.io"
                 }

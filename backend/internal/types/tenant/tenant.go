@@ -20,11 +20,13 @@ type UpdateTenantRequest struct {
 
 // AddDomainRequest registers an additional email domain for a tenant.
 type AddDomainRequest struct {
+	// Fully qualified domain with at least two labels, e.g. example.com; single-label hosts like localhost are not supported.
 	Domain string `json:"domain" example:"acme.io"`
 }
 
 // UpdateDomainRequest changes the value of an existing tenant domain.
 type UpdateDomainRequest struct {
+	// Fully qualified domain with at least two labels, e.g. example.com; single-label hosts like localhost are not supported.
 	Domain string `json:"domain" example:"acme.io"`
 }
 

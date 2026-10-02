@@ -228,6 +228,7 @@ func TestTenantHandler_ErrorMapping(t *testing.T) {
 	}{
 		{domainerrors.ErrDomainAlreadyExists, 409, "DOMAIN_ALREADY_EXISTS"},
 		{domainerrors.ErrLastDomain, 409, "LAST_DOMAIN"},
+		{domainerrors.ErrDomainInUse, 409, "DOMAIN_IN_USE"},
 		{domainerrors.ErrInvalidDomain, 400, "INVALID_DOMAIN"},
 		{domainerrors.ErrInvalidTenantName, 400, "INVALID_NAME"},
 		{domainerrors.ErrTenantNotFound, 404, "NOT_FOUND"},

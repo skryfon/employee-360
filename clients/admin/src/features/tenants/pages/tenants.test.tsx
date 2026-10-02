@@ -226,4 +226,44 @@ describe('organization page', () => {
     expect(screen.queryByRole('dialog')).toBeNull()
     expect(screen.getByText('acme.io')).toBeInTheDocument()
   })
+
+  const IN_USE = 'users in the organization still sign in with an @acme.io email; move or deactivate them before removing or changing this domain'
+
+  it('shows a persistent DOMAIN_IN_USE alert and closes the dialog on remove', async () => {
+    signIn(['super_admin'])
+    mock.onDelete('/api/v1/tenant/domains/d2').reply(() => fail(409, 'DOMAIN_IN_USE', IN_USE))
+    renderAt('/settings/organization/domains')
+    await userEvent.click(await screen.findByRole('button', { name: 'Remove domain acme.io' }))
+    await userEvent.click(within(screen.getByRole('dialog')).getByRole('button', { name: 'Remove' }))
+    const alert = await screen.findByRole('alert')
+    expect(alert).toHaveTextContent(IN_USE)
+    expect(alert).toHaveTextContent('Users page')
+    expect(screen.queryByRole('dialog')).toBeNull()
+    expect(screen.getByText('acme.io')).toBeInTheDocument()
+    await userEvent.click(screen.getByRole('button', { name: 'Dismiss' }))
+    expect(screen.queryByRole('alert')).toBeNull()
+  })
+
+  it('shows DOMAIN_IN_USE in the card and keeps the edit form open', async () => {
+    signIn(['super_admin'])
+    mock.onPatch('/api/v1/tenant/domains/d2').reply(() => fail(409, 'DOMAIN_IN_USE', IN_USE))
+    renderAt('/settings/organization/domains')
+    await userEvent.click(await screen.findByRole('button', { name: 'Edit domain acme.io' }))
+    const form = screen.getByRole('form', { name: 'Edit domain acme.io' })
+    const input = within(form).getByLabelText('Domain')
+    await userEvent.clear(input)
+    await userEvent.type(input, 'acme.org')
+    await userEvent.click(within(form).getByRole('button', { name: 'Save' }))
+    expect(await screen.findByRole('alert')).toHaveTextContent(IN_USE)
+    expect(screen.getByRole('form', { name: 'Edit domain acme.io' })).toBeInTheDocument()
+    expect(within(form).getByLabelText('Domain')).toHaveValue('acme.org')
+  })
+
+  it('shows the full-domain helper text under the add and edit inputs', async () => {
+    signIn(['super_admin'])
+    renderAt('/settings/organization/domains')
+    expect(await screen.findByText('Enter a full domain such as example.com')).toBeInTheDocument()
+    await userEvent.click(screen.getByRole('button', { name: 'Edit domain acme.io' }))
+    expect(screen.getAllByText('Enter a full domain such as example.com')).toHaveLength(2)
+  })
 })

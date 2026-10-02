@@ -17,7 +17,23 @@ function isDomainFieldError(code: string | undefined) {
   return code === TENANT_ERROR_CODES.DOMAIN_ALREADY_EXISTS || code === TENANT_ERROR_CODES.INVALID_DOMAIN
 }
 
-function DomainRow({ domain, canRemove, onRemove }: { domain: TenantDomain; canRemove: boolean; onRemove: () => void }) {
+const DOMAIN_HINT = 'Enter a full domain such as example.com'
+const IN_USE_GUIDANCE = 'Move or deactivate those users from the Users page, and check pending Invitations, then try again.'
+const inUseText = (message: string) => `${message} ${IN_USE_GUIDANCE}`
+
+function DomainRow({
+  domain,
+  canRemove,
+  onRemove,
+  onInUse,
+  onSaved,
+}: {
+  domain: TenantDomain
+  canRemove: boolean
+  onRemove: () => void
+  onInUse: (message: string) => void
+  onSaved: () => void
+}) {
   const toast = useToast()
   const update = useUpdateDomainMutation()
   const [editing, setEditing] = useState(false)
@@ -35,10 +51,15 @@ function DomainRow({ domain, canRemove, onRemove }: { domain: TenantDomain; canR
       {
         onSuccess: () => {
           toast.success(`Domain updated to ${v.domain}.`)
+          onSaved()
           setEditing(false)
         },
         onError: (err) => {
           const message = getErrorMessage(err, 'Could not update domain.')
+          if (getErrorCode(err) === TENANT_ERROR_CODES.DOMAIN_IN_USE) {
+            onInUse(message)
+            return
+          }
           if (isDomainFieldError(getErrorCode(err))) {
             setError('domain', { type: 'server', message }, { shouldFocus: true })
             return
@@ -53,7 +74,7 @@ function DomainRow({ domain, canRemove, onRemove }: { domain: TenantDomain; canR
       <li className="p-3 sm:px-4">
         <form onSubmit={handleSubmit(onSave)} noValidate aria-label={`Edit domain ${domain.domain}`} className="flex flex-col gap-3 sm:flex-row sm:items-start">
           <div className="min-w-0 flex-1">
-            <FormField label="Domain" autoComplete="off" error={errors.domain?.message} {...register('domain')} />
+            <FormField label="Domain" autoComplete="off" hint={DOMAIN_HINT} error={errors.domain?.message} {...register('domain')} />
           </div>
           <div className="grid grid-cols-2 gap-2 sm:mt-5 sm:flex sm:shrink-0 [&>button]:w-full sm:[&>button]:w-auto">
             <SubmitButton loading={update.isPending}>Save</SubmitButton>
@@ -100,7 +121,7 @@ export function DomainsManager({ domains }: { domains: TenantDomain[] }) {
   const add = useAddDomainMutation()
   const remove = useRemoveDomainMutation()
   const [removing, setRemoving] = useState<TenantDomain | null>(null)
-  const [lastDomainError, setLastDomainError] = useState<string | null>(null)
+  const [cardAlert, setCardAlert] = useState<string | null>(null)
   const {
     register,
     handleSubmit,
@@ -114,6 +135,7 @@ export function DomainsManager({ domains }: { domains: TenantDomain[] }) {
       onSuccess: () => {
         toast.success(`Domain ${v.domain} added.`)
         reset({ domain: '' })
+        setCardAlert(null)
       },
       onError: (err) => {
         const message = getErrorMessage(err, 'Could not add domain.')
@@ -131,14 +153,20 @@ export function DomainsManager({ domains }: { domains: TenantDomain[] }) {
     remove.mutate(target.id as string, {
       onSuccess: () => {
         toast.success(`Domain ${target.domain} removed.`)
-        setLastDomainError(null)
+        setCardAlert(null)
         setRemoving(null)
       },
       onError: (err) => {
         const message = getErrorMessage(err, 'Could not remove domain.')
-        if (getErrorCode(err) === TENANT_ERROR_CODES.LAST_DOMAIN) {
+        const code = getErrorCode(err)
+        if (code === TENANT_ERROR_CODES.LAST_DOMAIN) {
           setRemoving(null)
-          setLastDomainError(message)
+          setCardAlert(message)
+          return
+        }
+        if (code === TENANT_ERROR_CODES.DOMAIN_IN_USE) {
+          setRemoving(null)
+          setCardAlert(inUseText(message))
           return
         }
         toast.error(message)
@@ -155,7 +183,16 @@ export function DomainsManager({ domains }: { domains: TenantDomain[] }) {
             Users can only be invited with an email address on one of these domains. An organization must keep at least one domain.
           </p>
         </div>
-        {lastDomainError && <InlineAlert tone="error">{lastDomainError}</InlineAlert>}
+        {cardAlert && (
+          <div className="flex items-start gap-3">
+            <div className="min-w-0 flex-1">
+              <InlineAlert tone="error">{cardAlert}</InlineAlert>
+            </div>
+            <button type="button" className={neutralBtn} onClick={() => setCardAlert(null)}>
+              Dismiss
+            </button>
+          </div>
+        )}
         {domains.length === 0 ? (
           <p className="rounded-sm border border-dashed border-slate-300 bg-surface-subtle p-4 text-center text-sm text-ink-muted">No domains registered.</p>
         ) : (
@@ -165,6 +202,8 @@ export function DomainsManager({ domains }: { domains: TenantDomain[] }) {
                 key={d.id}
                 domain={d}
                 canRemove={domains.length > 1}
+                onInUse={(m) => setCardAlert(inUseText(m))}
+                onSaved={() => setCardAlert(null)}
                 onRemove={() => {
                   remove.reset()
                   setRemoving(d)
@@ -175,7 +214,7 @@ export function DomainsManager({ domains }: { domains: TenantDomain[] }) {
         )}
         <form onSubmit={handleSubmit(onAdd)} noValidate aria-label="Add domain" className="flex flex-col gap-3 border-t border-line pt-4 sm:flex-row sm:items-start">
           <div className="min-w-0 flex-1">
-            <FormField label="New domain" placeholder="acme.com" autoComplete="off" error={errors.domain?.message} {...register('domain')} />
+            <FormField label="New domain" placeholder="acme.com" hint={DOMAIN_HINT} autoComplete="off" error={errors.domain?.message} {...register('domain')} />
           </div>
           <div className="sm:mt-5 sm:shrink-0 [&>button]:w-full sm:[&>button]:w-auto">
             <SubmitButton loading={add.isPending}>Add domain</SubmitButton>

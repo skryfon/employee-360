@@ -7,5 +7,6 @@
  */
 
 export interface GithubComSkryfonEmployee360BackendInternalTypesTenantAddDomainRequest {
+  /** Fully qualified domain with at least two labels, e.g. example.com; single-label hosts like localhost are not supported. */
   domain?: string;
 }

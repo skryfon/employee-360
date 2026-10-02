@@ -335,6 +335,8 @@ definitions:
   github_com_skryfon_employee360_backend_internal_types_tenant.AddDomainRequest:
     properties:
       domain:
+        description: Fully qualified domain with at least two labels, e.g. example.com;
+          single-label hosts like localhost are not supported.
         example: acme.io
         type: string
     type: object
@@ -382,6 +384,8 @@ definitions:
   github_com_skryfon_employee360_backend_internal_types_tenant.UpdateDomainRequest:
     properties:
       domain:
+        description: Fully qualified domain with at least two labels, e.g. example.com;
+          single-label hosts like localhost are not supported.
         example: acme.io
         type: string
     type: object
@@ -963,7 +967,7 @@ paths:
           schema:
             $ref: '#/definitions/github_com_skryfon_employee360_backend_internal_delivery_http_response.Envelope'
         "409":
-          description: LAST_DOMAIN
+          description: LAST_DOMAIN or DOMAIN_IN_USE
           schema:
             $ref: '#/definitions/github_com_skryfon_employee360_backend_internal_delivery_http_response.Envelope'
       security:
@@ -1018,7 +1022,7 @@ paths:
           schema:
             $ref: '#/definitions/github_com_skryfon_employee360_backend_internal_delivery_http_response.Envelope'
         "409":
-          description: DOMAIN_ALREADY_EXISTS
+          description: DOMAIN_ALREADY_EXISTS or DOMAIN_IN_USE
           schema:
             $ref: '#/definitions/github_com_skryfon_employee360_backend_internal_delivery_http_response.Envelope'
       security:

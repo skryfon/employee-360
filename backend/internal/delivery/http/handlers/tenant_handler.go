@@ -49,8 +49,10 @@ func writeTenantError(c *gin.Context, err error) {
 		response.Error(c, http.StatusConflict, "DOMAIN_ALREADY_EXISTS", "this domain is already registered")
 	case errors.Is(err, domainerrors.ErrLastDomain):
 		response.Error(c, http.StatusConflict, "LAST_DOMAIN", "a tenant must keep at least one domain; add another before removing this one")
+	case errors.Is(err, domainerrors.ErrDomainInUse):
+		response.Error(c, http.StatusConflict, "DOMAIN_IN_USE", "users in your organization still sign in with an @<domain> email; move or deactivate them before removing or changing this domain")
 	case errors.Is(err, domainerrors.ErrInvalidDomain):
-		response.Error(c, http.StatusBadRequest, "INVALID_DOMAIN", "domain must be a valid hostname such as example.com")
+		response.Error(c, http.StatusBadRequest, "INVALID_DOMAIN", "domain must be a fully qualified domain with at least two labels, such as example.com (single-label hosts like localhost are not supported)")
 	case errors.Is(err, domainerrors.ErrInvalidTenantName):
 		response.Error(c, http.StatusBadRequest, "INVALID_NAME",
 			fmt.Sprintf("name is required and must be at most %d characters", tenanttypes.MaxNameLen))
@@ -197,7 +199,7 @@ func (h *TenantHandler) AddDomain(c *gin.Context) {
 // @Failure      401       {object}  response.Envelope
 // @Failure      403       {object}  response.Envelope
 // @Failure      404       {object}  response.Envelope
-// @Failure      409       {object}  response.Envelope  "DOMAIN_ALREADY_EXISTS"
+// @Failure      409       {object}  response.Envelope  "DOMAIN_ALREADY_EXISTS or DOMAIN_IN_USE"
 // @Router       /api/v1/tenant/domains/{domainId} [patch]
 func (h *TenantHandler) UpdateDomain(c *gin.Context) {
 	tenantID, actorID, ok := tenantAndUser(c)
@@ -234,7 +236,7 @@ func (h *TenantHandler) UpdateDomain(c *gin.Context) {
 // @Failure      401       {object}  response.Envelope
 // @Failure      403       {object}  response.Envelope
 // @Failure      404       {object}  response.Envelope
-// @Failure      409       {object}  response.Envelope  "LAST_DOMAIN"
+// @Failure      409       {object}  response.Envelope  "LAST_DOMAIN or DOMAIN_IN_USE"
 // @Router       /api/v1/tenant/domains/{domainId} [delete]
 func (h *TenantHandler) RemoveDomain(c *gin.Context) {
 	tenantID, actorID, ok := tenantAndUser(c)

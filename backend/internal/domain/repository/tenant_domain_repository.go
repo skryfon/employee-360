@@ -35,8 +35,13 @@ type TenantDomainManager interface {
 	GetByID(ctx context.Context, tenantID, id uuid.UUID) (*entity.TenantDomain, error)
 	// UpdateDomain changes the value of the tenant's live domain (already
 	// normalised). ErrDomainNotFound when no live row of this tenant matched;
-	// ErrDomainAlreadyExists when another row (live or soft-deleted) owns it.
+	// ErrDomainAlreadyExists when another live row owns it. A soft-deleted
+	// row holding the value is not destroyed: it is renamed to a placeholder.
 	UpdateDomain(ctx context.Context, tenantID, id uuid.UUID, domain string, actorID uuid.UUID, at time.Time) error
+	// CountUsersOnDomain counts the tenant's non-soft-deleted users (active or
+	// not, e.g. invited) whose email domain (the part after the last '@',
+	// compared case-insensitively and exactly) equals domain.
+	CountUsersOnDomain(ctx context.Context, tenantID uuid.UUID, domain string) (int64, error)
 	// SoftDelete marks the tenant's domain deleted (deleted_at/deleted_by);
 	// ErrDomainNotFound when no live row matched.
 	SoftDelete(ctx context.Context, tenantID, id, actorID uuid.UUID, at time.Time) error

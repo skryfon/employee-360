@@ -92,3 +92,17 @@ func normalizeName(raw string) (string, error) {
 	}
 	return n, nil
 }
+
+// ensureDomainUnused refuses (ErrDomainInUse) while any non-soft-deleted user
+// of the tenant has an email on domain: login resolves the tenant from the
+// email's domain, so removing/changing it would lock those users out.
+func ensureDomainUnused(c context.Context, repo repository.TenantDomainManager, tenantID uuid.UUID, domain string) error {
+	n, err := repo.CountUsersOnDomain(c, tenantID, domain)
+	if err != nil {
+		return err
+	}
+	if n > 0 {
+		return domainerrors.ErrDomainInUse
+	}
+	return nil
+}

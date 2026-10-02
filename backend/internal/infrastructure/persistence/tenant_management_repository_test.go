@@ -4,6 +4,7 @@ package persistence
 
 import (
 	"context"
+	"strings"
 	"testing"
 	"time"
 
@@ -195,11 +196,32 @@ func TestGormTenantDomainManager_UpdateDomain(t *testing.T) {
 	require.NoError(t, repo.SoftDelete(c, a.ID, d2.ID, editor, at))
 	require.ErrorIs(t, repo.UpdateDomain(c, a.ID, d2.ID, "zzz-"+sfx, editor, at), domainerrors.ErrDomainNotFound)
 
-	// A tombstone holding the target value is reclaimed (UNIQUE covers soft-deleted rows).
+	// A tombstone holding the target value is renamed to a placeholder, not
+	// destroyed (UNIQUE covers soft-deleted rows).
 	require.NoError(t, repo.UpdateDomain(c, a.ID, d1.ID, d2.Domain, editor, at))
 	got, err = repo.GetByID(c, a.ID, d1.ID)
 	require.NoError(t, err)
 	require.Equal(t, d2.Domain, got.Domain)
+	var tomb struct {
+		Domain    string
+		DeletedAt *time.Time
+	}
+	require.NoError(t, db.Raw("SELECT domain, deleted_at FROM tenant_domains WHERE id = ?", d2.ID).Scan(&tomb).Error)
+	require.Equal(t, d2.Domain+"#deleted-"+d2.ID.String(), tomb.Domain)
+	require.NotNil(t, tomb.DeletedAt, "tombstone row keeps its soft-delete marker")
+	// The placeholder is not matched by lookups.
+	ok, err := NewGormTenantDomainRepository(db).DomainBelongsToTenant(c, a.ID, tomb.Domain)
+	require.NoError(t, err)
+	require.False(t, ok)
+	_, err = NewGormTenantDomainRepository(db).FindTenantByDomain(c, tomb.Domain)
+	require.ErrorIs(t, err, domainerrors.ErrTenantNotFound)
+	// Create's revive path still works for a real tombstone value.
+	require.NoError(t, repo.SoftDelete(c, a.ID, d1.ID, editor, at))
+	revived := newDomain(b.ID, d2.Domain, actor)
+	require.NoError(t, repo.Create(c, revived))
+	require.Equal(t, d1.ID, revived.ID)
+	_, err = repo.GetByID(c, b.ID, d1.ID)
+	require.NoError(t, err)
 	require.ErrorIs(t, repo.UpdateDomain(c, a.ID, uuid.New(), "q-"+sfx, editor, at), domainerrors.ErrDomainNotFound)
 }
 
@@ -238,4 +260,38 @@ func TestGormTenantDomainManager_RenameThenReAddOldValue(t *testing.T) {
 	d2 := newDomain(a.ID, "old-"+sfx, actor)
 	require.NoError(t, repo.Create(c, d2))
 	require.NotEqual(t, d.ID, d2.ID)
+}
+
+func TestGormTenantDomainManager_CountUsersOnDomain(t *testing.T) {
+	db := setupTestDB(t)
+	repo := NewGormTenantDomainManager(db)
+	c := context.Background()
+	a := createTestTenant(t, db, "cu-a-"+uuid.NewString())
+	b := createTestTenant(t, db, "cu-b-"+uuid.NewString())
+	sfx := uuid.NewString()[:8]
+	dom := "acme-" + sfx + ".com"
+
+	count := func(tid uuid.UUID, d string) int64 {
+		n, err := repo.CountUsersOnDomain(c, tid, d)
+		require.NoError(t, err)
+		return n
+	}
+	require.EqualValues(t, 0, count(a.ID, dom))
+
+	u1 := createTestUser(t, db, a.ID, "one@"+dom)
+	createTestUser(t, db, a.ID, "Two@"+strings.ToUpper(dom)) // case-insensitive
+	inactive := createTestUser(t, db, a.ID, "three@"+dom)
+	require.NoError(t, db.Exec("UPDATE users SET is_active = FALSE WHERE id = ?", inactive.ID).Error)
+	createTestUser(t, db, a.ID, "x@evil"+dom)        // longer domain, suffix lookalike
+	createTestUser(t, db, a.ID, "x@sub."+dom)        // subdomain
+	createTestUser(t, db, a.ID, "a@"+dom+".evil.io") // prefix lookalike
+	createTestUser(t, db, b.ID, "other@"+dom)        // other tenant
+
+	require.EqualValues(t, 3, count(a.ID, dom), "active + inactive + mixed case, no lookalikes")
+	require.EqualValues(t, 3, count(a.ID, strings.ToUpper(dom)))
+	require.EqualValues(t, 1, count(b.ID, dom), "tenant scoped")
+	require.EqualValues(t, 0, count(uuid.New(), dom))
+
+	require.NoError(t, db.Exec("UPDATE users SET deleted_at = NOW() WHERE id = ?", u1.ID).Error)
+	require.EqualValues(t, 2, count(a.ID, dom), "soft-deleted users are ignored")
 }

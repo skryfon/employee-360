@@ -198,7 +198,7 @@ FK column. See the `create-migration` skill for the full invariant checklist.
   own (current) tenant** and has full CRUD (list/add/update/remove) over **that tenant's
   domains**. The tenant ID always comes from the auth context via the handler, never from the
   URL or body (Invariant 1). Guards: domains are normalised to lowercase and globally unique
-  (`ErrDomainAlreadyExists`); the tenant's last domain cannot be removed. Every mutation
+  (`ErrDomainAlreadyExists`); the tenant's last domain cannot be removed; and a domain cannot be removed or changed while any non-soft-deleted user of the tenant still has an email on it (`ErrDomainInUse`, 409 `DOMAIN_IN_USE`), since login resolves the tenant from the email domain. Every mutation
   writes an audit log entry.
 
 

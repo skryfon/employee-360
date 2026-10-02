@@ -20,6 +20,10 @@ var (
 	// ErrLastDomain is returned when removing a tenant's only live domain.
 	ErrLastDomain = errors.New("cannot remove the last domain of a tenant")
 
+	// ErrDomainInUse is returned when removing or changing a tenant domain
+	// that live (not soft-deleted) users of the tenant still sign in with.
+	ErrDomainInUse = errors.New("domain is still used by users of the tenant")
+
 	// User errors
 	ErrUserNotFound       = errors.New("user not found")
 	ErrUserInactive       = errors.New("user account is inactive")
