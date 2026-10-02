@@ -11,8 +11,18 @@ var (
 	ErrInternal      = errors.New("internal error")
 
 	// Tenant errors
-	ErrTenantNotFound      = errors.New("tenant not found")
-	ErrDomainAlreadyExists = errors.New("domain already registered")
+	ErrTenantNotFound        = errors.New("tenant not found")
+	ErrEmailDomainNotAllowed = errors.New("email domain is not registered for this organization")
+	ErrDomainAlreadyExists   = errors.New("domain already registered")
+	ErrDomainNotFound        = errors.New("tenant domain not found")
+	ErrInvalidDomain         = errors.New("invalid domain name")
+	ErrInvalidTenantName     = errors.New("invalid tenant name")
+	// ErrLastDomain is returned when removing a tenant's only live domain.
+	ErrLastDomain = errors.New("cannot remove the last domain of a tenant")
+
+	// ErrDomainInUse is returned when removing or changing a tenant domain
+	// that live (not soft-deleted) users of the tenant still sign in with.
+	ErrDomainInUse = errors.New("domain is still used by users of the tenant")
 
 	// User errors
 	ErrUserNotFound       = errors.New("user not found")
@@ -35,13 +45,14 @@ var (
 	ErrInvitationNotPending = errors.New("invitation is no longer pending")
 	// Distinct token-state errors returned by validate/accept when the token
 	// hash matches a row but the invitation cannot be used.
-	ErrInvitationExpired   = errors.New("invitation has expired")
-	ErrInvitationRevoked   = errors.New("invitation has been revoked")
-	ErrInvitationAccepted  = errors.New("invitation has already been accepted")
-	ErrInvalidRole         = errors.New("role cannot be assigned by invitation")
-	ErrInvalidEmail        = errors.New("invalid email address")
-	ErrDepartmentNotFound  = errors.New("department not found")
-	ErrDepartmentNameTaken = errors.New("department name already exists in this tenant")
-	ErrDepartmentInUse     = errors.New("department is currently assigned to users or invitations")
-	ErrPositionNotFound    = errors.New("position not found")
+	ErrInvitationExpired       = errors.New("invitation has expired")
+	ErrInvitationRevoked       = errors.New("invitation has been revoked")
+	ErrInvitationAccepted      = errors.New("invitation has already been accepted")
+	ErrInvalidRole             = errors.New("role cannot be assigned by invitation")
+	ErrInvalidEmail            = errors.New("invalid email address")
+	ErrInvalidInvitationFilter = errors.New("invalid invitation list filter")
+	ErrDepartmentNotFound      = errors.New("department not found")
+	ErrDepartmentNameTaken     = errors.New("department name already exists in this tenant")
+	ErrDepartmentInUse         = errors.New("department is currently assigned to users or invitations")
+	ErrPositionNotFound        = errors.New("position not found")
 )

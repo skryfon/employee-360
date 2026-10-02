@@ -1,12 +1,23 @@
+import { useEffect, useState } from 'react'
 import { Toaster } from 'sonner'
 
 const base = 'flex w-full items-start gap-3 rounded-sm border border-l-4 py-3 pl-4 pr-8 text-sm'
 
 /** Flat, design-system styled sonner toaster. Mount once at the app root. */
 export function AppToaster() {
+  // Phones: top-center keeps toasts clear of bottom content and thumb-reach actions.
+  const [narrow, setNarrow] = useState(() => window.matchMedia?.('(max-width: 639px)').matches ?? false)
+  useEffect(() => {
+    const mq = window.matchMedia?.('(max-width: 639px)')
+    if (!mq) return
+    const on = () => setNarrow(mq.matches)
+    mq.addEventListener('change', on)
+    return () => mq.removeEventListener('change', on)
+  }, [])
   return (
     <Toaster
-      position="bottom-right"
+      position={narrow ? 'top-center' : 'bottom-right'}
+      mobileOffset={16}
       closeButton
       visibleToasts={5}
       toastOptions={{

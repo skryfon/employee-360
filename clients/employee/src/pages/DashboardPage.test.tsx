@@ -29,7 +29,7 @@ describe('DashboardPage', () => {
     mock.restore()
   })
 
-  it('shows loading copy while the health check is pending', () => {
+  it('shows a skeleton while the health check is pending', () => {
     mock.onGet(HEALTH_URL).reply(200, {
       success: true,
       data: { status: 'ok', app: 'employee360', database: 'ok' },
@@ -37,7 +37,8 @@ describe('DashboardPage', () => {
 
     renderPage()
 
-    expect(screen.getByText('Checking API health…')).toBeInTheDocument()
+    expect(screen.getByRole('status')).toHaveTextContent('Checking API health…')
+    expect(screen.getByRole('status')).toHaveAttribute('aria-busy', 'true')
   })
 
   it('shows error copy when the health check fails', async () => {

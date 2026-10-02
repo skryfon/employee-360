@@ -24,6 +24,9 @@ export const INVITATION_ERROR_CODES = {
   ACCEPTED: 'INVITATION_ACCEPTED',
 } as const;
 
+/** Error code returned by the invite endpoint when the email domain is not registered for the tenant. */
+export const EMAIL_DOMAIN_NOT_ALLOWED = 'EMAIL_DOMAIN_NOT_ALLOWED';
+
 /** Read the backend's `{ error: { code } }` from an AxiosError, else `undefined`. */
 export function getErrorCode(err: unknown): string | undefined {
   if (axios.isAxiosError<{ error?: { code?: string } }>(err)) {
@@ -31,3 +34,12 @@ export function getErrorCode(err: unknown): string | undefined {
   }
   return undefined;
 }
+
+/** Error codes returned by the super_admin tenant endpoints. Branch on these, never on message text. */
+export const TENANT_ERROR_CODES = {
+  INVALID_DOMAIN: 'INVALID_DOMAIN',
+  INVALID_NAME: 'INVALID_NAME',
+  DOMAIN_ALREADY_EXISTS: 'DOMAIN_ALREADY_EXISTS',
+  LAST_DOMAIN: 'LAST_DOMAIN',
+  DOMAIN_IN_USE: 'DOMAIN_IN_USE',
+} as const;

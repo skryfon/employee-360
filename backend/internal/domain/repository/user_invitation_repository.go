@@ -30,5 +30,21 @@ type UserInvitationRepository interface {
 	// revoked_at IS NULL) and MUST return domainerrors.ErrInvitationNotPending
 	// when 0 rows were updated.
 	MarkRevoked(ctx context.Context, tenantID, id, actorID uuid.UUID, at time.Time) error
-	List(ctx context.Context, tenantID uuid.UUID, limit, offset int) ([]*entity.UserInvitation, int64, error)
+	// List returns one page of the tenant's invitations (joined with role name
+	// and inviter) plus the total number of rows matching the filter. Ordering
+	// is created_at DESC, id DESC.
+	List(ctx context.Context, tenantID uuid.UUID, filter InvitationListFilter) ([]*entity.InvitationListItem, int64, error)
+}
+
+// InvitationListFilter narrows and pages an invitation listing.
+type InvitationListFilter struct {
+	// Status, when non-empty, keeps only invitations in that derived state
+	// (evaluated against Now; expired = pending-but-past expires_at).
+	Status entity.InvitationStatus
+	// Search is a case-insensitive substring match on the invitee email. The
+	// repository escapes LIKE wildcards.
+	Search string
+	Now    time.Time
+	Limit  int
+	Offset int
 }

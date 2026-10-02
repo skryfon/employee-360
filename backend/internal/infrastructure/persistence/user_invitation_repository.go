@@ -3,6 +3,7 @@ package persistence
 import (
 	"context"
 	"errors"
+	"strings"
 	"time"
 
 	"github.com/google/uuid"
@@ -97,22 +98,67 @@ func (r *gormUserInvitationRepository) MarkRevoked(c context.Context, tenantID, 
 	return r.conditionalUpdate(c, tenantID, id, map[string]any{"revoked_at": at, "updated_at": at, "updated_by": actorID})
 }
 
-func (r *gormUserInvitationRepository) List(c context.Context, tenantID uuid.UUID, limit, offset int) ([]*entity.UserInvitation, int64, error) {
+// likeEscaper escapes LIKE wildcards so user input is matched literally.
+var likeEscaper = strings.NewReplacer(`\`, `\\`, `%`, `\%`, `_`, `\_`)
+
+type invitationListRow struct {
+	entity.UserInvitation
+	RoleName       string
+	InvitedByFirst string
+	InvitedByLast  string
+	InvitedByEmail string
+}
+
+func (r *gormUserInvitationRepository) List(c context.Context, tenantID uuid.UUID, f repository.InvitationListFilter) ([]*entity.InvitationListItem, int64, error) {
+	now := f.Now
+	if now.IsZero() {
+		now = time.Now()
+	}
+	q := database.DBFromContext(c, r.db).Table("user_invitations AS i").
+		Where("i.tenant_id = ? AND i.deleted_at IS NULL", tenantID)
+	if s := strings.TrimSpace(f.Search); s != "" {
+		q = q.Where(`i.email ILIKE ? ESCAPE '\'`, "%"+likeEscaper.Replace(s)+"%")
+	}
+	switch f.Status {
+	case entity.InvitationStatusAccepted:
+		q = q.Where("i.accepted_at IS NOT NULL")
+	case entity.InvitationStatusRevoked:
+		q = q.Where("i.accepted_at IS NULL AND i.revoked_at IS NOT NULL")
+	case entity.InvitationStatusExpired:
+		q = q.Where("i.accepted_at IS NULL AND i.revoked_at IS NULL AND i.expires_at <= ?", now)
+	case entity.InvitationStatusPending:
+		q = q.Where("i.accepted_at IS NULL AND i.revoked_at IS NULL AND i.expires_at > ?", now)
+	}
+
 	var total int64
-	base := database.DBFromContext(c, r.db).Model(&entity.UserInvitation{}).Where("tenant_id = ? AND deleted_at IS NULL", tenantID)
-	if err := base.Count(&total).Error; err != nil {
+	if err := q.Session(&gorm.Session{}).Count(&total).Error; err != nil {
 		return nil, 0, err
 	}
-	var out []*entity.UserInvitation
-	q := database.DBFromContext(c, r.db).Where("tenant_id = ? AND deleted_at IS NULL", tenantID).Order("created_at DESC, id DESC")
-	if limit > 0 {
-		q = q.Limit(limit)
+
+	var rows []invitationListRow
+	pq := q.Session(&gorm.Session{}).
+		Select(`i.*, r.name AS role_name, u.first_name AS invited_by_first,
+			u.last_name AS invited_by_last, u.email AS invited_by_email`).
+		// LEFT JOINs keep the invitation listed even when its role or inviter is
+		// soft-deleted; the deleted row's name/email then comes back empty.
+		Joins("LEFT JOIN roles r ON r.id = i.role_id AND r.tenant_id = i.tenant_id AND r.deleted_at IS NULL").
+		Joins("LEFT JOIN users u ON u.id = i.invited_by AND u.tenant_id = i.tenant_id AND u.deleted_at IS NULL").
+		Order("i.created_at DESC, i.id DESC")
+	if f.Limit > 0 {
+		pq = pq.Limit(f.Limit)
 	}
-	if offset > 0 {
-		q = q.Offset(offset)
+	if f.Offset > 0 {
+		pq = pq.Offset(f.Offset)
 	}
-	if err := q.Find(&out).Error; err != nil {
+	if err := pq.Scan(&rows).Error; err != nil {
 		return nil, 0, err
+	}
+	out := make([]*entity.InvitationListItem, 0, len(rows))
+	for _, row := range rows {
+		out = append(out, &entity.InvitationListItem{
+			UserInvitation: row.UserInvitation, RoleName: row.RoleName,
+			InvitedByFirst: row.InvitedByFirst, InvitedByLast: row.InvitedByLast, InvitedByEmail: row.InvitedByEmail,
+		})
 	}
 	return out, total, nil
 }

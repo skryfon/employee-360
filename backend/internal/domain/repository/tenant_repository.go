@@ -2,6 +2,7 @@ package repository
 
 import (
 	"context"
+	"time"
 
 	"github.com/google/uuid"
 	"github.com/skryfon/employee360/backend/internal/domain/entity"
@@ -17,12 +18,15 @@ type TenantReader interface {
 	GetByID(ctx context.Context, id uuid.UUID) (*entity.Tenant, error)
 }
 
-// TenantRepository defines the data access methods for tenants.
+// TenantRepository defines the data access methods for the caller's own
+// tenant. tenants is the tenant boundary itself (no tenant_id column): the id
+// is passed explicitly, sourced from the auth context by the handler. All
+// reads exclude soft-deleted rows.
 type TenantRepository interface {
 	TenantReader
-	Create(ctx context.Context, tenant *entity.Tenant) error
-	GetByName(ctx context.Context, name string) (*entity.Tenant, error)
-	List(ctx context.Context, limit, offset int) ([]*entity.Tenant, int64, error)
-	Update(ctx context.Context, tenant *entity.Tenant) error
-	Delete(ctx context.Context, id uuid.UUID) error
+	// LockByID returns the live tenant and takes a row lock (SELECT ... FOR
+	// UPDATE) for the rest of the surrounding transaction.
+	LockByID(ctx context.Context, id uuid.UUID) (*entity.Tenant, error)
+	// UpdateName renames the tenant; ErrTenantNotFound if no live row matched.
+	UpdateName(ctx context.Context, id uuid.UUID, name string, actorID uuid.UUID, at time.Time) error
 }

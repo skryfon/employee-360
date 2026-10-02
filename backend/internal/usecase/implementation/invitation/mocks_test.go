@@ -9,6 +9,7 @@ import (
 	"github.com/skryfon/employee360/backend/internal/domain/entity"
 	domainerrors "github.com/skryfon/employee360/backend/internal/domain/errors"
 	"github.com/skryfon/employee360/backend/internal/domain/event"
+	"github.com/skryfon/employee360/backend/internal/domain/repository"
 	domainservice "github.com/skryfon/employee360/backend/internal/domain/service"
 	infraservice "github.com/skryfon/employee360/backend/internal/infrastructure/service"
 )
@@ -16,6 +17,11 @@ import (
 // fakeStore is an in-memory stand-in for the DB; snapshot/restore emulate
 // transaction rollback so we can assert the outbox guarantee.
 type fakeStore struct {
+	domainChecks int
+	// calls records the order of lock/domain-check calls.
+	calls []string
+	// tenants is the set of live tenants for the fake tenant repo.
+	tenants     map[uuid.UUID]bool
 	users       map[uuid.UUID]*entity.User
 	userRoles   []*entity.UserRole
 	invitations map[uuid.UUID]*entity.UserInvitation
@@ -26,6 +32,8 @@ type fakeStore struct {
 	// depts/positions map id -> owning tenant.
 	depts     map[uuid.UUID]uuid.UUID
 	positions map[uuid.UUID]uuid.UUID
+	// domains maps lowercased domain -> owning tenant.
+	domains map[string]uuid.UUID
 }
 
 func newFakeStore() *fakeStore {
@@ -35,6 +43,8 @@ func newFakeStore() *fakeStore {
 		roles:       map[uuid.UUID]*entity.Role{},
 		depts:       map[uuid.UUID]uuid.UUID{},
 		positions:   map[uuid.UUID]uuid.UUID{},
+		domains:     map[string]uuid.UUID{},
+		tenants:     map[uuid.UUID]bool{},
 	}
 }
 
@@ -250,14 +260,42 @@ func (r fakeInvRepo) MarkRevoked(_ context.Context, t, id, actor uuid.UUID, at t
 	i.UpdatedBy = &actor
 	return nil
 }
-func (r fakeInvRepo) List(_ context.Context, t uuid.UUID, limit, offset int) ([]*entity.UserInvitation, int64, error) {
-	var out []*entity.UserInvitation
+func (r fakeInvRepo) List(_ context.Context, t uuid.UUID, _ repository.InvitationListFilter) ([]*entity.InvitationListItem, int64, error) {
+	var out []*entity.InvitationListItem
 	for _, i := range r.s.invitations {
 		if i.TenantID == t {
-			out = append(out, i)
+			out = append(out, &entity.InvitationListItem{UserInvitation: *i})
 		}
 	}
 	return out, int64(len(out)), nil
+}
+
+type fakeTenantDomainRepo struct{ s *fakeStore }
+
+func (r fakeTenantDomainRepo) FindTenantByDomain(context.Context, string) (*entity.Tenant, error) {
+	return nil, domainerrors.ErrTenantNotFound
+}
+func (r fakeTenantDomainRepo) DomainBelongsToTenant(_ context.Context, t uuid.UUID, d string) (bool, error) {
+	r.s.domainChecks++
+	r.s.calls = append(r.s.calls, "domain_check")
+	owner, ok := r.s.domains[d]
+	return ok && owner == t, nil
+}
+
+type fakeTenantRepo struct{ s *fakeStore }
+
+func (r fakeTenantRepo) GetByID(_ context.Context, id uuid.UUID) (*entity.Tenant, error) {
+	if !r.s.tenants[id] {
+		return nil, domainerrors.ErrTenantNotFound
+	}
+	return &entity.Tenant{ID: id, IsActive: true}, nil
+}
+func (r fakeTenantRepo) LockByID(c context.Context, id uuid.UUID) (*entity.Tenant, error) {
+	r.s.calls = append(r.s.calls, "lock")
+	return r.GetByID(c, id)
+}
+func (r fakeTenantRepo) UpdateName(context.Context, uuid.UUID, string, uuid.UUID, time.Time) error {
+	return nil
 }
 
 // fixture helpers
@@ -274,6 +312,9 @@ func newFixture() *fixture {
 	f := &fixture{s: newFakeStore(), tenantA: uuid.New(), tenantB: uuid.New(), adminID: uuid.New(), hash: infraservice.NewHashService(4)}
 	f.employeeRl = &entity.Role{ID: uuid.New(), TenantID: f.tenantA, Name: "employee"}
 	f.s.roles[f.employeeRl.ID] = f.employeeRl
+	f.s.tenants[f.tenantA], f.s.tenants[f.tenantB] = true, true
+	f.s.domains["acme.com"] = f.tenantA
+	f.s.domains["b.com"] = f.tenantB
 	return f
 }
 

@@ -23,15 +23,14 @@ import (
 // fakeInvUC implements all five invitation usecases with configurable results.
 type fakeInvUC struct {
 	inv       *entity.UserInvitation
-	items     []*entity.UserInvitation
+	items     []*entity.InvitationListItem
 	total     int64
 	err       error
 	gotInvite invtypes.InviteUserRequest
 	gotAccept invtypes.AcceptInvitationRequest
 	gotToken  string
 	gotID     uuid.UUID
-	gotLimit  int
-	gotOffset int
+	gotQuery  invtypes.ListInvitationsQuery
 	gotTenant uuid.UUID
 	gotActor  uuid.UUID
 }
@@ -73,10 +72,14 @@ func (f fakeRevokeUC) Execute(_ context.Context, tenantID, actorID, id uuid.UUID
 
 type fakeListUC struct{ *fakeInvUC }
 
-func (f fakeListUC) Execute(_ context.Context, tenantID uuid.UUID, limit, offset int) ([]*entity.UserInvitation, int64, error) {
-	f.gotLimit, f.gotOffset = limit, offset
+func (f fakeListUC) Execute(_ context.Context, tenantID uuid.UUID, q invtypes.ListInvitationsQuery) (*invtypes.ListInvitationsResult, error) {
+	f.gotQuery = q
 	f.gotTenant = tenantID
-	return f.items, f.total, f.err
+	if f.err != nil {
+		return nil, f.err
+	}
+	pages := int((f.total + int64(q.PageSize) - 1) / int64(q.PageSize))
+	return &invtypes.ListInvitationsResult{Items: f.items, Total: f.total, Page: q.Page, PageSize: q.PageSize, TotalPages: pages}, nil
 }
 
 type fakeValidateUC struct{ *fakeInvUC }
@@ -250,15 +253,18 @@ func TestInvitationHandler_Revoke(t *testing.T) {
 func TestInvitationHandler_List(t *testing.T) {
 	now := time.Now()
 	past, future := now.Add(-time.Hour), now.Add(time.Hour)
-	statusOf := func(i *entity.UserInvitation) string { return string(i.Status(now)) }
 
-	t.Run("derived status and no token leak", func(t *testing.T) {
+	t.Run("derived status, joins and no token leak", func(t *testing.T) {
 		engine, f := setupInvitationHandlerTest()
-		f.items = []*entity.UserInvitation{
-			{ID: uuid.New(), TokenHash: "h1", ExpiresAt: future},
-			{ID: uuid.New(), TokenHash: "h2", ExpiresAt: future, AcceptedAt: &past},
-			{ID: uuid.New(), TokenHash: "h3", ExpiresAt: future, RevokedAt: &past},
-			{ID: uuid.New(), TokenHash: "h4", ExpiresAt: past},
+		mk := func(inv entity.UserInvitation) *entity.InvitationListItem {
+			inv.CreatedAt = past
+			return &entity.InvitationListItem{UserInvitation: inv, RoleName: "employee", InvitedByFirst: "Ada", InvitedByLast: "Lovelace", InvitedByEmail: "ada@acme.com"}
+		}
+		f.items = []*entity.InvitationListItem{
+			mk(entity.UserInvitation{ID: uuid.New(), TokenHash: "h1", ExpiresAt: future}),
+			mk(entity.UserInvitation{ID: uuid.New(), TokenHash: "h2", ExpiresAt: future, AcceptedAt: &past}),
+			mk(entity.UserInvitation{ID: uuid.New(), TokenHash: "h3", ExpiresAt: future, RevokedAt: &past}),
+			mk(entity.UserInvitation{ID: uuid.New(), TokenHash: "h4", ExpiresAt: past}),
 		}
 		f.total = 4
 		rec := doInv(engine, http.MethodGet, "/invitations", "")
@@ -269,11 +275,18 @@ func TestInvitationHandler_List(t *testing.T) {
 			t.Errorf("response must not expose token data: %s", rec.Body.String())
 		}
 		env := decodeEnvelope(t, rec)
-		items := env.Data.([]any)
 		want := []string{"pending", "accepted", "revoked", "expired"}
-		for i, it := range items {
-			if got := it.(map[string]any)["status"]; got != want[i] {
-				t.Errorf("item %d: want status %s, got %v (entity says %s)", i, want[i], got, statusOf(f.items[i]))
+		for i, it := range env.Data.([]any) {
+			m := it.(map[string]any)
+			if m["status"] != want[i] {
+				t.Errorf("item %d: want status %s, got %v", i, want[i], m["status"])
+			}
+			if m["role"] != "employee" || m["invited_on"] == nil {
+				t.Errorf("item %d: missing role/invited_on: %v", i, m)
+			}
+			ib := m["invited_by"].(map[string]any)
+			if ib["name"] != "Ada Lovelace" || ib["email"] != "ada@acme.com" {
+				t.Errorf("item %d: bad invited_by: %v", i, ib)
 			}
 		}
 		if env.Meta == nil || env.Meta.TotalItems != 4 || env.Meta.TotalPages != 1 {
@@ -284,38 +297,61 @@ func TestInvitationHandler_List(t *testing.T) {
 	t.Run("empty list is an array", func(t *testing.T) {
 		engine, _ := setupInvitationHandlerTest()
 		rec := doInv(engine, http.MethodGet, "/invitations", "")
-		if !strings.Contains(rec.Body.String(), `"data":[]`) {
-			t.Errorf("want empty array, got %s", rec.Body.String())
+		if !strings.Contains(rec.Body.String(), `"data":[]`) || !strings.Contains(rec.Body.String(), `"total_items":0`) {
+			t.Errorf("want empty array with zero totals, got %s", rec.Body.String())
 		}
 	})
 
-	paging := []struct {
-		name, query         string
-		limit, offset, page int
+	ok := []struct {
+		name, query    string
+		page, size     int
+		status, search string
+		wantPages      int
 	}{
-		{"defaults", "", 20, 0, 1},
-		{"explicit page", "?page=3&page_size=10", 10, 20, 3},
-		{"max page size", "?page_size=100", 100, 0, 1},
-		{"over max falls back to default", "?page_size=101", 20, 0, 1},
-		{"zero page clamps to 1", "?page=0", 20, 0, 1},
-		{"garbage falls back", "?page=x&page_size=y", 20, 0, 1},
+		{"defaults", "", 1, 20, "", "", 13},
+		{"explicit page", "?page=3&page_size=10", 3, 10, "", "", 25},
+		{"max page size", "?page_size=100", 1, 100, "", "", 3},
+		{"status and search", "?status=Expired&search=%20Bob%25%20", 1, 20, "expired", "Bob%", 13},
 	}
-	for _, tt := range paging {
+	for _, tt := range ok {
 		t.Run(tt.name, func(t *testing.T) {
 			engine, f := setupInvitationHandlerTest()
 			f.total = 250
 			rec := doInv(engine, http.MethodGet, "/invitations"+tt.query, "")
 			if rec.Code != http.StatusOK {
-				t.Fatalf("want 200, got %d", rec.Code)
+				t.Fatalf("want 200, got %d: %s", rec.Code, rec.Body.String())
 			}
-			if f.gotLimit != tt.limit || f.gotOffset != tt.offset {
-				t.Errorf("usecase got limit=%d offset=%d, want %d/%d", f.gotLimit, f.gotOffset, tt.limit, tt.offset)
+			q := f.gotQuery
+			if q.Page != tt.page || q.PageSize != tt.size || string(q.Status) != tt.status || q.Search != tt.search {
+				t.Errorf("usecase got %+v", q)
 			}
-			if meta := decodeEnvelope(t, rec).Meta; meta.Page != tt.page || meta.PageSize != tt.limit {
+			meta := decodeEnvelope(t, rec).Meta
+			if meta.Page != tt.page || meta.PageSize != tt.size || meta.TotalPages != tt.wantPages {
 				t.Errorf("unexpected meta: %+v", meta)
 			}
 		})
 	}
+
+	for _, q := range []string{"?page=0", "?page=x", "?page_size=0", "?page_size=y", "?page_size=101", "?page_size=500", "?search=" + strings.Repeat("a", 101)} {
+		t.Run("rejects "+q[:min(len(q), 20)], func(t *testing.T) {
+			engine, _ := setupInvitationHandlerTest()
+			rec := doInv(engine, http.MethodGet, "/invitations"+q, "")
+			if rec.Code != http.StatusBadRequest {
+				t.Errorf("want 400, got %d", rec.Code)
+			}
+			if q == "?page_size=101" && !strings.Contains(rec.Body.String(), "page_size must be between 1 and 100") {
+				t.Errorf("unexpected body %s", rec.Body.String())
+			}
+		})
+	}
+
+	t.Run("invalid status maps to 400", func(t *testing.T) {
+		engine, f := setupInvitationHandlerTest()
+		f.err = domainerrors.ErrInvalidInvitationFilter
+		if rec := doInv(engine, http.MethodGet, "/invitations?status=bogus", ""); rec.Code != http.StatusBadRequest {
+			t.Errorf("want 400, got %d", rec.Code)
+		}
+	})
 }
 
 func TestInvitationHandler_Accept(t *testing.T) {

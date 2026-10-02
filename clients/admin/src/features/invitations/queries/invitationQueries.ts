@@ -7,14 +7,14 @@ import {
   revokeInvitation,
   type InviteUserRequest,
 } from '@employee360/api-client'
+import type { InvitationListParams } from '../schemas/invitationListSchema'
 
 export const INVITATIONS_KEY = ['invitations'] as const
-export const INVITATIONS_PAGE_SIZE = 20
 
-export function useInvitationsQuery(page: number) {
+export function useInvitationsQuery(params: InvitationListParams) {
   return useQuery({
-    queryKey: [...INVITATIONS_KEY, { page }],
-    queryFn: ({ signal }) => listInvitations({ page, page_size: INVITATIONS_PAGE_SIZE }, signal),
+    queryKey: [...INVITATIONS_KEY, params],
+    queryFn: ({ signal }) => listInvitations(params, signal),
     placeholderData: keepPreviousData,
   })
 }

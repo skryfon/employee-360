@@ -88,6 +88,43 @@ func registerRoutes(engine *gin.Engine, c *container.Container) {
 			)
 		}
 
+		// Dashboards (read-only). Admin: tenant-scoped from the auth context.
+		// Super admin: same tenant-scoped data plus tenant info/users by role, strictly super_admin.
+		if c.Auth != nil && c.Auth.DashboardHandler != nil {
+			dh := c.Auth.DashboardHandler
+			v1.GET("/dashboard/admin",
+				middleware.Auth(c.Auth.TokenService, c.Auth.IdentityVerifier),
+				middleware.Tenant(),
+				middleware.RequireRole(entity.RoleAdmin),
+				dh.Admin,
+			)
+			v1.GET("/dashboard/super-admin",
+				middleware.Auth(c.Auth.TokenService, c.Auth.IdentityVerifier),
+				middleware.Tenant(),
+				middleware.RequireRole(entity.RoleSuperAdmin),
+				dh.SuperAdmin,
+			)
+		}
+
+		// Current-tenant settings (self-hosted: the caller's own tenant only), strictly
+		// super_admin (Auth -> Tenant -> role guard). No tenant id in URL or body.
+		if c.Auth != nil && c.Auth.TenantHandler != nil {
+			th := c.Auth.TenantHandler
+			tg := v1.Group("/tenant",
+				middleware.Auth(c.Auth.TokenService, c.Auth.IdentityVerifier),
+				middleware.Tenant(),
+				middleware.RequireRole(entity.RoleSuperAdmin),
+			)
+			{
+				tg.GET("", th.Get)
+				tg.PATCH("", th.Update)
+				tg.GET("/domains", th.ListDomains)
+				tg.POST("/domains", th.AddDomain)
+				tg.PATCH("/domains/:domainId", th.UpdateDomain)
+				tg.DELETE("/domains/:domainId", th.RemoveDomain)
+			}
+		}
+
 		if c.Auth != nil && c.Auth.InvitationHandler != nil {
 			ih := c.Auth.InvitationHandler
 

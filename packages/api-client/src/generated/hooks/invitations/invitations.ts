@@ -242,7 +242,7 @@ export const getGetApiV1UsersInvitationsQueryKey = (params?: GetApiV1UsersInvita
     }
 
 
-export const getGetApiV1UsersInvitationsQueryOptions = <TData = Awaited<ReturnType<typeof getApiV1UsersInvitations>>, TError = unknown>(params?: GetApiV1UsersInvitationsParams, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getApiV1UsersInvitations>>, TError, TData>>, }
+export const getGetApiV1UsersInvitationsQueryOptions = <TData = Awaited<ReturnType<typeof getApiV1UsersInvitations>>, TError = GithubComSkryfonEmployee360BackendInternalDeliveryHttpResponseEnvelope>(params?: GetApiV1UsersInvitationsParams, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getApiV1UsersInvitations>>, TError, TData>>, }
 ) => {
 
 const {query: queryOptions} = options ?? {};
@@ -261,10 +261,10 @@ const {query: queryOptions} = options ?? {};
 }
 
 export type GetApiV1UsersInvitationsQueryResult = NonNullable<Awaited<ReturnType<typeof getApiV1UsersInvitations>>>
-export type GetApiV1UsersInvitationsQueryError = unknown
+export type GetApiV1UsersInvitationsQueryError = GithubComSkryfonEmployee360BackendInternalDeliveryHttpResponseEnvelope
 
 
-export function useGetApiV1UsersInvitations<TData = Awaited<ReturnType<typeof getApiV1UsersInvitations>>, TError = unknown>(
+export function useGetApiV1UsersInvitations<TData = Awaited<ReturnType<typeof getApiV1UsersInvitations>>, TError = GithubComSkryfonEmployee360BackendInternalDeliveryHttpResponseEnvelope>(
  params: undefined |  GetApiV1UsersInvitationsParams, options: { query:Partial<UseQueryOptions<Awaited<ReturnType<typeof getApiV1UsersInvitations>>, TError, TData>> & Pick<
         DefinedInitialDataOptions<
           Awaited<ReturnType<typeof getApiV1UsersInvitations>>,
@@ -274,7 +274,7 @@ export function useGetApiV1UsersInvitations<TData = Awaited<ReturnType<typeof ge
       >, }
  , queryClient?: QueryClient
   ):  DefinedUseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
-export function useGetApiV1UsersInvitations<TData = Awaited<ReturnType<typeof getApiV1UsersInvitations>>, TError = unknown>(
+export function useGetApiV1UsersInvitations<TData = Awaited<ReturnType<typeof getApiV1UsersInvitations>>, TError = GithubComSkryfonEmployee360BackendInternalDeliveryHttpResponseEnvelope>(
  params?: GetApiV1UsersInvitationsParams, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getApiV1UsersInvitations>>, TError, TData>> & Pick<
         UndefinedInitialDataOptions<
           Awaited<ReturnType<typeof getApiV1UsersInvitations>>,
@@ -284,7 +284,7 @@ export function useGetApiV1UsersInvitations<TData = Awaited<ReturnType<typeof ge
       >, }
  , queryClient?: QueryClient
   ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
-export function useGetApiV1UsersInvitations<TData = Awaited<ReturnType<typeof getApiV1UsersInvitations>>, TError = unknown>(
+export function useGetApiV1UsersInvitations<TData = Awaited<ReturnType<typeof getApiV1UsersInvitations>>, TError = GithubComSkryfonEmployee360BackendInternalDeliveryHttpResponseEnvelope>(
  params?: GetApiV1UsersInvitationsParams, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getApiV1UsersInvitations>>, TError, TData>>, }
  , queryClient?: QueryClient
   ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
@@ -292,7 +292,7 @@ export function useGetApiV1UsersInvitations<TData = Awaited<ReturnType<typeof ge
  * @summary List invitations
  */
 
-export function useGetApiV1UsersInvitations<TData = Awaited<ReturnType<typeof getApiV1UsersInvitations>>, TError = unknown>(
+export function useGetApiV1UsersInvitations<TData = Awaited<ReturnType<typeof getApiV1UsersInvitations>>, TError = GithubComSkryfonEmployee360BackendInternalDeliveryHttpResponseEnvelope>(
  params?: GetApiV1UsersInvitationsParams, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getApiV1UsersInvitations>>, TError, TData>>, }
  , queryClient?: QueryClient
  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> } {
