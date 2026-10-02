@@ -32,6 +32,13 @@ func TestGormDashboardRepository_TenantScopedCounts(t *testing.T) {
 	// Pending invited user: inactive, no password.
 	pending := createTestUser(t, db, a.ID, "pend+"+uuid.NewString()+"@example.com")
 	require.NoError(t, db.Exec("UPDATE users SET is_active = false, password_hash = NULL WHERE id = ?", pending.ID).Error)
+	// Deactivated never-logged-in user without an open invitation: not counted.
+	deact := createTestUser(t, db, a.ID, "deact+"+uuid.NewString()+"@example.com")
+	require.NoError(t, db.Exec("UPDATE users SET is_active = false, password_hash = NULL WHERE id = ?", deact.ID).Error)
+	// Same shape in tenant B with an open invitation in tenant A for its email: not counted for A or B.
+	crossEmail := "cross+" + uuid.NewString() + "@example.com"
+	cross := createTestUser(t, db, b.ID, crossEmail)
+	require.NoError(t, db.Exec("UPDATE users SET is_active = false, password_hash = NULL WHERE id = ?", cross.ID).Error)
 	// Soft-deleted user must not count.
 	gone := createTestUser(t, db, a.ID, "gone+"+uuid.NewString()+"@example.com")
 	require.NoError(t, db.Exec("UPDATE users SET deleted_at = NOW() WHERE id = ?", gone.ID).Error)
@@ -47,21 +54,24 @@ func TestGormDashboardRepository_TenantScopedCounts(t *testing.T) {
 		mod(inv)
 		require.NoError(t, db.Table("user_invitations").Create(inv).Error)
 	}
-	mkInv(a.ID, func(*entity.UserInvitation) {})
+	mkInv(a.ID, func(i *entity.UserInvitation) { i.Email = pending.Email })
+	mkInv(a.ID, func(i *entity.UserInvitation) { i.Email = crossEmail })
+	mkInv(a.ID, func(i *entity.UserInvitation) { i.Email = deact.Email; i.RevokedAt = &now })
 	mkInv(a.ID, func(i *entity.UserInvitation) { i.AcceptedAt = &now })
 	mkInv(a.ID, func(i *entity.UserInvitation) { i.RevokedAt = &now })
 	mkInv(a.ID, func(i *entity.UserInvitation) { i.ExpiresAt = now.Add(-time.Hour) })
 
 	counts, err := repo.TenantCounts(c, a.ID, now)
 	require.NoError(t, err)
-	require.EqualValues(t, 3, counts.UsersTotal)
+	require.EqualValues(t, 4, counts.UsersTotal)
 	require.EqualValues(t, 1, counts.UsersActive)
 	require.EqualValues(t, 1, counts.UsersPendingInvited)
-	require.Equal(t, entity.InvitationStatusCounts{Pending: 1, Accepted: 1, Expired: 1, Revoked: 1}, counts.Invitations)
+	require.Equal(t, entity.InvitationStatusCounts{Pending: 2, Accepted: 1, Expired: 1, Revoked: 2}, counts.Invitations)
 
 	other, err := repo.TenantCounts(c, b.ID, now)
 	require.NoError(t, err)
-	require.EqualValues(t, 1, other.UsersTotal)
+	require.EqualValues(t, 2, other.UsersTotal)
+	require.EqualValues(t, 0, other.UsersPendingInvited)
 	require.Equal(t, entity.InvitationStatusCounts{}, other.Invitations)
 
 	roles, err := repo.UsersByRole(c, a.ID)

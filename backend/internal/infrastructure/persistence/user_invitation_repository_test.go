@@ -258,3 +258,28 @@ func TestGormUserInvitationRepository_ListFilterSearchJoins(t *testing.T) {
 	require.NoError(t, err)
 	require.EqualValues(t, 0, total)
 }
+
+func TestGormUserInvitationRepository_ListHidesSoftDeletedJoinNames(t *testing.T) {
+	f := newInvFixture(t)
+	c := context.Background()
+	now := time.Now().UTC()
+
+	inv := f.mustCreate(t, now)
+	items, _, err := f.repo.List(c, f.tenantA.ID, repository.InvitationListFilter{Limit: 10})
+	require.NoError(t, err)
+	require.Len(t, items, 1)
+	require.Equal(t, "admin", items[0].RoleName)
+	require.NotEmpty(t, items[0].InvitedByEmail)
+
+	require.NoError(t, f.db.Exec("UPDATE roles SET deleted_at = NOW() WHERE id = ?", f.roleA).Error)
+	require.NoError(t, f.db.Exec("UPDATE users SET deleted_at = NOW() WHERE id = ?", f.inviterA).Error)
+
+	items, total, err := f.repo.List(c, f.tenantA.ID, repository.InvitationListFilter{Limit: 10})
+	require.NoError(t, err)
+	require.EqualValues(t, 1, total, "invitation must still be listed")
+	require.Equal(t, inv.ID, items[0].ID)
+	require.Empty(t, items[0].RoleName)
+	require.Empty(t, items[0].InvitedByFirst)
+	require.Empty(t, items[0].InvitedByLast)
+	require.Empty(t, items[0].InvitedByEmail)
+}

@@ -55,7 +55,7 @@ export function InvitationsTable({ invitations, filtered = false }: { invitation
             return (
               <tr key={inv.id} className="border-t border-slate-200 text-sm text-slate-900 hover:bg-slate-50 max-sm:flex max-sm:flex-col max-sm:gap-2 max-sm:p-4">
                 <td className="px-4 py-3 max-sm:p-0 max-sm:break-all max-sm:font-medium">{inv.email}</td>
-                <td className={CELL} data-label="Role">{inv.role ?? '-'}</td>
+                <td className={CELL} data-label="Role">{inv.role || '-'}</td>
                 <td className={CELL} data-label="Invited by">{inv.invited_by?.name || inv.invited_by?.email || '-'}</td>
                 <td className={CELL} data-label="Invited on">{fmt(inv.invited_on ?? inv.created_at)}</td>
                 <td className={CELL} data-label="Expires on">{fmt(inv.expires_at)}</td>

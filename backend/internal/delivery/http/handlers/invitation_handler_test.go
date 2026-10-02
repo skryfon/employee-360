@@ -311,7 +311,6 @@ func TestInvitationHandler_List(t *testing.T) {
 		{"defaults", "", 1, 20, "", "", 13},
 		{"explicit page", "?page=3&page_size=10", 3, 10, "", "", 25},
 		{"max page size", "?page_size=100", 1, 100, "", "", 3},
-		{"over max is capped", "?page_size=500", 1, 100, "", "", 3},
 		{"status and search", "?status=Expired&search=%20Bob%25%20", 1, 20, "expired", "Bob%", 13},
 	}
 	for _, tt := range ok {
@@ -333,11 +332,15 @@ func TestInvitationHandler_List(t *testing.T) {
 		})
 	}
 
-	for _, q := range []string{"?page=0", "?page=x", "?page_size=0", "?page_size=y", "?search=" + strings.Repeat("a", 101)} {
+	for _, q := range []string{"?page=0", "?page=x", "?page_size=0", "?page_size=y", "?page_size=101", "?page_size=500", "?search=" + strings.Repeat("a", 101)} {
 		t.Run("rejects "+q[:min(len(q), 20)], func(t *testing.T) {
 			engine, _ := setupInvitationHandlerTest()
-			if rec := doInv(engine, http.MethodGet, "/invitations"+q, ""); rec.Code != http.StatusBadRequest {
+			rec := doInv(engine, http.MethodGet, "/invitations"+q, "")
+			if rec.Code != http.StatusBadRequest {
 				t.Errorf("want 400, got %d", rec.Code)
+			}
+			if q == "?page_size=101" && !strings.Contains(rec.Body.String(), "page_size must be between 1 and 100") {
+				t.Errorf("unexpected body %s", rec.Body.String())
 			}
 		})
 	}

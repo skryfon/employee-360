@@ -623,7 +623,7 @@ const docTemplate = `{
                     },
                     {
                         "type": "integer",
-                        "description": "Page size (default 20, max 100)",
+                        "description": "Page size (1-100, default 20); values above 100 are rejected with 400",
                         "name": "page_size",
                         "in": "query"
                     },

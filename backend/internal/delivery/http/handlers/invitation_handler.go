@@ -2,6 +2,7 @@ package handlers
 
 import (
 	"errors"
+	"fmt"
 	"net/http"
 	"strconv"
 	"strings"
@@ -178,7 +179,7 @@ func (h *InvitationHandler) Revoke(c *gin.Context) {
 // @Produce      json
 // @Security     BearerAuth
 // @Param        page       query  int     false  "Page (1-based, default 1)"
-// @Param        page_size  query  int     false  "Page size (default 20, max 100)"
+// @Param        page_size  query  int     false  "Page size (1-100, default 20); values above 100 are rejected with 400"
 // @Param        status     query  string  false  "Filter by status"  Enums(pending, accepted, expired, revoked)
 // @Param        search     query  string  false  "Case-insensitive substring match on invitee email (max 100 chars)"
 // @Success      200  {object}  response.Envelope{data=[]invtypes.InvitationListItemResponse}
@@ -205,7 +206,8 @@ func (h *InvitationHandler) List(c *gin.Context) {
 			return
 		}
 		if n > invtypes.MaxPageSize {
-			n = invtypes.MaxPageSize
+			response.BadRequest(c, fmt.Sprintf("page_size must be between 1 and %d", invtypes.MaxPageSize))
+			return
 		}
 		q.PageSize = n
 	}

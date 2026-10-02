@@ -139,8 +139,10 @@ func (r *gormUserInvitationRepository) List(c context.Context, tenantID uuid.UUI
 	pq := q.Session(&gorm.Session{}).
 		Select(`i.*, r.name AS role_name, u.first_name AS invited_by_first,
 			u.last_name AS invited_by_last, u.email AS invited_by_email`).
-		Joins("LEFT JOIN roles r ON r.id = i.role_id AND r.tenant_id = i.tenant_id").
-		Joins("LEFT JOIN users u ON u.id = i.invited_by AND u.tenant_id = i.tenant_id").
+		// LEFT JOINs keep the invitation listed even when its role or inviter is
+		// soft-deleted; the deleted row's name/email then comes back empty.
+		Joins("LEFT JOIN roles r ON r.id = i.role_id AND r.tenant_id = i.tenant_id AND r.deleted_at IS NULL").
+		Joins("LEFT JOIN users u ON u.id = i.invited_by AND u.tenant_id = i.tenant_id AND u.deleted_at IS NULL").
 		Order("i.created_at DESC, i.id DESC")
 	if f.Limit > 0 {
 		pq = pq.Limit(f.Limit)
