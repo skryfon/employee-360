@@ -96,7 +96,7 @@ function ProblemView({ problem }: { problem: InvitationProblem }) {
             Sign in
           </Link>
         ) : (
-          <Link to="/login" className="inline-flex min-h-11 w-fit items-center text-sm text-slate-900 underline hover:text-slate-700">
+          <Link to="/login" className="inline-flex min-h-11 w-fit items-center text-sm text-slate-900 hover:text-slate-700">
             Return to sign in
           </Link>
         )}
@@ -179,7 +179,7 @@ export function AcceptInvitationPage({
           <InlineAlert tone="error">
             {getErrorMessage(validateQuery.error, 'Unable to verify this invitation. Please try again.')}
           </InlineAlert>
-          <Link to="/login" className="inline-flex min-h-11 w-fit items-center text-sm text-slate-900 underline hover:text-slate-700">
+          <Link to="/login" className="inline-flex min-h-11 w-fit items-center text-sm text-slate-900 hover:text-slate-700">
             Return to sign in
           </Link>
         </div>
@@ -191,7 +191,7 @@ export function AcceptInvitationPage({
     return (
       <Notice title="Redirecting">
         This invitation is for the {otherPortalName}. Redirecting you now...{' '}
-        <a href={redirect.url} className="underline">
+        <a href={redirect.url} className="font-medium">
           Continue
         </a>
       </Notice>
@@ -276,7 +276,7 @@ export function AcceptInvitationPage({
           {...register('confirmPassword')}
         />
         <SubmitButton loading={mutation.isPending}>Set password & accept</SubmitButton>
-        <Link to="/login" className="inline-flex min-h-11 w-fit items-center text-sm text-slate-900 underline hover:text-slate-700">
+        <Link to="/login" className="inline-flex min-h-11 w-fit items-center text-sm text-slate-900 hover:text-slate-700">
           Already accepted? Sign in
         </Link>
       </form>

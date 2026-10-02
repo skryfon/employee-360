@@ -43,6 +43,7 @@ export type {
   AcceptInvitationRequest,
   ValidateInvitationResponse,
   Invitation,
+  InvitationListItem,
   PageMeta,
   ListInvitationsParams,
   RoleOption,
@@ -53,3 +54,6 @@ export type { HealthResponse } from './health.ts';
 
 export * from './generated/models/index.ts';
 export * from './generated/hooks/index.ts';
+
+export { fetchAdminDashboard, fetchSuperAdminDashboard } from './dashboard.ts';
+export type { AdminDashboard, SuperAdminDashboard, RoleUserCount, TenantInfo } from './dashboard.ts';

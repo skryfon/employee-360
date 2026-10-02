@@ -24,6 +24,7 @@ import type { GithubComSkryfonEmployee360BackendInternalTypesAuthResetPasswordRe
 import type { GithubComSkryfonEmployee360BackendInternalTypesInvitationInviteUserRequest as InviteUserRequest } from './generated/models/githubComSkryfonEmployee360BackendInternalTypesInvitationInviteUserRequest.ts';
 import type { GithubComSkryfonEmployee360BackendInternalTypesInvitationAcceptInvitationRequest as AcceptInvitationRequest } from './generated/models/githubComSkryfonEmployee360BackendInternalTypesInvitationAcceptInvitationRequest.ts';
 import type { GithubComSkryfonEmployee360BackendInternalTypesInvitationInvitationResponse as Invitation } from './generated/models/githubComSkryfonEmployee360BackendInternalTypesInvitationInvitationResponse.ts';
+import type { GithubComSkryfonEmployee360BackendInternalTypesInvitationInvitationListItemResponse as InvitationListItem } from './generated/models/githubComSkryfonEmployee360BackendInternalTypesInvitationInvitationListItemResponse.ts';
 import type { GithubComSkryfonEmployee360BackendInternalDeliveryHttpResponseMeta as PageMeta } from './generated/models/githubComSkryfonEmployee360BackendInternalDeliveryHttpResponseMeta.ts';
 import type { GetApiV1UsersInvitationsParams as ListInvitationsParams } from './generated/models/getApiV1UsersInvitationsParams.ts';
 
@@ -41,6 +42,7 @@ export type {
   InviteUserRequest,
   AcceptInvitationRequest,
   Invitation,
+  InvitationListItem,
   PageMeta,
   ListInvitationsParams,
 };
@@ -118,7 +120,7 @@ export async function inviteUser(body: InviteUserRequest): Promise<Invitation> {
 export async function listInvitations(
   params?: ListInvitationsParams,
   signal?: AbortSignal,
-): Promise<{ data: Invitation[]; meta?: PageMeta }> {
+): Promise<{ data: InvitationListItem[]; meta?: PageMeta }> {
   return unwrapListResponse(await getApiV1UsersInvitations(params, signal));
 }
 

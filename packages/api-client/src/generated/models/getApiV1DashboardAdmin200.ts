@@ -6,8 +6,8 @@
  * OpenAPI spec version: 1.0
  */
 import type { GithubComSkryfonEmployee360BackendInternalDeliveryHttpResponseEnvelope } from './githubComSkryfonEmployee360BackendInternalDeliveryHttpResponseEnvelope.ts';
-import type { GithubComSkryfonEmployee360BackendInternalTypesInvitationInvitationListItemResponse } from './githubComSkryfonEmployee360BackendInternalTypesInvitationInvitationListItemResponse.ts';
+import type { GithubComSkryfonEmployee360BackendInternalTypesDashboardAdminDashboardResponse } from './githubComSkryfonEmployee360BackendInternalTypesDashboardAdminDashboardResponse.ts';
 
-export type GetApiV1UsersInvitations200 = GithubComSkryfonEmployee360BackendInternalDeliveryHttpResponseEnvelope & {
-  data?: GithubComSkryfonEmployee360BackendInternalTypesInvitationInvitationListItemResponse[];
+export type GetApiV1DashboardAdmin200 = GithubComSkryfonEmployee360BackendInternalDeliveryHttpResponseEnvelope & {
+  data?: GithubComSkryfonEmployee360BackendInternalTypesDashboardAdminDashboardResponse;
 };
