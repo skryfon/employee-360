@@ -1,6 +1,8 @@
 import { useEffect, useRef } from 'react'
-import { NavLink } from 'react-router-dom'
-import { BrandMark } from '@employee360/ui'
+import { NavLink, useNavigate } from 'react-router-dom'
+import { BrandMark, UserBadge, pickPrimaryRole } from '@employee360/ui'
+import { useAuthStore } from '../../stores/authStore'
+import { useLogoutMutation } from '../../features/auth/queries/authMutations'
 import { useUiStore } from '../../stores/uiStore'
 import { NAV_ITEMS } from './navItems'
 
@@ -12,6 +14,9 @@ export function Sidebar() {
   const toggle = useUiStore((s) => s.toggleSidebar)
   const setMobileOpen = useUiStore((s) => s.setSidebarMobileOpen)
 
+  const user = useAuthStore((s) => s.user)
+  const navigate = useNavigate()
+  const logout = useLogoutMutation()
   const closeRef = useRef<HTMLButtonElement>(null)
 
   // Mobile drawer: lock page scroll while open, close on Escape or when resized to desktop.
@@ -86,6 +91,7 @@ export function Sidebar() {
             <NavLink
               key={item.to}
               to={item.to}
+              end={item.to === '/'}
               title={item.label}
               aria-label={item.label}
               onClick={() => setMobileOpen(false)}
@@ -102,6 +108,21 @@ export function Sidebar() {
             </NavLink>
           ))}
         </nav>
+        <div className={`mt-auto flex flex-col gap-3 border-t border-slate-200 p-3 ${collapsed ? 'md:items-center md:p-2' : ''}`}>
+          <UserBadge email={user?.email} name={[user?.firstName, user?.lastName].filter(Boolean).join(' ')} role={pickPrimaryRole(user?.roles)} variant="sidebar" collapsed={collapsed} />
+          <button
+            type="button"
+            aria-label="Sign out"
+            title="Sign out"
+            onClick={() => logout.mutate(undefined, { onSettled: () => navigate('/login', { replace: true }) })}
+            className={`flex h-9 w-full items-center justify-center gap-2 rounded-sm border border-slate-300 bg-white px-3 text-sm font-medium text-slate-700 hover:bg-slate-100 ${collapsed ? 'md:w-9 md:px-0' : ''} ${FOCUS}`}
+          >
+            <svg aria-hidden="true" viewBox="0 0 24 24" width={16} height={16} fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" className="shrink-0">
+              <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4M16 17l5-5-5-5M21 12H9" />
+            </svg>
+            <span className={labelClass}>Sign out</span>
+          </button>
+        </div>
       </aside>
     </>
   )

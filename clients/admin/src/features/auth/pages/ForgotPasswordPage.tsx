@@ -27,7 +27,7 @@ export default function ForgotPasswordPage() {
       {done ? (
         <div className="flex flex-col gap-4">
           <InlineAlert tone="neutral">{FORGOT_SUCCESS_MESSAGE}</InlineAlert>
-          <Link to="/login" className="inline-flex min-h-11 w-fit items-center text-sm text-slate-900 underline hover:text-slate-700">
+          <Link to="/login" className="inline-flex min-h-11 w-fit items-center text-sm text-slate-900 hover:text-slate-700">
             Back to sign in
           </Link>
         </div>
@@ -44,7 +44,7 @@ export default function ForgotPasswordPage() {
             {...register('email')}
           />
           <SubmitButton loading={mutation.isPending}>Send reset link</SubmitButton>
-          <Link to="/login" className="inline-flex min-h-11 w-fit items-center text-sm text-slate-900 underline hover:text-slate-700">
+          <Link to="/login" className="inline-flex min-h-11 w-fit items-center text-sm text-slate-900 hover:text-slate-700">
             Back to sign in
           </Link>
         </form>

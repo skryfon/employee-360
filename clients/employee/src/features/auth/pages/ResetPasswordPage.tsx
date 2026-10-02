@@ -22,7 +22,7 @@ export default function ResetPasswordPage() {
       <AuthLayout title="Reset password">
         <div className="flex flex-col gap-4">
           <InlineAlert tone="error">This reset link is invalid. Request a new one.</InlineAlert>
-          <Link to="/forgot-password" className="inline-flex min-h-11 w-fit items-center text-sm text-slate-900 underline hover:text-slate-700">
+          <Link to="/forgot-password" className="inline-flex min-h-11 w-fit items-center text-sm text-slate-900 hover:text-slate-700">
             Request a new link
           </Link>
         </div>
@@ -66,7 +66,7 @@ export default function ResetPasswordPage() {
           {...register('confirmPassword')}
         />
         <SubmitButton loading={mutation.isPending}>Reset password</SubmitButton>
-        <Link to="/forgot-password" className="inline-flex min-h-11 w-fit items-center text-sm text-slate-900 underline hover:text-slate-700">
+        <Link to="/forgot-password" className="inline-flex min-h-11 w-fit items-center text-sm text-slate-900 hover:text-slate-700">
           Request a new link
         </Link>
       </form>

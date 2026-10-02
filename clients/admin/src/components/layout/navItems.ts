@@ -1,5 +1,5 @@
 import type { ComponentType, SVGProps } from 'react'
-import { MailIcon } from './NavIcons'
+import { DashboardIcon, MailIcon } from './NavIcons'
 
 export interface NavItem {
   to: string
@@ -9,4 +9,7 @@ export interface NavItem {
 }
 
 /** Add new admin sections here; the sidebar renders this list. */
-export const NAV_ITEMS: NavItem[] = [{ to: '/invitations', label: 'Invitations', icon: MailIcon }]
+export const NAV_ITEMS: NavItem[] = [
+  { to: '/', label: 'Dashboard', icon: DashboardIcon },
+  { to: '/invitations', label: 'Invitations', icon: MailIcon },
+]

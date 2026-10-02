@@ -1,5 +1,5 @@
 import { useHealth } from '@employee360/api-client'
-import { Card, PageHeader } from '@employee360/ui'
+import { Card, PageContainer, PageHeader } from '@employee360/ui'
 import { useAuthStore } from '../stores/authStore'
 
 export default function DashboardPage() {
@@ -9,7 +9,7 @@ export default function DashboardPage() {
   const displayName = [user?.firstName, user?.lastName].filter(Boolean).join(' ') || user?.email || 'Employee'
 
   return (
-    <div className="flex flex-col gap-6">
+    <PageContainer>
       <PageHeader title={`Welcome, ${displayName}`} description="You are logged into the Employee360 employee portal." />
 
       <Card>
@@ -37,6 +37,6 @@ export default function DashboardPage() {
           </dl>
         )}
       </Card>
-    </div>
+    </PageContainer>
   )
 }

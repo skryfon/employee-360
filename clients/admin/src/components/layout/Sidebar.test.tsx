@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it } from 'vitest'
-import { render, screen } from '@testing-library/react'
+import { render, screen, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { MemoryRouter, Route, Routes } from 'react-router-dom'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
@@ -34,13 +34,25 @@ describe('Sidebar', () => {
     const link = screen.getByRole('link', { name: 'Invitations' })
     expect(link).toHaveAttribute('href', '/invitations')
     expect(link).toHaveAttribute('aria-current', 'page')
-    expect(screen.getByText('admin@x.com')).toBeInTheDocument()
-    expect(screen.getByRole('button', { name: 'Sign out' })).toBeInTheDocument()
+    const sidebar = screen.getByRole('complementary', { name: 'Sidebar' })
+    expect(within(sidebar).getByText('admin@x.com')).toBeInTheDocument()
+    expect(within(sidebar).getAllByText('Admin').length).toBeGreaterThan(1)
+    expect(within(sidebar).getByRole('button', { name: 'Sign out' })).toBeInTheDocument()
+    expect(within(screen.getByRole('banner')).queryByRole('button', { name: 'Sign out' })).toBeNull()
+  })
+
+  it('shows the full name instead of the email when available', () => {
+    useAuthStore.setState({ user: { id: 'u1', email: 'admin@x.com', firstName: 'Ada', lastName: 'Lovelace', roles: ['admin'] } })
+    renderShell()
+    const sidebar = screen.getByRole('complementary', { name: 'Sidebar' })
+    expect(within(sidebar).getByText('Ada Lovelace')).toBeInTheDocument()
+    expect(within(sidebar).queryByText('admin@x.com')).toBeNull()
   })
 
   it('keeps Invitations highlighted on /invitations/new', () => {
     renderShell('/invitations/new')
-    expect(screen.getByRole('link', { name: 'Invitations' })).toHaveAttribute('aria-current', 'page')
+    const sidebar = screen.getByRole('complementary', { name: 'Sidebar' })
+    expect(within(sidebar).getByRole('link', { name: 'Invitations' })).toHaveAttribute('aria-current', 'page')
   })
 
   it('does not mark the link active on other routes', () => {
@@ -66,5 +78,28 @@ describe('Sidebar', () => {
     await userEvent.click(screen.getByRole('button', { name: 'Open menu' }))
     await userEvent.click(screen.getByRole('link', { name: 'Invitations' }))
     expect(useUiStore.getState().sidebarMobileOpen).toBe(false)
+  })
+})
+
+describe('AdminShell user role', () => {
+  it('shows the humanized role next to the email', () => {
+    useAuthStore.setState({ accessToken: 't', user: { id: 'u', email: 'a@x.com', roles: ['employee', 'super_admin'] } })
+    renderShell('/')
+    expect(within(screen.getByRole('complementary', { name: 'Sidebar' })).getByText('Super Admin')).toBeInTheDocument()
+  })
+})
+
+describe('AdminShell breadcrumbs', () => {
+  it('renders the trail for a nested route with the last crumb as current page', () => {
+    renderShell('/invitations/new')
+    const nav = screen.getByRole('navigation', { name: 'Breadcrumb' })
+    expect(nav.querySelector('a[href="/invitations"]')).toHaveTextContent('Invitations')
+    expect(nav.querySelector('[aria-current="page"]')).toHaveTextContent('Invite user')
+  })
+  it('shows only Dashboard on the root', () => {
+    renderShell('/')
+    const nav = screen.getByRole('navigation', { name: 'Breadcrumb' })
+    expect(nav.querySelectorAll('li')).toHaveLength(1)
+    expect(nav.querySelector('[aria-current="page"]')).toHaveTextContent('Dashboard')
   })
 })

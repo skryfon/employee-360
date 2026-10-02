@@ -4,7 +4,7 @@ import { RequireAuth } from './components/layout/RequireAuth'
 import { AdminShell } from './components/layout/AdminShell'
 import { invitationRoutes } from './features/invitations/routes'
 import { AppToaster } from './components/feedback/AppToaster'
-import DashboardPage from './pages/DashboardPage'
+import { dashboardRoutes } from './features/dashboard/routes'
 
 export default function App() {
   return (
@@ -13,7 +13,7 @@ export default function App() {
         {authRoutes}
         <Route element={<RequireAuth />}>
           <Route element={<AdminShell />}>
-            <Route path="/" element={<DashboardPage />} />
+            {dashboardRoutes}
             {invitationRoutes}
           </Route>
         </Route>

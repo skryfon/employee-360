@@ -1,24 +1,20 @@
-import { Outlet, useNavigate } from 'react-router-dom'
-import { useAuthStore } from '../../stores/authStore'
+import { Outlet } from 'react-router-dom'
 import { useUiStore } from '../../stores/uiStore'
-import { useLogoutMutation } from '../../features/auth/queries/authMutations'
-import { BrandMark, UserBadge } from '@employee360/ui'
+import { BrandMark } from '@employee360/ui'
 import { Sidebar } from './Sidebar'
+import { AdminBreadcrumbs } from './AdminBreadcrumbs'
 
 const FOCUS = 'focus:outline-none focus-visible:ring-2 focus-visible:ring-slate-900 focus-visible:ring-offset-2'
 
 export function AdminShell() {
-  const user = useAuthStore((s) => s.user)
   const setMobileOpen = useUiStore((s) => s.setSidebarMobileOpen)
   const mobileOpen = useUiStore((s) => s.sidebarMobileOpen)
-  const navigate = useNavigate()
-  const logout = useLogoutMutation()
   return (
-    <div className="flex min-h-dvh bg-slate-50">
+    <div className="flex h-dvh overflow-hidden bg-slate-50">
       <Sidebar />
-      <div className="flex min-w-0 flex-1 flex-col">
-        <header className="sticky flex top-0 z-20 h-14 items-center justify-between gap-2 border-b border-slate-200 bg-white px-3 sm:gap-4 sm:px-4">
-          <div className="flex items-center gap-2 sm:gap-4">
+      <div className="flex min-h-0 min-w-0 flex-1 flex-col">
+        <header className="z-20 flex min-h-14 shrink-0 flex-wrap items-center gap-x-2 border-b border-slate-200 bg-white px-3 sm:gap-x-4 sm:px-4 md:flex-nowrap">
+          <div className="flex h-14 items-center gap-2 sm:gap-4 md:hidden">
             <button
               type="button"
               onClick={() => setMobileOpen(true)}
@@ -34,18 +30,9 @@ export function AdminShell() {
               <BrandMark name="Employee360" subtitle="Admin" compactOnMobile />
             </span>
           </div>
-          <div className="ml-auto flex min-w-0 items-center gap-2 sm:gap-4">
-            <UserBadge email={user?.email} />
-            <button
-              type="button"
-              onClick={() => logout.mutate(undefined, { onSettled: () => navigate('/login', { replace: true }) })}
-              className={`h-11 md:h-9 rounded-sm border border-slate-300 bg-white px-4 text-sm font-medium text-slate-800 hover:bg-slate-100 ${FOCUS}`}
-            >
-              Sign out
-            </button>
-          </div>
+          <AdminBreadcrumbs />
         </header>
-        <main className="min-w-0 flex-1 px-4 py-6 sm:px-6 lg:px-8">
+        <main className="min-h-0 min-w-0 flex-1 overflow-y-auto overscroll-contain [scrollbar-gutter:stable] px-4 py-6 sm:px-6 lg:px-8">
           <Outlet />
         </main>
       </div>

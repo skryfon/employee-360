@@ -54,7 +54,7 @@ shadows-as-decoration.** Don't invent new colors; use the tokens below.
   `focus-visible:ring-red-600`. Never remove the outline without a ring.
 - **Disabled:** `disabled:bg-slate-200 disabled:text-slate-500 disabled:border-slate-200
   disabled:cursor-not-allowed` (no hover/active change).
-- **Links:** `text-slate-900 underline hover:text-slate-700`. Blue is reserved for the
+- **Links:** `text-slate-900 hover:text-slate-700` (no underline). Blue is reserved for the
   Company Offsite category — never use it for links or info alerts.
 - **Dividers inside selected areas** (`bg-slate-200`): use `border-slate-300`, since
   `border-slate-200` would vanish.
