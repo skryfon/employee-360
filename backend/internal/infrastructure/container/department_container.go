@@ -30,7 +30,7 @@ type DepartmentContainer struct {
 func NewDepartmentContainer(db *gorm.DB, recorder domainservice.AuditRecorder, transactor ucshared.Transactor) (*DepartmentContainer, error) {
 	repo := persistence.NewGormDepartmentRepository(db)
 
-	if recorder == nil {
+	if recorder == nil && db != nil {
 		recorder = infraservice.NewAuditRecorder(persistence.NewGormAuditRepository(db))
 	}
 	if transactor == nil {

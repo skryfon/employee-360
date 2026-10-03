@@ -91,3 +91,57 @@ func TestAuditRecorder(t *testing.T) {
 		assert.ErrorIs(t, err, boom)
 	})
 }
+
+func TestIsSensitive(t *testing.T) {
+	sensitive := []string{
+		"password", "Password", "newPassword", "New_Password", "passwd", "token", "accessToken",
+		"refresh_token", "refresh-token", "otp", "otp_code", "OTPCode", "client_secret", "clientSecret",
+		"authorization", "Authorization", "credential", "credentials", "user.credentials",
+		"api_key", "apiKey", "api-key", "API_KEY", "apikey", "private_key", "privateKey", "private key", "PrivateKey",
+	}
+	for _, k := range sensitive {
+		assert.True(t, isSensitive(k), k)
+	}
+	safe := []string{
+		"footprint", "hotpath", "name", "is_active", "email", "department_id", "keyword", "tokenizer",
+		"secretary", "monkey", "api", "key", "private", "author", "otpx", "",
+	}
+	for _, k := range safe {
+		assert.False(t, isSensitive(k), k)
+	}
+}
+
+func TestRedactTypes(t *testing.T) {
+	nested := map[string]string{"token": "t", "name": "n"}
+	list := []map[string]any{{"password": "p", "id": 1}, {"ok": true}}
+	meta := map[string]any{
+		"ms":    nested,
+		"lm":    list,
+		"sl":    map[string][]string{"otp": {"1"}, "tags": {"x"}},
+		"deep":  []any{map[string]string{"api_key": "k", "v": "1"}},
+		"arr":   [1]map[string]any{{"authorization": "x", "a": 1}},
+		"ptr":   &nested,
+		"bytes": []byte("raw"),
+		"nilm":  map[string]string(nil),
+	}
+	out := redact(meta)
+	raw, err := json.Marshal(out)
+	require.NoError(t, err)
+	assert.JSONEq(t, `{
+		"ms":{"name":"n"},
+		"lm":[{"id":1},{"ok":true}],
+		"sl":{"tags":["x"]},
+		"deep":[{"v":"1"}],
+		"arr":[{"a":1}],
+		"ptr":{"name":"n"},
+		"bytes":"cmF3",
+		"nilm":null
+	}`, string(raw))
+
+	// inputs untouched
+	assert.Equal(t, map[string]string{"token": "t", "name": "n"}, nested)
+	assert.Equal(t, "p", list[0]["password"])
+	assert.Contains(t, meta["sl"], "otp")
+	assert.Contains(t, meta["deep"].([]any)[0], "api_key")
+	assert.Contains(t, meta["arr"].([1]map[string]any)[0], "authorization")
+}

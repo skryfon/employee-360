@@ -4,7 +4,7 @@ import (
 	"context"
 	"errors"
 	domainaudit "github.com/skryfon/employee360/backend/internal/domain/audit"
-	infraservice "github.com/skryfon/employee360/backend/internal/infrastructure/service"
+	"github.com/skryfon/employee360/backend/internal/usecase/implementation/ucshared/ucsharedtest"
 	"testing"
 
 	"github.com/google/uuid"
@@ -23,7 +23,7 @@ func TestDeleteDepartmentUseCase(t *testing.T) {
 	bg := context.Background()
 
 	t.Run("successful deletion", func(t *testing.T) {
-		auditRepo := &mockAuditRepo{}
+		auditRepo := &ucsharedtest.RecordingAuditRecorder{}
 		repo := &mockDepartmentRepo{
 			getByIDFn: func(ctx context.Context, tID, id uuid.UUID) (*entity.Department, error) {
 				assert.Equal(t, tenantID, tID)
@@ -41,21 +41,21 @@ func TestDeleteDepartmentUseCase(t *testing.T) {
 			},
 		}
 
-		uc := NewDeleteDepartmentUseCase(repo, infraservice.NewAuditRecorder(auditRepo), nil)
+		uc := NewDeleteDepartmentUseCase(repo, auditRepo, nil)
 		err := uc.Execute(bg, tenantID, actorID, depttypes.DeleteDepartmentInput{ID: deptID})
 		require.NoError(t, err)
 		assert.Equal(t, 1, repo.forUpdateCalls, "department row must be locked before the reference check")
 
-		require.Len(t, auditRepo.logs, 1)
-		assert.Equal(t, domainaudit.ActionDepartmentDelete, auditRepo.logs[0].Action)
-		assert.Equal(t, domainaudit.EntityDepartment, auditRepo.logs[0].EntityType)
-		assert.Equal(t, deptID, auditRepo.logs[0].EntityID)
-		assert.Equal(t, &actorID, auditRepo.logs[0].ActorUserID)
-		assert.Equal(t, tenantID, auditRepo.logs[0].TenantID)
+		require.Len(t, auditRepo.Logs, 1)
+		assert.Equal(t, domainaudit.ActionDepartmentDelete, auditRepo.Logs[0].Action)
+		assert.Equal(t, domainaudit.EntityDepartment, auditRepo.Logs[0].EntityType)
+		assert.Equal(t, deptID, auditRepo.Logs[0].EntityID)
+		assert.Equal(t, &actorID, auditRepo.Logs[0].ActorUserID)
+		assert.Equal(t, tenantID, auditRepo.Logs[0].TenantID)
 	})
 
 	t.Run("nil uuid returns ErrDepartmentNotFound", func(t *testing.T) {
-		uc := NewDeleteDepartmentUseCase(&mockDepartmentRepo{}, infraservice.NewAuditRecorder(&mockAuditRepo{}), nil)
+		uc := NewDeleteDepartmentUseCase(&mockDepartmentRepo{}, &ucsharedtest.RecordingAuditRecorder{}, nil)
 		err := uc.Execute(bg, tenantID, actorID, depttypes.DeleteDepartmentInput{ID: uuid.Nil})
 		require.ErrorIs(t, err, domainerrors.ErrDepartmentNotFound)
 	})
@@ -66,7 +66,7 @@ func TestDeleteDepartmentUseCase(t *testing.T) {
 				return nil, domainerrors.ErrDepartmentNotFound
 			},
 		}
-		uc := NewDeleteDepartmentUseCase(repo, infraservice.NewAuditRecorder(&mockAuditRepo{}), nil)
+		uc := NewDeleteDepartmentUseCase(repo, &ucsharedtest.RecordingAuditRecorder{}, nil)
 		err := uc.Execute(bg, tenantID, actorID, depttypes.DeleteDepartmentInput{ID: deptID})
 		require.ErrorIs(t, err, domainerrors.ErrDepartmentNotFound)
 	})
@@ -80,13 +80,13 @@ func TestDeleteDepartmentUseCase(t *testing.T) {
 				return true, nil
 			},
 		}
-		uc := NewDeleteDepartmentUseCase(repo, infraservice.NewAuditRecorder(&mockAuditRepo{}), nil)
+		uc := NewDeleteDepartmentUseCase(repo, &ucsharedtest.RecordingAuditRecorder{}, nil)
 		err := uc.Execute(bg, tenantID, actorID, depttypes.DeleteDepartmentInput{ID: deptID})
 		require.ErrorIs(t, err, domainerrors.ErrDepartmentInUse)
 	})
 
 	t.Run("nil tenant or actor returns unauthorized", func(t *testing.T) {
-		uc := NewDeleteDepartmentUseCase(&mockDepartmentRepo{}, infraservice.NewAuditRecorder(&mockAuditRepo{}), nil)
+		uc := NewDeleteDepartmentUseCase(&mockDepartmentRepo{}, &ucsharedtest.RecordingAuditRecorder{}, nil)
 		err := uc.Execute(bg, uuid.Nil, actorID, depttypes.DeleteDepartmentInput{ID: deptID})
 		require.ErrorIs(t, err, domainerrors.ErrUnauthorized)
 
@@ -107,7 +107,7 @@ func TestDeleteDepartmentUseCase(t *testing.T) {
 				return boom
 			},
 		}
-		uc := NewDeleteDepartmentUseCase(repo, infraservice.NewAuditRecorder(&mockAuditRepo{}), nil)
+		uc := NewDeleteDepartmentUseCase(repo, &ucsharedtest.RecordingAuditRecorder{}, nil)
 		err := uc.Execute(bg, tenantID, actorID, depttypes.DeleteDepartmentInput{ID: deptID})
 		require.ErrorIs(t, err, boom)
 	})

@@ -4,7 +4,7 @@ import (
 	"context"
 	"errors"
 	domainaudit "github.com/skryfon/employee360/backend/internal/domain/audit"
-	infraservice "github.com/skryfon/employee360/backend/internal/infrastructure/service"
+	"github.com/skryfon/employee360/backend/internal/usecase/implementation/ucshared/ucsharedtest"
 	"strings"
 	"testing"
 
@@ -81,34 +81,13 @@ func (m *mockDepartmentRepo) IsReferenced(ctx context.Context, tenantID, id uuid
 	return false, nil
 }
 
-type mockAuditRepo struct {
-	createFn func(ctx context.Context, log *entity.AuditLog) error
-	logs     []*entity.AuditLog
-}
-
-func (m *mockAuditRepo) Create(ctx context.Context, log *entity.AuditLog) error {
-	m.logs = append(m.logs, log)
-	if m.createFn != nil {
-		return m.createFn(ctx, log)
-	}
-	return nil
-}
-
-func (m *mockAuditRepo) ListByTenantID(ctx context.Context, tenantID uuid.UUID, limit, offset int) ([]*entity.AuditLog, int64, error) {
-	return nil, 0, nil
-}
-
-func (m *mockAuditRepo) ListByEntity(ctx context.Context, tenantID uuid.UUID, entityType string, entityID uuid.UUID, limit, offset int) ([]*entity.AuditLog, int64, error) {
-	return nil, 0, nil
-}
-
 func TestCreateDepartmentUseCase(t *testing.T) {
 	tenantID := uuid.New()
 	actorID := uuid.New()
 	bg := context.Background()
 
 	t.Run("successful creation", func(t *testing.T) {
-		auditRepo := &mockAuditRepo{}
+		auditRepo := &ucsharedtest.RecordingAuditRecorder{}
 		repo := &mockDepartmentRepo{
 			existsByNameFn: func(ctx context.Context, tID uuid.UUID, name string) (bool, error) {
 				assert.Equal(t, tenantID, tID)
@@ -124,7 +103,7 @@ func TestCreateDepartmentUseCase(t *testing.T) {
 			},
 		}
 
-		uc := NewCreateDepartmentUseCase(repo, infraservice.NewAuditRecorder(auditRepo), nil)
+		uc := NewCreateDepartmentUseCase(repo, auditRepo, nil)
 		dept, err := uc.Execute(bg, tenantID, actorID, depttypes.CreateDepartmentInput{
 			Name:        "  Engineering  ",
 			Description: "  Dev team  ",
@@ -134,16 +113,16 @@ func TestCreateDepartmentUseCase(t *testing.T) {
 		assert.Equal(t, "Dev team", dept.Description)
 		assert.Equal(t, tenantID, dept.TenantID)
 
-		require.Len(t, auditRepo.logs, 1)
-		assert.Equal(t, domainaudit.ActionDepartmentCreate, auditRepo.logs[0].Action)
-		assert.Equal(t, domainaudit.EntityDepartment, auditRepo.logs[0].EntityType)
-		assert.Equal(t, dept.ID, auditRepo.logs[0].EntityID)
-		assert.Equal(t, &actorID, auditRepo.logs[0].ActorUserID)
-		assert.Equal(t, tenantID, auditRepo.logs[0].TenantID)
+		require.Len(t, auditRepo.Logs, 1)
+		assert.Equal(t, domainaudit.ActionDepartmentCreate, auditRepo.Logs[0].Action)
+		assert.Equal(t, domainaudit.EntityDepartment, auditRepo.Logs[0].EntityType)
+		assert.Equal(t, dept.ID, auditRepo.Logs[0].EntityID)
+		assert.Equal(t, &actorID, auditRepo.Logs[0].ActorUserID)
+		assert.Equal(t, tenantID, auditRepo.Logs[0].TenantID)
 	})
 
 	t.Run("is_active defaults to true when omitted", func(t *testing.T) {
-		auditRepo := &mockAuditRepo{}
+		auditRepo := &ucsharedtest.RecordingAuditRecorder{}
 		var persisted bool
 		repo := &mockDepartmentRepo{
 			createFn: func(ctx context.Context, tID, aID uuid.UUID, d *entity.Department) error {
@@ -151,16 +130,16 @@ func TestCreateDepartmentUseCase(t *testing.T) {
 				return nil
 			},
 		}
-		dept, err := NewCreateDepartmentUseCase(repo, infraservice.NewAuditRecorder(auditRepo), nil).Execute(bg, tenantID, actorID, depttypes.CreateDepartmentInput{Name: "Ops"})
+		dept, err := NewCreateDepartmentUseCase(repo, auditRepo, nil).Execute(bg, tenantID, actorID, depttypes.CreateDepartmentInput{Name: "Ops"})
 		require.NoError(t, err)
 		assert.True(t, dept.IsActive)
 		assert.True(t, persisted)
-		require.Len(t, auditRepo.logs, 1)
-		assert.Contains(t, auditRepo.logs[0].Metadata, `"is_active":true`)
+		require.Len(t, auditRepo.Logs, 1)
+		assert.Contains(t, auditRepo.Logs[0].Metadata, `"is_active":true`)
 	})
 
 	t.Run("explicit is_active false is honoured", func(t *testing.T) {
-		auditRepo := &mockAuditRepo{}
+		auditRepo := &ucsharedtest.RecordingAuditRecorder{}
 		f := false
 		var persisted = true
 		repo := &mockDepartmentRepo{
@@ -169,28 +148,28 @@ func TestCreateDepartmentUseCase(t *testing.T) {
 				return nil
 			},
 		}
-		dept, err := NewCreateDepartmentUseCase(repo, infraservice.NewAuditRecorder(auditRepo), nil).Execute(bg, tenantID, actorID, depttypes.CreateDepartmentInput{Name: "Ops", IsActive: &f})
+		dept, err := NewCreateDepartmentUseCase(repo, auditRepo, nil).Execute(bg, tenantID, actorID, depttypes.CreateDepartmentInput{Name: "Ops", IsActive: &f})
 		require.NoError(t, err)
 		assert.False(t, dept.IsActive)
 		assert.False(t, persisted)
-		require.Len(t, auditRepo.logs, 1)
-		assert.Contains(t, auditRepo.logs[0].Metadata, `"is_active":false`)
+		require.Len(t, auditRepo.Logs, 1)
+		assert.Contains(t, auditRepo.Logs[0].Metadata, `"is_active":false`)
 	})
 
 	t.Run("empty name returns validation error", func(t *testing.T) {
-		uc := NewCreateDepartmentUseCase(&mockDepartmentRepo{}, infraservice.NewAuditRecorder(&mockAuditRepo{}), nil)
+		uc := NewCreateDepartmentUseCase(&mockDepartmentRepo{}, &ucsharedtest.RecordingAuditRecorder{}, nil)
 		_, err := uc.Execute(bg, tenantID, actorID, depttypes.CreateDepartmentInput{Name: "   "})
 		require.ErrorIs(t, err, ErrDepartmentNameRequired)
 	})
 
 	t.Run("name exceeds 100 characters", func(t *testing.T) {
-		uc := NewCreateDepartmentUseCase(&mockDepartmentRepo{}, infraservice.NewAuditRecorder(&mockAuditRepo{}), nil)
+		uc := NewCreateDepartmentUseCase(&mockDepartmentRepo{}, &ucsharedtest.RecordingAuditRecorder{}, nil)
 		_, err := uc.Execute(bg, tenantID, actorID, depttypes.CreateDepartmentInput{Name: strings.Repeat("a", 101)})
 		require.ErrorIs(t, err, ErrDepartmentNameTooLong)
 	})
 
 	t.Run("description exceeds 500 characters", func(t *testing.T) {
-		uc := NewCreateDepartmentUseCase(&mockDepartmentRepo{}, infraservice.NewAuditRecorder(&mockAuditRepo{}), nil)
+		uc := NewCreateDepartmentUseCase(&mockDepartmentRepo{}, &ucsharedtest.RecordingAuditRecorder{}, nil)
 		_, err := uc.Execute(bg, tenantID, actorID, depttypes.CreateDepartmentInput{
 			Name:        "Valid Name",
 			Description: strings.Repeat("b", 501),
@@ -199,7 +178,7 @@ func TestCreateDepartmentUseCase(t *testing.T) {
 	})
 
 	t.Run("multibyte name and description are counted in characters", func(t *testing.T) {
-		uc := NewCreateDepartmentUseCase(&mockDepartmentRepo{}, infraservice.NewAuditRecorder(&mockAuditRepo{}), nil)
+		uc := NewCreateDepartmentUseCase(&mockDepartmentRepo{}, &ucsharedtest.RecordingAuditRecorder{}, nil)
 		dept, err := uc.Execute(bg, tenantID, actorID, depttypes.CreateDepartmentInput{
 			Name:        strings.Repeat("é", 100),
 			Description: strings.Repeat("日", 500),
@@ -222,13 +201,13 @@ func TestCreateDepartmentUseCase(t *testing.T) {
 				return true, nil
 			},
 		}
-		uc := NewCreateDepartmentUseCase(repo, infraservice.NewAuditRecorder(&mockAuditRepo{}), nil)
+		uc := NewCreateDepartmentUseCase(repo, &ucsharedtest.RecordingAuditRecorder{}, nil)
 		_, err := uc.Execute(bg, tenantID, actorID, depttypes.CreateDepartmentInput{Name: "Existing"})
 		require.ErrorIs(t, err, domainerrors.ErrDepartmentNameTaken)
 	})
 
 	t.Run("nil tenant or actor returns unauthorized", func(t *testing.T) {
-		uc := NewCreateDepartmentUseCase(&mockDepartmentRepo{}, infraservice.NewAuditRecorder(&mockAuditRepo{}), nil)
+		uc := NewCreateDepartmentUseCase(&mockDepartmentRepo{}, &ucsharedtest.RecordingAuditRecorder{}, nil)
 		_, err := uc.Execute(bg, uuid.Nil, actorID, depttypes.CreateDepartmentInput{Name: "Engineering"})
 		require.ErrorIs(t, err, domainerrors.ErrUnauthorized)
 
@@ -246,7 +225,7 @@ func TestCreateDepartmentUseCase(t *testing.T) {
 				return boom
 			},
 		}
-		uc := NewCreateDepartmentUseCase(repo, infraservice.NewAuditRecorder(&mockAuditRepo{}), nil)
+		uc := NewCreateDepartmentUseCase(repo, &ucsharedtest.RecordingAuditRecorder{}, nil)
 		_, err := uc.Execute(bg, tenantID, actorID, depttypes.CreateDepartmentInput{Name: "Engineering"})
 		require.ErrorIs(t, err, boom)
 	})

@@ -30,7 +30,7 @@ type PositionContainer struct {
 func NewPositionContainer(db *gorm.DB, recorder domainservice.AuditRecorder, transactor ucshared.Transactor) (*PositionContainer, error) {
 	repo := persistence.NewGormPositionRepository(db)
 
-	if recorder == nil {
+	if recorder == nil && db != nil {
 		recorder = infraservice.NewAuditRecorder(persistence.NewGormAuditRepository(db))
 	}
 	if transactor == nil {
