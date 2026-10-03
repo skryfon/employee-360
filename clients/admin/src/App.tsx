@@ -5,6 +5,7 @@ import { AdminShell } from './components/layout/AdminShell'
 import { invitationRoutes } from './features/invitations/routes'
 import { AppToaster } from './components/feedback/AppToaster'
 import { tenantRoutes } from './features/tenants/routes'
+import { departmentRoutes } from './features/departments/routes'
 import { dashboardRoutes } from './features/dashboard/routes'
 
 export default function App() {
@@ -16,6 +17,7 @@ export default function App() {
           <Route element={<AdminShell />}>
             {dashboardRoutes}
             {invitationRoutes}
+            {departmentRoutes}
             {tenantRoutes}
           </Route>
         </Route>

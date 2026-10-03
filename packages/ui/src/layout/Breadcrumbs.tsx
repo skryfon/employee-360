@@ -1,5 +1,5 @@
 import { Link } from 'react-router-dom'
-import type { Crumb } from './breadcrumbs'
+import type { Crumb } from './breadcrumbs-utils'
 
 const LINK =
   'rounded-sm text-slate-900 hover:text-slate-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-slate-900 focus-visible:ring-offset-2'

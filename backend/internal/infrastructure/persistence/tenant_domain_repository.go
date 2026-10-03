@@ -7,7 +7,6 @@ import (
 	"time"
 
 	"github.com/google/uuid"
-	"github.com/jackc/pgx/v5/pgconn"
 	"gorm.io/gorm"
 	"gorm.io/gorm/clause"
 
@@ -158,12 +157,6 @@ func (r *gormTenantDomainRepository) CountUsersOnDomain(c context.Context, tenan
 			tenantID, strings.ToLower(strings.TrimSpace(domain))).
 		Count(&n).Error
 	return n, err
-}
-
-// isUniqueViolation reports whether err is a PostgreSQL unique_violation (23505).
-func isUniqueViolation(err error) bool {
-	var pgErr *pgconn.PgError
-	return errors.As(err, &pgErr) && pgErr.Code == "23505"
 }
 
 // tombstonePlaceholderSuffix marks a soft-deleted domain row whose value was

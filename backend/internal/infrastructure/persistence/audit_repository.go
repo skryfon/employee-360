@@ -29,7 +29,7 @@ func (r *gormAuditRepository) Create(c context.Context, log *entity.AuditLog) er
 	return database.DBFromContext(c, r.db).Create(log).Error
 }
 
-func (r *gormAuditRepository) list(c context.Context, q *gorm.DB, limit, offset int) ([]*entity.AuditLog, int64, error) {
+func (r *gormAuditRepository) list(q *gorm.DB, limit, offset int) ([]*entity.AuditLog, int64, error) {
 	q = q.Session(&gorm.Session{})
 	var total int64
 	if err := q.Model(&entity.AuditLog{}).Count(&total).Error; err != nil {
@@ -54,9 +54,9 @@ func (r *gormAuditRepository) tenantQuery(c context.Context, tenantID uuid.UUID)
 }
 
 func (r *gormAuditRepository) ListByTenantID(c context.Context, tenantID uuid.UUID, limit, offset int) ([]*entity.AuditLog, int64, error) {
-	return r.list(c, r.tenantQuery(c, tenantID), limit, offset)
+	return r.list(r.tenantQuery(c, tenantID), limit, offset)
 }
 
 func (r *gormAuditRepository) ListByEntity(c context.Context, tenantID uuid.UUID, entityType string, entityID uuid.UUID, limit, offset int) ([]*entity.AuditLog, int64, error) {
-	return r.list(c, r.tenantQuery(c, tenantID).Where("entity_type = ? AND entity_id = ?", entityType, entityID), limit, offset)
+	return r.list(r.tenantQuery(c, tenantID).Where("entity_type = ? AND entity_id = ?", entityType, entityID), limit, offset)
 }

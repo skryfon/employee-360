@@ -28,8 +28,9 @@ type AppContainer struct {
 	// No consumers yet; it is wired for follow-up tickets.
 	Cache domainservice.Cache
 
-	Health *HealthContainer
-	Auth   *AuthContainer
+	Health     *HealthContainer
+	Auth       *AuthContainer
+	Department *DepartmentContainer
 }
 
 // NewAppContainer wires the full dependency graph for the application.
@@ -67,13 +68,19 @@ func NewAppContainer(cfg *config.Config, db *gorm.DB, cache domainservice.Cache,
 		return nil, err
 	}
 
+	departmentContainer, err := NewDepartmentContainer(db, authContainer.AuditRepo, transactor)
+	if err != nil {
+		return nil, err
+	}
+
 	return &AppContainer{
-		Config: cfg,
-		Log:    log,
-		DB:     db,
-		Cache:  cache,
-		Health: healthContainer,
-		Auth:   authContainer,
+		Config:     cfg,
+		Log:        log,
+		DB:         db,
+		Cache:      cache,
+		Health:     healthContainer,
+		Auth:       authContainer,
+		Department: departmentContainer,
 	}, nil
 }
 

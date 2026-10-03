@@ -26,6 +26,7 @@ import (
 	dashtypes "github.com/skryfon/employee360/backend/internal/types/dashboard"
 	invtypes "github.com/skryfon/employee360/backend/internal/types/invitation"
 	usecaseinterface "github.com/skryfon/employee360/backend/internal/usecase/interface"
+	deptuc "github.com/skryfon/employee360/backend/internal/usecase/interface/department"
 	"github.com/skryfon/employee360/backend/shared"
 )
 
@@ -616,6 +617,86 @@ func TestPreAuthRoutes_DoNotVerifyIdentity(t *testing.T) {
 	}
 }
 
+type fakeCreateDept struct {
+	gotTenant string
+	gotActor  string
+}
+
+func (f *fakeCreateDept) Execute(c context.Context, tenantID, actorID uuid.UUID, in deptuc.CreateDepartmentInput) (*entity.Department, error) {
+	f.gotTenant, f.gotActor = tenantID.String(), actorID.String()
+	return &entity.Department{ID: uuid.New(), TenantID: tenantID, Name: in.Name, Description: in.Description}, nil
+}
+
+type fakeGetDept struct {
+	ownerTenant uuid.UUID
+	deptID      uuid.UUID
+}
+
+func (f *fakeGetDept) Execute(c context.Context, tenantID uuid.UUID, in deptuc.GetDepartmentInput) (*entity.Department, error) {
+	if in.ID == f.deptID && tenantID != f.ownerTenant {
+		return nil, domainerrors.ErrDepartmentNotFound
+	}
+	return &entity.Department{ID: in.ID, TenantID: tenantID, Name: "Engineering"}, nil
+}
+
+type fakeListDept struct{}
+
+func (fakeListDept) Execute(c context.Context, tenantID uuid.UUID, in deptuc.ListDepartmentsInput) (*deptuc.ListDepartmentsOutput, error) {
+	return &deptuc.ListDepartmentsOutput{
+		Departments: []*entity.Department{{ID: uuid.New(), TenantID: tenantID, Name: "HR"}},
+		Total:       1,
+		Page:        1,
+		PageSize:    20,
+	}, nil
+}
+
+type fakeUpdateDept struct {
+	ownerTenant uuid.UUID
+	deptID      uuid.UUID
+}
+
+func (f *fakeUpdateDept) Execute(c context.Context, tenantID, actorID uuid.UUID, in deptuc.UpdateDepartmentInput) (*entity.Department, error) {
+	if in.ID == f.deptID && tenantID != f.ownerTenant {
+		return nil, domainerrors.ErrDepartmentNotFound
+	}
+	return &entity.Department{ID: in.ID, TenantID: tenantID, Name: in.Name, Description: in.Description}, nil
+}
+
+type fakeDeleteDept struct {
+	ownerTenant uuid.UUID
+	deptID      uuid.UUID
+}
+
+func (f *fakeDeleteDept) Execute(c context.Context, tenantID, actorID uuid.UUID, in deptuc.DeleteDepartmentInput) error {
+	if in.ID == f.deptID && tenantID != f.ownerTenant {
+		return domainerrors.ErrDepartmentNotFound
+	}
+	return nil
+}
+
+func departmentEngine(
+	t *testing.T,
+	create deptuc.CreateDepartmentUseCase,
+	get deptuc.GetDepartmentUseCase,
+	list deptuc.ListDepartmentsUseCase,
+	update deptuc.UpdateDepartmentUseCase,
+	del deptuc.DeleteDepartmentUseCase,
+) (*gin.Engine, domainservice.TokenService) {
+	t.Helper()
+	gin.SetMode(gin.TestMode)
+	jwtSvc := setupTestTokenService(t)
+	cfg := &config.Config{CORS: config.CORSConfig{AllowedOrigins: []string{"*"}}}
+	ctr := testContainer(t, cfg, nil, nil)
+	ctr.Auth = &container.AuthContainer{
+		TokenService:     jwtSvc,
+		IdentityVerifier: verifierOf(jwtSvc),
+	}
+	ctr.Department = &container.DepartmentContainer{
+		Handler: handlers.NewDepartmentHandler(create, get, list, update, del),
+	}
+	return SetupRouter(cfg, zerolog.Nop(), ctr), jwtSvc
+}
+
 type fakeAdminDash struct{ gotTenant uuid.UUID }
 
 func (f *fakeAdminDash) Execute(_ context.Context, tenantID uuid.UUID) (*dashtypes.AdminDashboardResult, error) {
@@ -649,6 +730,145 @@ func dashboardEngine(t *testing.T, admin *fakeAdminDash, super *fakeSuperDash) (
 		DashboardHandler: handlers.NewDashboardHandler(admin, super),
 	}
 	return SetupRouter(cfg, zerolog.Nop(), ctr), jwtSvc
+}
+
+func TestDepartmentRoutes_AuthAndRoles(t *testing.T) {
+	deptID := uuid.New()
+	tenant := uuid.New()
+
+	engine, jwtSvc := departmentEngine(
+		t,
+		&fakeCreateDept{},
+		&fakeGetDept{ownerTenant: tenant, deptID: deptID},
+		fakeListDept{},
+		&fakeUpdateDept{ownerTenant: tenant, deptID: deptID},
+		&fakeDeleteDept{ownerTenant: tenant, deptID: deptID},
+	)
+
+	routes := []struct {
+		method, path, body string
+		wantSuccessCode    int
+	}{
+		{http.MethodPost, "/api/v1/departments", `{"name":"Engineering","description":"Platform"}`, http.StatusCreated},
+		{http.MethodGet, "/api/v1/departments", "", http.StatusOK},
+		{http.MethodGet, "/api/v1/departments/" + deptID.String(), "", http.StatusOK},
+		{http.MethodPut, "/api/v1/departments/" + deptID.String(), `{"name":"Engineering 2","description":"Platform"}`, http.StatusOK},
+		{http.MethodDelete, "/api/v1/departments/" + deptID.String(), "", http.StatusOK},
+	}
+
+	for _, r := range routes {
+		t.Run(r.method+" "+r.path, func(t *testing.T) {
+			// Unauthenticated -> 401
+			if rec := do(engine, r.method, r.path, "", r.body); rec.Code != http.StatusUnauthorized {
+				t.Errorf("no token: want 401, got %d", rec.Code)
+			}
+			// Bad token -> 401
+			if rec := do(engine, r.method, r.path, "Bearer invalid-token", r.body); rec.Code != http.StatusUnauthorized {
+				t.Errorf("bad token: want 401, got %d", rec.Code)
+			}
+			// Employee -> 403
+			if rec := do(engine, r.method, r.path, bearer(t, jwtSvc, tenant, "employee"), r.body); rec.Code != http.StatusForbidden {
+				t.Errorf("employee: want 403, got %d", rec.Code)
+			}
+			// Admin -> 200/201
+			rec := do(engine, r.method, r.path, bearer(t, jwtSvc, tenant, "admin"), r.body)
+			if rec.Code != r.wantSuccessCode {
+				t.Errorf("admin: want %d, got %d: %s", r.wantSuccessCode, rec.Code, rec.Body.String())
+			}
+			// Super Admin -> 200/201 (scoped to tenant)
+			rec = do(engine, r.method, r.path, bearer(t, jwtSvc, tenant, "super_admin"), r.body)
+			if rec.Code != r.wantSuccessCode {
+				t.Errorf("super_admin: want %d, got %d: %s", r.wantSuccessCode, rec.Code, rec.Body.String())
+			}
+		})
+	}
+}
+
+func TestDepartmentRoutes_CrossTenant404(t *testing.T) {
+	tenantA := uuid.New()
+	tenantB := uuid.New()
+	deptID := uuid.New()
+
+	engine, jwtSvc := departmentEngine(
+		t,
+		&fakeCreateDept{},
+		&fakeGetDept{ownerTenant: tenantA, deptID: deptID},
+		fakeListDept{},
+		&fakeUpdateDept{ownerTenant: tenantA, deptID: deptID},
+		&fakeDeleteDept{ownerTenant: tenantA, deptID: deptID},
+	)
+
+	routes := []struct {
+		method, path, body string
+	}{
+		{http.MethodGet, "/api/v1/departments/" + deptID.String(), ""},
+		{http.MethodPut, "/api/v1/departments/" + deptID.String(), `{"name":"Hacked","description":"Cross-tenant"}`},
+		{http.MethodDelete, "/api/v1/departments/" + deptID.String(), ""},
+	}
+
+	for _, r := range routes {
+		t.Run("tenantB accessing tenantA department "+r.method, func(t *testing.T) {
+			rec := do(engine, r.method, r.path, bearer(t, jwtSvc, tenantB, "admin"), r.body)
+			if rec.Code != http.StatusNotFound {
+				t.Errorf("cross-tenant admin: want 404, got %d: %s", rec.Code, rec.Body.String())
+			}
+
+			// Super Admin in tenantB also receives 404 (no cross-tenant bypass)
+			rec = do(engine, r.method, r.path, bearer(t, jwtSvc, tenantB, "super_admin"), r.body)
+			if rec.Code != http.StatusNotFound {
+				t.Errorf("cross-tenant super_admin: want 404, got %d: %s", rec.Code, rec.Body.String())
+			}
+		})
+	}
+}
+
+func TestDepartmentRoutes_TenantFromTokenNotClient(t *testing.T) {
+	create := &fakeCreateDept{}
+	engine, jwtSvc := departmentEngine(
+		t,
+		create,
+		&fakeGetDept{},
+		fakeListDept{},
+		&fakeUpdateDept{},
+		&fakeDeleteDept{},
+	)
+
+	tenantA := uuid.New()
+	spoofedTenant := uuid.New()
+
+	body := `{"name":"Engineering","description":"Test","tenant_id":"` + spoofedTenant.String() + `"}`
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/departments", bytes.NewBufferString(body))
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Authorization", bearer(t, jwtSvc, tenantA, "admin"))
+	req.Header.Set("X-Tenant-ID", spoofedTenant.String())
+	rec := httptest.NewRecorder()
+	engine.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusCreated {
+		t.Fatalf("want 201, got %d: %s", rec.Code, rec.Body.String())
+	}
+	if create.gotTenant != tenantA.String() {
+		t.Errorf("usecase saw tenant %q, want token tenant %q", create.gotTenant, tenantA)
+	}
+}
+
+func TestDepartmentRoutes_AllRegistered(t *testing.T) {
+	engine, _ := departmentEngine(t, &fakeCreateDept{}, &fakeGetDept{}, fakeListDept{}, &fakeUpdateDept{}, &fakeDeleteDept{})
+	registered := map[string]bool{}
+	for _, r := range engine.Routes() {
+		registered[r.Method+" "+r.Path] = true
+	}
+	for _, want := range []string{
+		"POST /api/v1/departments",
+		"GET /api/v1/departments",
+		"GET /api/v1/departments/:id",
+		"PUT /api/v1/departments/:id",
+		"DELETE /api/v1/departments/:id",
+	} {
+		if !registered[want] {
+			t.Errorf("route not registered: %s", want)
+		}
+	}
 }
 
 func TestDashboardRoutes_RoleGuards(t *testing.T) {

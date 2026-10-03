@@ -32,4 +32,7 @@ func TestNew_ConstructsWithoutTouchingDB(t *testing.T) {
 	if c.Cache == nil {
 		t.Fatal("expected a no-op Cache when none is supplied")
 	}
+	if c.Department == nil || c.Department.Handler == nil {
+		t.Fatal("expected Department sub-container and its handler to be wired")
+	}
 }

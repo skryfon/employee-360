@@ -80,16 +80,8 @@ func (u *InviteUserUseCaseImpl) Execute(c context.Context, tenantID, inviterID u
 		return nil, domainerrors.ErrInvalidRole
 	}
 
-	// Department/position must belong to the caller's tenant (FKs only check existence).
-	if req.DepartmentID != nil {
-		ok, err := u.orgRefRepo.DepartmentExists(c, tenantID, *req.DepartmentID)
-		if err != nil {
-			return nil, err
-		}
-		if !ok {
-			return nil, domainerrors.ErrDepartmentNotFound
-		}
-	}
+	// Position must belong to the caller's tenant (FKs only check existence).
+	// The department is validated (and share-locked) inside the transaction below.
 	if req.PositionID != nil {
 		ok, err := u.orgRefRepo.PositionExists(c, tenantID, *req.PositionID)
 		if err != nil {
@@ -172,6 +164,21 @@ func (u *InviteUserUseCaseImpl) Execute(c context.Context, tenantID, inviterID u
 		}
 		if !ok {
 			return domainerrors.ErrEmailDomainNotAllowed
+		}
+		// Department must belong to the caller's tenant (FKs only check existence).
+		// The shared lock serialises with department deletion, which locks the
+		// row FOR UPDATE before checking references.
+		if req.DepartmentID != nil {
+			found, active, err := u.orgRefRepo.LockDepartmentShared(txCtx, tenantID, *req.DepartmentID)
+			if err != nil {
+				return err
+			}
+			if !found {
+				return domainerrors.ErrDepartmentNotFound
+			}
+			if !active {
+				return domainerrors.ErrDepartmentInactive
+			}
 		}
 		if err := u.userRepo.Create(txCtx, user); err != nil {
 			return err

@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 import { render, screen, within } from '@testing-library/react'
 import { MemoryRouter } from 'react-router-dom'
 import { Breadcrumbs } from './Breadcrumbs'
-import { buildBreadcrumbs, humanise } from './breadcrumbs'
+import { buildBreadcrumbs, humanise } from './breadcrumbs-utils'
 
 const config = {
   '/': 'Dashboard',

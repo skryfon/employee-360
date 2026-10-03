@@ -12,8 +12,9 @@ Cross-cutting principles live in `CLAUDE.md`.
 
 **Scope note:** migrations first, then backend API (`backend-agent`), then admin frontend
 (`frontend-agent`). The employee self-service portal (`clients/employee`) is **not** in
-this cycle. Migration number is the next free one (`000018` at time of writing — the repo
-has no `000016`); independent of Cycle 3 (Holiday Calendar).
+this cycle. Migration numbers are the next free ones (`000019` and `000020` at time of
+writing — `000018` is now `add_is_active_to_departments`; re-check with
+`ls backend/migrations` before creating them); independent of Cycle 3 (Holiday Calendar).
 
 ---
 
@@ -28,7 +29,7 @@ deactivate them. Requires a tenant-scoped schema for employee details, which `us
 
 ## Sub-Features
 
-### 1. Migration `000018_create_employee_profiles` (up + down, via `create-migration` skill)
+### 1. Migrations `000019_create_employee_profiles` and `000020_create_user_assignments` (up + down, via `create-migration` skill)
 
 **`employee_profiles`** — 1:1 with `users`
 - [ ] `tenant_id` FK (`ON DELETE CASCADE`) + index; `user_id` FK (`ON DELETE CASCADE`) + index
@@ -50,7 +51,23 @@ deactivate them. Requires a tenant-scoped schema for employee details, which `us
       non-deleted rows
 - [ ] Audit columns inline
 
-**Down:** drop `emergency_contacts`, then `employee_profiles` (indexes first).
+**`user_assignments`** — department/position history ("internal experience"), many per user.
+`users.department_id` / `users.position_id` stay as the denormalised *current* value
+(used by invitations, list filters, dashboard); this table records every stint.
+- [ ] `tenant_id` FK (`ON DELETE CASCADE`) + index; `user_id` FK (`ON DELETE CASCADE`) + index
+- [ ] `department_id` FK (`ON DELETE SET NULL`) + index; `position_id` FK
+      (`ON DELETE SET NULL`) + index (both nullable)
+- [ ] `effective_from` DATE NOT NULL; `effective_to` DATE NULL (NULL = current stint);
+      `change_reason` TEXT NULL (joined / promotion / transfer / ...)
+- [ ] `CHECK (effective_to IS NULL OR effective_to >= effective_from)`
+- [ ] Partial unique index `(tenant_id, user_id) WHERE effective_to IS NULL AND
+      deleted_at IS NULL` — at most one open stint per user
+- [ ] Audit columns inline (as above)
+- Experience is **derived**, not stored: tenure = (`exit_date` or today) − `joining_date`;
+  time per department/position = sum of stint lengths. Prior *external* jobs are out of scope.
+
+**Down:** drop `user_assignments` (000020) and, separately, `emergency_contacts` then
+`employee_profiles` (000019) (indexes first).
 
 ### 2. Backend API (`backend-agent`, `new-backend-feature` skill) — `/api/v1`, roles `admin` + `super_admin`
 
@@ -64,6 +81,16 @@ explicit `tenantID`/actor params; handlers never touch GORM.
 - [ ] `PUT/PATCH /employees/:id` — update user fields (name, department, position) and
       profile fields; upsert profile on first update; validate department/position/manager
       belong to the tenant
+- [ ] Assignment history: whenever department/position changes (employee create/update),
+      in ONE transaction close the open `user_assignments` row, insert a new open row,
+      update `users.department_id/position_id`, and write an audit entry; employee
+      creation inserts the first row (`effective_from = joining_date`). Validate
+      department (must be active; reuse `OrgReferenceRepository.LockDepartmentShared`) and
+      position belong to the tenant
+- [ ] `GET /employees/:id/assignments` — history, newest first (admin/super_admin only;
+      Auth → Tenant → `RequireRole`); cross-tenant → 404
+- [ ] Tests for assignments: close/open on change, no row when nothing changed, single open
+      row, date-order check, tenant isolation, cross-tenant 404
 - [ ] `PUT /employees/:id/emergency-contacts` (or sub-resource CRUD) — manage contacts,
       enforce single primary
 - [ ] `POST /employees/:id/deactivate` and `/activate` — flips `users.is_active`; revoke
@@ -104,7 +131,10 @@ fills in the rest themselves.
   belongs to the Salary/Taxation module with its own access rules.
 - Employee self-service beyond the onboarding profile completion in sub-feature 4
   (no leave, documents, or other self-service).
-- Bulk import/export, org chart, department/position CRUD.
+- Bulk import/export, org chart, position CRUD (department CRUD shipped in
+  EMPLOYEE36-26; positions still have no API, unique name or `is_active`).
+- Prior external work experience (previous employers); only internal department/position
+  history is tracked.
 - Hard delete / purge of users.
 
 **Done when:** migrations apply and revert cleanly; an admin can list, search, filter,
