@@ -38,6 +38,11 @@ work; it is the authoritative current scope**, not the tech-stack description be
 - **Cycle 3 (planned, blocked on Cycle 2)** — Holiday Calendar: migrations +
   seeding only. No handlers, no routes, no frontend. →
   `plan/cycles/cycle-03-holiday-calendar-migrations-seeding.md`
+- **Cycle 5 (EPIC-F, EMPLOYEE36-29)** — Redis foundation (backend only): optional
+  Redis service in compose, config, `Cache` port + go-redis adapter, tenant-scoped
+  key helper, health check, DI and CI. **No consumers** (rate limiting, OTP counters,
+  JWT revocation are follow-up tickets). Reverses Cycle 2's "no Redis" non-goal. →
+  `plan/cycles/cycle-05-redis-foundation.md`
 - Backend API and frontend for Holiday Calendar are later, not-yet-filed cycles —
   don't build them yet, even though the target architecture is described below for
   context.

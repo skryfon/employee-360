@@ -2,6 +2,7 @@ package config
 
 import (
 	"fmt"
+	"net/url"
 	"os"
 	"path/filepath"
 	"strings"
@@ -25,6 +26,8 @@ type Config struct {
 	App      AppConfig      `mapstructure:"app"`
 	CORS     CORSConfig     `mapstructure:"cors"`
 	SMTP     SMTPConfig     `mapstructure:"smtp"`
+	// Redis configures the optional cache/counter store (disabled by default).
+	Redis RedisConfig `mapstructure:"redis"`
 	// RateLimit configures the global per-client-IP request throttle.
 	RateLimit RateLimitConfig `mapstructure:"rate_limit"`
 	// Bootstrap holds inputs for cmd/bootstrap only; the API does not use it.
@@ -139,6 +142,28 @@ type SMTPConfig struct {
 	UseTLS   bool   `mapstructure:"use_tls"`
 }
 
+// RedisConfig contains Redis connection parameters. Redis is optional: when
+// Enabled is false the API uses a no-op cache and health reports "disabled".
+type RedisConfig struct {
+	Enabled bool `mapstructure:"enabled"`
+	// URL (redis:// or rediss://) overrides Host/Port/Password/DB/TLS when set.
+	URL          string        `mapstructure:"url"`
+	Host         string        `mapstructure:"host"`
+	Port         int           `mapstructure:"port"`
+	Password     string        `mapstructure:"password"`
+	DB           int           `mapstructure:"db"`
+	TLS          bool          `mapstructure:"tls"`
+	DialTimeout  time.Duration `mapstructure:"dial_timeout"`
+	ReadTimeout  time.Duration `mapstructure:"read_timeout"`
+	WriteTimeout time.Duration `mapstructure:"write_timeout"`
+	PoolSize     int           `mapstructure:"pool_size"`
+}
+
+// Addr returns the host:port address used when URL is not set.
+func (r RedisConfig) Addr() string {
+	return fmt.Sprintf("%s:%d", r.Host, r.Port)
+}
+
 // Validate verifies that the configuration meets environment and security requirements.
 func (c *Config) Validate() error {
 	env := strings.ToLower(c.App.Environment)
@@ -165,7 +190,43 @@ func (c *Config) Validate() error {
 			return fmt.Errorf("rate_limit.idle_ttl (RATE_LIMIT_IDLE_TTL) must not be negative, got %s", rl.IdleTTL)
 		}
 	}
+	if c.Redis.Enabled {
+		r := c.Redis
+		if r.URL == "" {
+			if r.Host == "" {
+				return fmt.Errorf("redis.host (REDIS_HOST) must be set when Redis is enabled")
+			}
+			if r.Port < 1 || r.Port > 65535 {
+				return fmt.Errorf("redis.port (REDIS_PORT) must be between 1 and 65535, got %d", r.Port)
+			}
+			if r.DB < 0 {
+				return fmt.Errorf("redis.db (REDIS_DB) must not be negative, got %d", r.DB)
+			}
+		}
+		if r.PoolSize < 1 {
+			return fmt.Errorf("redis.pool_size (REDIS_POOL_SIZE) must be at least 1, got %d", r.PoolSize)
+		}
+		if r.DialTimeout < 0 || r.ReadTimeout < 0 || r.WriteTimeout < 0 {
+			return fmt.Errorf("redis timeouts (REDIS_DIAL_TIMEOUT/READ_TIMEOUT/WRITE_TIMEOUT) must not be negative")
+		}
+		if (env == "production" || env == "staging") && r.Password == "" && !urlHasPassword(r.URL) {
+			return fmt.Errorf("redis.password (REDIS_PASSWORD) must be set when Redis is enabled in %q environment", c.App.Environment)
+		}
+	}
 	return nil
+}
+
+// urlHasPassword reports whether a redis:// URL carries credentials.
+func urlHasPassword(raw string) bool {
+	if raw == "" {
+		return false
+	}
+	u, err := url.Parse(raw)
+	if err != nil || u.User == nil {
+		return false
+	}
+	pw, ok := u.User.Password()
+	return ok && pw != ""
 }
 
 // Load loads configuration from defaults, .env files, config.yaml files, and environment variables.
@@ -284,6 +345,19 @@ func setDefaults(v *viper.Viper) {
 	v.SetDefault("smtp.password", "")
 	v.SetDefault("smtp.from", "no-reply@employee360.local")
 	v.SetDefault("smtp.use_tls", false)
+
+	// Redis defaults (optional; disabled unless REDIS_ENABLED=true)
+	v.SetDefault("redis.enabled", false)
+	v.SetDefault("redis.url", "")
+	v.SetDefault("redis.host", "localhost")
+	v.SetDefault("redis.port", 6379)
+	v.SetDefault("redis.password", "")
+	v.SetDefault("redis.db", 0)
+	v.SetDefault("redis.tls", false)
+	v.SetDefault("redis.dial_timeout", 5*time.Second)
+	v.SetDefault("redis.read_timeout", 3*time.Second)
+	v.SetDefault("redis.write_timeout", 3*time.Second)
+	v.SetDefault("redis.pool_size", 10)
 }
 
 func loadDotEnv(searchPaths ...string) {
@@ -387,4 +461,16 @@ func bindEnvAliases(v *viper.Viper) {
 	_ = v.BindEnv("smtp.password", "SMTP_PASSWORD", "SMTP_PASS")
 	_ = v.BindEnv("smtp.from", "SMTP_FROM", "SMTP_FROM_EMAIL", "EMAIL_FROM")
 	_ = v.BindEnv("smtp.use_tls", "SMTP_USE_TLS", "SMTP_TLS")
+
+	_ = v.BindEnv("redis.enabled", "REDIS_ENABLED")
+	_ = v.BindEnv("redis.url", "REDIS_URL")
+	_ = v.BindEnv("redis.host", "REDIS_HOST")
+	_ = v.BindEnv("redis.port", "REDIS_PORT")
+	_ = v.BindEnv("redis.password", "REDIS_PASSWORD")
+	_ = v.BindEnv("redis.db", "REDIS_DB")
+	_ = v.BindEnv("redis.tls", "REDIS_TLS")
+	_ = v.BindEnv("redis.dial_timeout", "REDIS_DIAL_TIMEOUT")
+	_ = v.BindEnv("redis.read_timeout", "REDIS_READ_TIMEOUT")
+	_ = v.BindEnv("redis.write_timeout", "REDIS_WRITE_TIMEOUT")
+	_ = v.BindEnv("redis.pool_size", "REDIS_POOL_SIZE")
 }

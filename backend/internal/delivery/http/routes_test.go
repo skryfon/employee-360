@@ -32,7 +32,7 @@ import (
 type fakeHealthUseCase struct{}
 
 func (f *fakeHealthUseCase) Execute(ctx context.Context) usecaseinterface.HealthResult {
-	return usecaseinterface.HealthResult{App: shared.AppName, Database: "ok"}
+	return usecaseinterface.HealthResult{App: shared.AppName, Database: "ok", Redis: "disabled"}
 }
 
 type fakeLoginUseCase struct{}

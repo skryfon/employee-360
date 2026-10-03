@@ -81,6 +81,34 @@ func TestUsecaseLayerImportsNoInfrastructure(t *testing.T) {
 	require.Empty(t, violations, "usecase layer must not depend on infrastructure/persistence/queue packages")
 }
 
+// TestRedisClientOnlyImportedByInfrastructure: the go-redis client may be
+// imported only under internal/infrastructure/ (the Cache port lives in the
+// domain, with no Redis types), so Redis never leaks into other layers.
+func TestRedisClientOnlyImportedByInfrastructure(t *testing.T) {
+	files := parseNonTestFiles(t, internalDir)
+	require.NotEmpty(t, files, "no files found; guard would be vacuous")
+
+	var violations []string
+	found := false
+	for name, f := range files {
+		for _, imp := range f.Imports {
+			p, err := strconv.Unquote(imp.Path.Value)
+			require.NoError(t, err)
+			if !strings.HasPrefix(p, "github.com/redis/") {
+				continue
+			}
+			if strings.HasPrefix(name, "infrastructure/") {
+				found = true
+				continue
+			}
+			violations = append(violations, name+" imports "+p)
+		}
+	}
+	sort.Strings(violations)
+	require.Empty(t, violations, "go-redis may only be imported under internal/infrastructure/")
+	require.True(t, found, "expected the Redis adapter under internal/infrastructure/ to import go-redis")
+}
+
 // TestEmailServiceSendOnlyCalledFromWorker (AC-3): the only non-test file that
 // calls Send on a domain service.EmailService is job/email_worker.go.
 //
