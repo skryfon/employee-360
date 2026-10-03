@@ -43,7 +43,7 @@ func TestInviteUser_RollbackLeavesNothing(t *testing.T) {
 		return invimpl.NewInviteUserUseCase(
 			persistence.NewGormUserRepository(db), persistence.NewGormUserRoleRepository(db),
 			persistence.NewGormRoleRepository(db), persistence.NewGormUserInvitationRepository(db),
-			persistence.NewGormOrgReferenceRepository(db), persistence.NewGormTenantDomainRepository(db), persistence.NewGormTenantRepository(db), persistence.NewGormAuditRepository(db),
+			persistence.NewGormOrgReferenceRepository(db), persistence.NewGormTenantDomainRepository(db), persistence.NewGormTenantRepository(db), infraservice.NewAuditRecorder(persistence.NewGormAuditRepository(db)),
 			infraservice.NewHashService(), pub, database.NewGormTransactor(db), invimpl.AppURLs{Default: "http://frontend.test"})
 	}
 	bg := context.Background()

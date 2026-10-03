@@ -7,9 +7,11 @@ import (
 	"unicode/utf8"
 
 	"github.com/google/uuid"
+	domainaudit "github.com/skryfon/employee360/backend/internal/domain/audit"
 	"github.com/skryfon/employee360/backend/internal/domain/entity"
 	domainerrors "github.com/skryfon/employee360/backend/internal/domain/errors"
 	"github.com/skryfon/employee360/backend/internal/domain/repository"
+	"github.com/skryfon/employee360/backend/internal/domain/service"
 	depttypes "github.com/skryfon/employee360/backend/internal/types/department"
 	"github.com/skryfon/employee360/backend/internal/usecase/implementation/ucshared"
 	deptuc "github.com/skryfon/employee360/backend/internal/usecase/interface/department"
@@ -17,14 +19,14 @@ import (
 
 type updateDepartmentUseCase struct {
 	repo       repository.DepartmentRepository
-	auditRepo  repository.AuditRepository
+	audit      service.AuditRecorder
 	transactor ucshared.Transactor
 }
 
 // NewUpdateDepartmentUseCase creates a new UpdateDepartmentUseCase.
 func NewUpdateDepartmentUseCase(
 	repo repository.DepartmentRepository,
-	auditRepo repository.AuditRepository,
+	audit service.AuditRecorder,
 	transactor ucshared.Transactor,
 ) deptuc.UpdateDepartmentUseCase {
 	if transactor == nil {
@@ -32,7 +34,7 @@ func NewUpdateDepartmentUseCase(
 	}
 	return &updateDepartmentUseCase{
 		repo:       repo,
-		auditRepo:  auditRepo,
+		audit:      audit,
 		transactor: transactor,
 	}
 }
@@ -89,7 +91,7 @@ func (uc *updateDepartmentUseCase) Execute(c context.Context, tenantID, actorID 
 			return err
 		}
 
-		if err := writeAudit(txCtx, uc.auditRepo, tenantID, actorID, existing.ID, auditActionUpdate, map[string]any{
+		if err := uc.audit.Record(txCtx, tenantID, actorID, domainaudit.ActionDepartmentUpdate, domainaudit.EntityDepartment, existing.ID, map[string]any{
 			"name":      existing.Name,
 			"is_active": existing.IsActive,
 		}); err != nil {
@@ -98,11 +100,11 @@ func (uc *updateDepartmentUseCase) Execute(c context.Context, tenantID, actorID 
 		if wasActive == existing.IsActive {
 			return nil
 		}
-		action := auditActionDeactivate
+		action := domainaudit.ActionDepartmentDeactivate
 		if existing.IsActive {
-			action = auditActionActivate
+			action = domainaudit.ActionDepartmentActivate
 		}
-		return writeAudit(txCtx, uc.auditRepo, tenantID, actorID, existing.ID, action, map[string]any{
+		return uc.audit.Record(txCtx, tenantID, actorID, action, domainaudit.EntityDepartment, existing.ID, map[string]any{
 			"name": existing.Name,
 		})
 	})

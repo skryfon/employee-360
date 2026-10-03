@@ -8,9 +8,11 @@ import (
 	"unicode/utf8"
 
 	"github.com/google/uuid"
+	domainaudit "github.com/skryfon/employee360/backend/internal/domain/audit"
 	"github.com/skryfon/employee360/backend/internal/domain/entity"
 	domainerrors "github.com/skryfon/employee360/backend/internal/domain/errors"
 	"github.com/skryfon/employee360/backend/internal/domain/repository"
+	"github.com/skryfon/employee360/backend/internal/domain/service"
 	postypes "github.com/skryfon/employee360/backend/internal/types/position"
 	"github.com/skryfon/employee360/backend/internal/usecase/implementation/ucshared"
 	posuc "github.com/skryfon/employee360/backend/internal/usecase/interface/position"
@@ -24,14 +26,14 @@ var (
 
 type createPositionUseCase struct {
 	repo       repository.PositionRepository
-	auditRepo  repository.AuditRepository
+	audit      service.AuditRecorder
 	transactor ucshared.Transactor
 }
 
 // NewCreatePositionUseCase creates a new CreatePositionUseCase.
 func NewCreatePositionUseCase(
 	repo repository.PositionRepository,
-	auditRepo repository.AuditRepository,
+	audit service.AuditRecorder,
 	transactor ucshared.Transactor,
 ) posuc.CreatePositionUseCase {
 	if transactor == nil {
@@ -39,7 +41,7 @@ func NewCreatePositionUseCase(
 	}
 	return &createPositionUseCase{
 		repo:       repo,
-		auditRepo:  auditRepo,
+		audit:      audit,
 		transactor: transactor,
 	}
 }
@@ -91,7 +93,7 @@ func (uc *createPositionUseCase) Execute(c context.Context, tenantID, actorID uu
 			return err
 		}
 
-		return writeAudit(txCtx, uc.auditRepo, tenantID, actorID, pos.ID, auditActionCreate, map[string]any{
+		return uc.audit.Record(txCtx, tenantID, actorID, domainaudit.ActionPositionCreate, domainaudit.EntityPosition, pos.ID, map[string]any{
 			"name":      pos.Name,
 			"is_active": pos.IsActive,
 		})

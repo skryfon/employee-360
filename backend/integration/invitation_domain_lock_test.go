@@ -57,10 +57,10 @@ func TestInviteVsDomainRemoval(t *testing.T) {
 		persistence.NewGormUserRepository(db), persistence.NewGormUserRoleRepository(db),
 		persistence.NewGormRoleRepository(db), persistence.NewGormUserInvitationRepository(db),
 		persistence.NewGormOrgReferenceRepository(db), persistence.NewGormTenantDomainRepository(db), tenantRepo,
-		persistence.NewGormAuditRepository(db), infraservice.NewHashService(), stubPublisher{}, transactor,
+		infraservice.NewAuditRecorder(persistence.NewGormAuditRepository(db)), infraservice.NewHashService(), stubPublisher{}, transactor,
 		invimpl.AppURLs{Default: "http://frontend.test"})
 	remove := tenantimpl.NewRemoveTenantDomainUseCase(tenantRepo, persistence.NewGormTenantDomainManager(db),
-		persistence.NewGormAuditRepository(db), transactor)
+		infraservice.NewAuditRecorder(persistence.NewGormAuditRepository(db)), transactor)
 	req := func(d string) invtypes.InviteUserRequest {
 		return invtypes.InviteUserRequest{Email: "u-" + uuid.NewString()[:6] + "@" + d, RoleID: roleID}
 	}

@@ -4,8 +4,10 @@ import (
 	"context"
 
 	"github.com/google/uuid"
+	domainaudit "github.com/skryfon/employee360/backend/internal/domain/audit"
 	domainerrors "github.com/skryfon/employee360/backend/internal/domain/errors"
 	"github.com/skryfon/employee360/backend/internal/domain/repository"
+	"github.com/skryfon/employee360/backend/internal/domain/service"
 	postypes "github.com/skryfon/employee360/backend/internal/types/position"
 	"github.com/skryfon/employee360/backend/internal/usecase/implementation/ucshared"
 	posuc "github.com/skryfon/employee360/backend/internal/usecase/interface/position"
@@ -13,14 +15,14 @@ import (
 
 type deletePositionUseCase struct {
 	repo       repository.PositionRepository
-	auditRepo  repository.AuditRepository
+	audit      service.AuditRecorder
 	transactor ucshared.Transactor
 }
 
 // NewDeletePositionUseCase creates a new DeletePositionUseCase.
 func NewDeletePositionUseCase(
 	repo repository.PositionRepository,
-	auditRepo repository.AuditRepository,
+	audit service.AuditRecorder,
 	transactor ucshared.Transactor,
 ) posuc.DeletePositionUseCase {
 	if transactor == nil {
@@ -28,7 +30,7 @@ func NewDeletePositionUseCase(
 	}
 	return &deletePositionUseCase{
 		repo:       repo,
-		auditRepo:  auditRepo,
+		audit:      audit,
 		transactor: transactor,
 	}
 }
@@ -62,7 +64,7 @@ func (uc *deletePositionUseCase) Execute(c context.Context, tenantID, actorID uu
 			return err
 		}
 
-		return writeAudit(txCtx, uc.auditRepo, tenantID, actorID, pos.ID, auditActionDelete, map[string]any{
+		return uc.audit.Record(txCtx, tenantID, actorID, domainaudit.ActionPositionDelete, domainaudit.EntityPosition, pos.ID, map[string]any{
 			"name": pos.Name,
 		})
 	})

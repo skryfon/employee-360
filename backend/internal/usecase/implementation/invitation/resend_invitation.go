@@ -5,6 +5,7 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+	domainaudit "github.com/skryfon/employee360/backend/internal/domain/audit"
 	"github.com/skryfon/employee360/backend/internal/domain/entity"
 	domainerrors "github.com/skryfon/employee360/backend/internal/domain/errors"
 	"github.com/skryfon/employee360/backend/internal/domain/event"
@@ -18,7 +19,7 @@ import (
 type ResendInvitationUseCaseImpl struct {
 	roleRepo       repository.RoleRepository
 	invitationRepo repository.UserInvitationRepository
-	auditRepo      repository.AuditRepository
+	audit          service.AuditRecorder
 	hashService    service.HashService
 	eventPublisher service.EventPublisher
 	transactor     ucshared.Transactor
@@ -32,14 +33,14 @@ var _ invusecase.ResendInvitationUseCase = (*ResendInvitationUseCaseImpl)(nil)
 func NewResendInvitationUseCase(
 	roleRepo repository.RoleRepository,
 	invitationRepo repository.UserInvitationRepository,
-	auditRepo repository.AuditRepository,
+	audit service.AuditRecorder,
 	hashService service.HashService,
 	eventPublisher service.EventPublisher,
 	transactor ucshared.Transactor,
 	appURLs AppURLs,
 ) *ResendInvitationUseCaseImpl {
 	return &ResendInvitationUseCaseImpl{
-		roleRepo: roleRepo, invitationRepo: invitationRepo, auditRepo: auditRepo, hashService: hashService,
+		roleRepo: roleRepo, invitationRepo: invitationRepo, audit: audit, hashService: hashService,
 		eventPublisher: eventPublisher, transactor: transactor,
 		expiry: defaultInvitationExpiry, appURLs: appURLs,
 	}
@@ -90,7 +91,7 @@ func (u *ResendInvitationUseCaseImpl) Execute(c context.Context, tenantID, actor
 		if err := u.invitationRepo.UpdateToken(txCtx, tenantID, inv.ID, actorID, inv.TokenHash, inv.ExpiresAt); err != nil {
 			return err
 		}
-		if err := writeAudit(txCtx, u.auditRepo, tenantID, actorID, inv.ID, auditActionResend,
+		if err := u.audit.Record(txCtx, tenantID, actorID, domainaudit.ActionInvitationResend, domainaudit.EntityInvitation, inv.ID,
 			map[string]any{"email": inv.Email}); err != nil {
 			return err
 		}

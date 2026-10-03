@@ -8,9 +8,11 @@ import (
 	"unicode/utf8"
 
 	"github.com/google/uuid"
+	domainaudit "github.com/skryfon/employee360/backend/internal/domain/audit"
 	"github.com/skryfon/employee360/backend/internal/domain/entity"
 	domainerrors "github.com/skryfon/employee360/backend/internal/domain/errors"
 	"github.com/skryfon/employee360/backend/internal/domain/repository"
+	"github.com/skryfon/employee360/backend/internal/domain/service"
 	depttypes "github.com/skryfon/employee360/backend/internal/types/department"
 	"github.com/skryfon/employee360/backend/internal/usecase/implementation/ucshared"
 	deptuc "github.com/skryfon/employee360/backend/internal/usecase/interface/department"
@@ -24,14 +26,14 @@ var (
 
 type createDepartmentUseCase struct {
 	repo       repository.DepartmentRepository
-	auditRepo  repository.AuditRepository
+	audit      service.AuditRecorder
 	transactor ucshared.Transactor
 }
 
 // NewCreateDepartmentUseCase creates a new CreateDepartmentUseCase.
 func NewCreateDepartmentUseCase(
 	repo repository.DepartmentRepository,
-	auditRepo repository.AuditRepository,
+	audit service.AuditRecorder,
 	transactor ucshared.Transactor,
 ) deptuc.CreateDepartmentUseCase {
 	if transactor == nil {
@@ -39,7 +41,7 @@ func NewCreateDepartmentUseCase(
 	}
 	return &createDepartmentUseCase{
 		repo:       repo,
-		auditRepo:  auditRepo,
+		audit:      audit,
 		transactor: transactor,
 	}
 }
@@ -91,7 +93,7 @@ func (uc *createDepartmentUseCase) Execute(c context.Context, tenantID, actorID 
 			return err
 		}
 
-		return writeAudit(txCtx, uc.auditRepo, tenantID, actorID, dept.ID, auditActionCreate, map[string]any{
+		return uc.audit.Record(txCtx, tenantID, actorID, domainaudit.ActionDepartmentCreate, domainaudit.EntityDepartment, dept.ID, map[string]any{
 			"name":      dept.Name,
 			"is_active": dept.IsActive,
 		})

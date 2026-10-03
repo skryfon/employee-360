@@ -70,12 +70,12 @@ func NewAppContainer(cfg *config.Config, db *gorm.DB, cache domainservice.Cache,
 		return nil, err
 	}
 
-	departmentContainer, err := NewDepartmentContainer(db, authContainer.AuditRepo, transactor)
+	departmentContainer, err := NewDepartmentContainer(db, authContainer.AuditRecorder, transactor)
 	if err != nil {
 		return nil, err
 	}
 
-	positionContainer, err := NewPositionContainer(db, authContainer.AuditRepo, transactor)
+	positionContainer, err := NewPositionContainer(db, authContainer.AuditRecorder, transactor)
 	if err != nil {
 		return nil, err
 	}

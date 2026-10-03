@@ -74,7 +74,7 @@ type AuthContainer struct {
 	OrgReferenceRepo   repository.OrgReferenceRepository
 	RoleRepo           repository.RoleRepository
 	UserRoleRepo       repository.UserRoleRepository
-	AuditRepo          repository.AuditRepository
+	AuditRecorder      domainservice.AuditRecorder
 	UserRepo           repository.UserRepository
 	RefreshTokenRepo   repository.RefreshTokenRepository
 	PasswordResetRepo  repository.PasswordResetRepository
@@ -118,7 +118,7 @@ func NewAuthContainer(
 	orgRefRepo := persistence.NewGormOrgReferenceRepository(db)
 	roleRepo := persistence.NewGormRoleRepository(db)
 	userRoleRepo := persistence.NewGormUserRoleRepository(db)
-	auditRepo := persistence.NewGormAuditRepository(db)
+	auditRecorder := infraservice.NewAuditRecorder(persistence.NewGormAuditRepository(db))
 	identityReader := persistence.NewGormIdentityReader(db)
 
 	if transactor == nil {
@@ -136,10 +136,10 @@ func NewAuthContainer(
 	resetPasswordUC := authusecaseimpl.NewResetPasswordUseCase(userRepo, passwordResetRepo, refreshTokenRepo, hashService, transactor)
 
 	inviteAppURLs := invusecaseimpl.AppURLs{Default: cfg.App.FrontendURL, Admin: cfg.App.AdminURL, Employee: cfg.App.EmployeeURL}
-	inviteUC := invusecaseimpl.NewInviteUserUseCase(userRepo, userRoleRepo, roleRepo, invitationRepo, orgRefRepo, tenantDomainRepo, persistence.NewGormTenantRepository(db), auditRepo, hashService, eventPublisher, transactor, inviteAppURLs)
+	inviteUC := invusecaseimpl.NewInviteUserUseCase(userRepo, userRoleRepo, roleRepo, invitationRepo, orgRefRepo, tenantDomainRepo, persistence.NewGormTenantRepository(db), auditRecorder, hashService, eventPublisher, transactor, inviteAppURLs)
 	acceptInvUC := invusecaseimpl.NewAcceptInvitationUseCase(userRepo, invitationRepo, hashService, transactor)
-	resendInvUC := invusecaseimpl.NewResendInvitationUseCase(roleRepo, invitationRepo, auditRepo, hashService, eventPublisher, transactor, inviteAppURLs)
-	revokeInvUC := invusecaseimpl.NewRevokeInvitationUseCase(invitationRepo, userRepo, userRoleRepo, auditRepo, transactor)
+	resendInvUC := invusecaseimpl.NewResendInvitationUseCase(roleRepo, invitationRepo, auditRecorder, hashService, eventPublisher, transactor, inviteAppURLs)
+	revokeInvUC := invusecaseimpl.NewRevokeInvitationUseCase(invitationRepo, userRepo, userRoleRepo, auditRecorder, transactor)
 	listInvUC := invusecaseimpl.NewListInvitationsUseCase(invitationRepo)
 	validateInvUC := invusecaseimpl.NewValidateInvitationUseCase(userRepo, invitationRepo, roleRepo, hashService)
 
@@ -166,11 +166,11 @@ func NewAuthContainer(
 	tenantDomainMgr := persistence.NewGormTenantDomainManager(db)
 	tenantHandler := handlers.NewTenantHandler(handlers.TenantUseCases{
 		Get:          tenantusecaseimpl.NewGetTenantUseCase(tenantRepo, tenantDomainMgr),
-		Rename:       tenantusecaseimpl.NewRenameTenantUseCase(tenantRepo, auditRepo, transactor),
+		Rename:       tenantusecaseimpl.NewRenameTenantUseCase(tenantRepo, auditRecorder, transactor),
 		ListDomains:  tenantusecaseimpl.NewListTenantDomainsUseCase(tenantRepo, tenantDomainMgr),
-		AddDomain:    tenantusecaseimpl.NewAddTenantDomainUseCase(tenantRepo, tenantDomainMgr, auditRepo, transactor),
-		UpdateDomain: tenantusecaseimpl.NewUpdateTenantDomainUseCase(tenantRepo, tenantDomainMgr, auditRepo, transactor),
-		DelDomain:    tenantusecaseimpl.NewRemoveTenantDomainUseCase(tenantRepo, tenantDomainMgr, auditRepo, transactor),
+		AddDomain:    tenantusecaseimpl.NewAddTenantDomainUseCase(tenantRepo, tenantDomainMgr, auditRecorder, transactor),
+		UpdateDomain: tenantusecaseimpl.NewUpdateTenantDomainUseCase(tenantRepo, tenantDomainMgr, auditRecorder, transactor),
+		DelDomain:    tenantusecaseimpl.NewRemoveTenantDomainUseCase(tenantRepo, tenantDomainMgr, auditRecorder, transactor),
 	})
 
 	return &AuthContainer{
@@ -198,7 +198,7 @@ func NewAuthContainer(
 		OrgReferenceRepo:           orgRefRepo,
 		RoleRepo:                   roleRepo,
 		UserRoleRepo:               userRoleRepo,
-		AuditRepo:                  auditRepo,
+		AuditRecorder:              auditRecorder,
 		UserRepo:                   userRepo,
 		RefreshTokenRepo:           refreshTokenRepo,
 		PasswordResetRepo:          passwordResetRepo,

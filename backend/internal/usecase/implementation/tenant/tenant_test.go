@@ -3,6 +3,8 @@ package tenant
 import (
 	"context"
 	"errors"
+	domainservice "github.com/skryfon/employee360/backend/internal/domain/service"
+	infraservice "github.com/skryfon/employee360/backend/internal/infrastructure/service"
 	"sort"
 	"strings"
 	"testing"
@@ -188,7 +190,7 @@ type env struct {
 	s     *fakeStore
 	tr    tenantRepoFake
 	dr    domainRepoFake
-	ar    auditRepoFake
+	ar    domainservice.AuditRecorder
 	tx    fakeTx
 	actor uuid.UUID
 	c     context.Context
@@ -196,7 +198,7 @@ type env struct {
 
 func newEnv() *env {
 	s := newStore()
-	return &env{s: s, tr: tenantRepoFake{s}, dr: domainRepoFake{s}, ar: auditRepoFake{s}, tx: fakeTx{s}, actor: uuid.New(), c: context.Background()}
+	return &env{s: s, tr: tenantRepoFake{s}, dr: domainRepoFake{s}, ar: infraservice.NewAuditRecorder(auditRepoFake{s}), tx: fakeTx{s}, actor: uuid.New(), c: context.Background()}
 }
 
 func (e *env) seedTenant(active bool, domains ...string) uuid.UUID {

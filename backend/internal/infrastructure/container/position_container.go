@@ -1,6 +1,8 @@
 package container
 
 import (
+	domainservice "github.com/skryfon/employee360/backend/internal/domain/service"
+	infraservice "github.com/skryfon/employee360/backend/internal/infrastructure/service"
 	"gorm.io/gorm"
 
 	"github.com/skryfon/employee360/backend/internal/delivery/http/handlers"
@@ -25,21 +27,21 @@ type PositionContainer struct {
 }
 
 // NewPositionContainer initializes and wires all position-related repository, usecases, and handler.
-func NewPositionContainer(db *gorm.DB, auditRepo repository.AuditRepository, transactor ucshared.Transactor) (*PositionContainer, error) {
+func NewPositionContainer(db *gorm.DB, recorder domainservice.AuditRecorder, transactor ucshared.Transactor) (*PositionContainer, error) {
 	repo := persistence.NewGormPositionRepository(db)
 
-	if auditRepo == nil && db != nil {
-		auditRepo = persistence.NewGormAuditRepository(db)
+	if recorder == nil {
+		recorder = infraservice.NewAuditRecorder(persistence.NewGormAuditRepository(db))
 	}
 	if transactor == nil {
 		transactor = ucshared.NewNopTransactor()
 	}
 
-	createUC := posimpl.NewCreatePositionUseCase(repo, auditRepo, transactor)
+	createUC := posimpl.NewCreatePositionUseCase(repo, recorder, transactor)
 	getUC := posimpl.NewGetPositionUseCase(repo)
 	listUC := posimpl.NewListPositionsUseCase(repo)
-	updateUC := posimpl.NewUpdatePositionUseCase(repo, auditRepo, transactor)
-	deleteUC := posimpl.NewDeletePositionUseCase(repo, auditRepo, transactor)
+	updateUC := posimpl.NewUpdatePositionUseCase(repo, recorder, transactor)
+	deleteUC := posimpl.NewDeletePositionUseCase(repo, recorder, transactor)
 
 	handler := handlers.NewPositionHandler(createUC, getUC, listUC, updateUC, deleteUC)
 

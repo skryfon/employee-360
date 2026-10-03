@@ -3,6 +3,8 @@ package department
 import (
 	"context"
 	"errors"
+	domainaudit "github.com/skryfon/employee360/backend/internal/domain/audit"
+	infraservice "github.com/skryfon/employee360/backend/internal/infrastructure/service"
 	"strings"
 	"testing"
 
@@ -122,7 +124,7 @@ func TestCreateDepartmentUseCase(t *testing.T) {
 			},
 		}
 
-		uc := NewCreateDepartmentUseCase(repo, auditRepo, nil)
+		uc := NewCreateDepartmentUseCase(repo, infraservice.NewAuditRecorder(auditRepo), nil)
 		dept, err := uc.Execute(bg, tenantID, actorID, depttypes.CreateDepartmentInput{
 			Name:        "  Engineering  ",
 			Description: "  Dev team  ",
@@ -133,8 +135,8 @@ func TestCreateDepartmentUseCase(t *testing.T) {
 		assert.Equal(t, tenantID, dept.TenantID)
 
 		require.Len(t, auditRepo.logs, 1)
-		assert.Equal(t, auditActionCreate, auditRepo.logs[0].Action)
-		assert.Equal(t, auditEntityDepartment, auditRepo.logs[0].EntityType)
+		assert.Equal(t, domainaudit.ActionDepartmentCreate, auditRepo.logs[0].Action)
+		assert.Equal(t, domainaudit.EntityDepartment, auditRepo.logs[0].EntityType)
 		assert.Equal(t, dept.ID, auditRepo.logs[0].EntityID)
 		assert.Equal(t, &actorID, auditRepo.logs[0].ActorUserID)
 		assert.Equal(t, tenantID, auditRepo.logs[0].TenantID)
@@ -149,7 +151,7 @@ func TestCreateDepartmentUseCase(t *testing.T) {
 				return nil
 			},
 		}
-		dept, err := NewCreateDepartmentUseCase(repo, auditRepo, nil).Execute(bg, tenantID, actorID, depttypes.CreateDepartmentInput{Name: "Ops"})
+		dept, err := NewCreateDepartmentUseCase(repo, infraservice.NewAuditRecorder(auditRepo), nil).Execute(bg, tenantID, actorID, depttypes.CreateDepartmentInput{Name: "Ops"})
 		require.NoError(t, err)
 		assert.True(t, dept.IsActive)
 		assert.True(t, persisted)
@@ -167,7 +169,7 @@ func TestCreateDepartmentUseCase(t *testing.T) {
 				return nil
 			},
 		}
-		dept, err := NewCreateDepartmentUseCase(repo, auditRepo, nil).Execute(bg, tenantID, actorID, depttypes.CreateDepartmentInput{Name: "Ops", IsActive: &f})
+		dept, err := NewCreateDepartmentUseCase(repo, infraservice.NewAuditRecorder(auditRepo), nil).Execute(bg, tenantID, actorID, depttypes.CreateDepartmentInput{Name: "Ops", IsActive: &f})
 		require.NoError(t, err)
 		assert.False(t, dept.IsActive)
 		assert.False(t, persisted)
@@ -176,19 +178,19 @@ func TestCreateDepartmentUseCase(t *testing.T) {
 	})
 
 	t.Run("empty name returns validation error", func(t *testing.T) {
-		uc := NewCreateDepartmentUseCase(&mockDepartmentRepo{}, nil, nil)
+		uc := NewCreateDepartmentUseCase(&mockDepartmentRepo{}, infraservice.NewAuditRecorder(&mockAuditRepo{}), nil)
 		_, err := uc.Execute(bg, tenantID, actorID, depttypes.CreateDepartmentInput{Name: "   "})
 		require.ErrorIs(t, err, ErrDepartmentNameRequired)
 	})
 
 	t.Run("name exceeds 100 characters", func(t *testing.T) {
-		uc := NewCreateDepartmentUseCase(&mockDepartmentRepo{}, nil, nil)
+		uc := NewCreateDepartmentUseCase(&mockDepartmentRepo{}, infraservice.NewAuditRecorder(&mockAuditRepo{}), nil)
 		_, err := uc.Execute(bg, tenantID, actorID, depttypes.CreateDepartmentInput{Name: strings.Repeat("a", 101)})
 		require.ErrorIs(t, err, ErrDepartmentNameTooLong)
 	})
 
 	t.Run("description exceeds 500 characters", func(t *testing.T) {
-		uc := NewCreateDepartmentUseCase(&mockDepartmentRepo{}, nil, nil)
+		uc := NewCreateDepartmentUseCase(&mockDepartmentRepo{}, infraservice.NewAuditRecorder(&mockAuditRepo{}), nil)
 		_, err := uc.Execute(bg, tenantID, actorID, depttypes.CreateDepartmentInput{
 			Name:        "Valid Name",
 			Description: strings.Repeat("b", 501),
@@ -197,7 +199,7 @@ func TestCreateDepartmentUseCase(t *testing.T) {
 	})
 
 	t.Run("multibyte name and description are counted in characters", func(t *testing.T) {
-		uc := NewCreateDepartmentUseCase(&mockDepartmentRepo{}, nil, nil)
+		uc := NewCreateDepartmentUseCase(&mockDepartmentRepo{}, infraservice.NewAuditRecorder(&mockAuditRepo{}), nil)
 		dept, err := uc.Execute(bg, tenantID, actorID, depttypes.CreateDepartmentInput{
 			Name:        strings.Repeat("é", 100),
 			Description: strings.Repeat("日", 500),
@@ -220,13 +222,13 @@ func TestCreateDepartmentUseCase(t *testing.T) {
 				return true, nil
 			},
 		}
-		uc := NewCreateDepartmentUseCase(repo, nil, nil)
+		uc := NewCreateDepartmentUseCase(repo, infraservice.NewAuditRecorder(&mockAuditRepo{}), nil)
 		_, err := uc.Execute(bg, tenantID, actorID, depttypes.CreateDepartmentInput{Name: "Existing"})
 		require.ErrorIs(t, err, domainerrors.ErrDepartmentNameTaken)
 	})
 
 	t.Run("nil tenant or actor returns unauthorized", func(t *testing.T) {
-		uc := NewCreateDepartmentUseCase(&mockDepartmentRepo{}, nil, nil)
+		uc := NewCreateDepartmentUseCase(&mockDepartmentRepo{}, infraservice.NewAuditRecorder(&mockAuditRepo{}), nil)
 		_, err := uc.Execute(bg, uuid.Nil, actorID, depttypes.CreateDepartmentInput{Name: "Engineering"})
 		require.ErrorIs(t, err, domainerrors.ErrUnauthorized)
 
@@ -244,7 +246,7 @@ func TestCreateDepartmentUseCase(t *testing.T) {
 				return boom
 			},
 		}
-		uc := NewCreateDepartmentUseCase(repo, nil, nil)
+		uc := NewCreateDepartmentUseCase(repo, infraservice.NewAuditRecorder(&mockAuditRepo{}), nil)
 		_, err := uc.Execute(bg, tenantID, actorID, depttypes.CreateDepartmentInput{Name: "Engineering"})
 		require.ErrorIs(t, err, boom)
 	})
