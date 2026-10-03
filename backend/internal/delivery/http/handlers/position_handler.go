@@ -93,7 +93,7 @@ func (h *PositionHandler) Create(c *gin.Context) {
 		return
 	}
 
-	pos, err := h.createUC.Execute(c.Request.Context(), tenantID, actorID, posuc.CreatePositionInput{
+	pos, err := h.createUC.Execute(c.Request.Context(), tenantID, actorID, postypes.CreatePositionInput{
 		Name:        req.Name,
 		Description: req.Description,
 		IsActive:    req.IsActive,
@@ -132,7 +132,7 @@ func (h *PositionHandler) GetByID(c *gin.Context) {
 		return
 	}
 
-	pos, err := h.getUC.Execute(c.Request.Context(), tenantID, posuc.GetPositionInput{ID: id})
+	pos, err := h.getUC.Execute(c.Request.Context(), tenantID, postypes.GetPositionQuery{ID: id})
 	if err != nil {
 		writePositionError(c, err)
 		return
@@ -184,7 +184,7 @@ func (h *PositionHandler) List(c *gin.Context) {
 		isActive = &v
 	}
 
-	out, err := h.listUC.Execute(c.Request.Context(), tenantID, posuc.ListPositionsInput{
+	out, err := h.listUC.Execute(c.Request.Context(), tenantID, postypes.ListPositionsQuery{
 		Page:     page,
 		PageSize: pageSize,
 		IsActive: isActive,
@@ -249,7 +249,7 @@ func (h *PositionHandler) Update(c *gin.Context) {
 		return
 	}
 
-	pos, err := h.updateUC.Execute(c.Request.Context(), tenantID, actorID, posuc.UpdatePositionInput{
+	pos, err := h.updateUC.Execute(c.Request.Context(), tenantID, actorID, postypes.UpdatePositionInput{
 		ID:          id,
 		Name:        req.Name,
 		Description: req.Description,
@@ -289,7 +289,7 @@ func (h *PositionHandler) Delete(c *gin.Context) {
 		return
 	}
 
-	if err := h.deleteUC.Execute(c.Request.Context(), tenantID, actorID, posuc.DeletePositionInput{ID: id}); err != nil {
+	if err := h.deleteUC.Execute(c.Request.Context(), tenantID, actorID, postypes.DeletePositionInput{ID: id}); err != nil {
 		writePositionError(c, err)
 		return
 	}

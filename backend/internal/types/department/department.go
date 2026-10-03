@@ -47,3 +47,43 @@ func ToDepartmentResponse(d *entity.Department) DepartmentResponse {
 		UpdatedAt:   d.UpdatedAt,
 	}
 }
+
+// CreateDepartmentInput holds validated data required to create a department.
+type CreateDepartmentInput struct {
+	Name        string
+	Description string
+	IsActive    *bool // nil defaults to true
+}
+
+// UpdateDepartmentInput specifies the department to modify and its new attributes.
+type UpdateDepartmentInput struct {
+	ID          uuid.UUID
+	Name        string
+	Description string
+	IsActive    *bool // nil keeps the current value
+}
+
+// DeleteDepartmentInput specifies the department to remove.
+type DeleteDepartmentInput struct {
+	ID uuid.UUID
+}
+
+// GetDepartmentQuery specifies the department to look up.
+type GetDepartmentQuery struct {
+	ID uuid.UUID
+}
+
+// ListDepartmentsQuery holds pagination parameters for listing departments.
+type ListDepartmentsQuery struct {
+	Page     int
+	PageSize int
+	IsActive *bool // nil returns all departments
+}
+
+// ListDepartmentsResult contains paginated departments and pagination metadata.
+type ListDepartmentsResult struct {
+	Departments []*entity.Department
+	Total       int64
+	Page        int
+	PageSize    int
+}

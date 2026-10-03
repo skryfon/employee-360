@@ -12,7 +12,7 @@ import (
 
 	"github.com/skryfon/employee360/backend/internal/domain/entity"
 	domainerrors "github.com/skryfon/employee360/backend/internal/domain/errors"
-	posuc "github.com/skryfon/employee360/backend/internal/usecase/interface/position"
+	postypes "github.com/skryfon/employee360/backend/internal/types/position"
 )
 
 func TestCreatePositionUseCase_Execute(t *testing.T) {
@@ -38,7 +38,7 @@ func TestCreatePositionUseCase_Execute(t *testing.T) {
 		auditRepo := &mockAuditRepo{}
 		uc := NewCreatePositionUseCase(repo, auditRepo, nil)
 
-		res, err := uc.Execute(ctx, tenantID, actorID, posuc.CreatePositionInput{
+		res, err := uc.Execute(ctx, tenantID, actorID, postypes.CreatePositionInput{
 			Name:        "Software Engineer",
 			Description: "Core engineering role",
 		})
@@ -67,7 +67,7 @@ func TestCreatePositionUseCase_Execute(t *testing.T) {
 		auditRepo := &mockAuditRepo{}
 		uc := NewCreatePositionUseCase(repo, auditRepo, nil)
 
-		res, err := uc.Execute(ctx, tenantID, actorID, posuc.CreatePositionInput{
+		res, err := uc.Execute(ctx, tenantID, actorID, postypes.CreatePositionInput{
 			Name:     "Product Manager",
 			IsActive: nil,
 		})
@@ -81,7 +81,7 @@ func TestCreatePositionUseCase_Execute(t *testing.T) {
 		uc := NewCreatePositionUseCase(repo, auditRepo, nil)
 
 		fl := false
-		res, err := uc.Execute(ctx, tenantID, actorID, posuc.CreatePositionInput{
+		res, err := uc.Execute(ctx, tenantID, actorID, postypes.CreatePositionInput{
 			Name:     "Legacy Role",
 			IsActive: &fl,
 		})
@@ -96,7 +96,7 @@ func TestCreatePositionUseCase_Execute(t *testing.T) {
 		auditRepo := &mockAuditRepo{}
 		uc := NewCreatePositionUseCase(repo, auditRepo, nil)
 
-		res, err := uc.Execute(ctx, tenantID, actorID, posuc.CreatePositionInput{
+		res, err := uc.Execute(ctx, tenantID, actorID, postypes.CreatePositionInput{
 			Name:        "   Designer   ",
 			Description: "   UI/UX design team   ",
 		})
@@ -108,20 +108,20 @@ func TestCreatePositionUseCase_Execute(t *testing.T) {
 	t.Run("unauthorized when tenantID or actorID is nil", func(t *testing.T) {
 		uc := NewCreatePositionUseCase(&mockPositionRepo{}, &mockAuditRepo{}, nil)
 
-		_, err := uc.Execute(ctx, uuid.Nil, actorID, posuc.CreatePositionInput{Name: "Engineering"})
+		_, err := uc.Execute(ctx, uuid.Nil, actorID, postypes.CreatePositionInput{Name: "Engineering"})
 		require.ErrorIs(t, err, domainerrors.ErrUnauthorized)
 
-		_, err = uc.Execute(ctx, tenantID, uuid.Nil, posuc.CreatePositionInput{Name: "Engineering"})
+		_, err = uc.Execute(ctx, tenantID, uuid.Nil, postypes.CreatePositionInput{Name: "Engineering"})
 		require.ErrorIs(t, err, domainerrors.ErrUnauthorized)
 	})
 
 	t.Run("validation: name required", func(t *testing.T) {
 		uc := NewCreatePositionUseCase(&mockPositionRepo{}, &mockAuditRepo{}, nil)
 
-		_, err := uc.Execute(ctx, tenantID, actorID, posuc.CreatePositionInput{Name: ""})
+		_, err := uc.Execute(ctx, tenantID, actorID, postypes.CreatePositionInput{Name: ""})
 		require.ErrorIs(t, err, ErrPositionNameRequired)
 
-		_, err = uc.Execute(ctx, tenantID, actorID, posuc.CreatePositionInput{Name: "   "})
+		_, err = uc.Execute(ctx, tenantID, actorID, postypes.CreatePositionInput{Name: "   "})
 		require.ErrorIs(t, err, ErrPositionNameRequired)
 	})
 
@@ -129,17 +129,17 @@ func TestCreatePositionUseCase_Execute(t *testing.T) {
 		uc := NewCreatePositionUseCase(&mockPositionRepo{}, &mockAuditRepo{}, nil)
 
 		longName := strings.Repeat("a", 101)
-		_, err := uc.Execute(ctx, tenantID, actorID, posuc.CreatePositionInput{Name: longName})
+		_, err := uc.Execute(ctx, tenantID, actorID, postypes.CreatePositionInput{Name: longName})
 		require.ErrorIs(t, err, ErrPositionNameTooLong)
 
 		// 100 characters is allowed
 		validName := strings.Repeat("a", 100)
-		_, err = uc.Execute(ctx, tenantID, actorID, posuc.CreatePositionInput{Name: validName})
+		_, err = uc.Execute(ctx, tenantID, actorID, postypes.CreatePositionInput{Name: validName})
 		require.NoError(t, err)
 
 		// Test multi-byte runes
 		rune101 := strings.Repeat("🔥", 101)
-		_, err = uc.Execute(ctx, tenantID, actorID, posuc.CreatePositionInput{Name: rune101})
+		_, err = uc.Execute(ctx, tenantID, actorID, postypes.CreatePositionInput{Name: rune101})
 		require.ErrorIs(t, err, ErrPositionNameTooLong)
 	})
 
@@ -147,12 +147,12 @@ func TestCreatePositionUseCase_Execute(t *testing.T) {
 		uc := NewCreatePositionUseCase(&mockPositionRepo{}, &mockAuditRepo{}, nil)
 
 		longDesc := strings.Repeat("a", 501)
-		_, err := uc.Execute(ctx, tenantID, actorID, posuc.CreatePositionInput{Name: "Valid", Description: longDesc})
+		_, err := uc.Execute(ctx, tenantID, actorID, postypes.CreatePositionInput{Name: "Valid", Description: longDesc})
 		require.ErrorIs(t, err, ErrDescriptionTooLong)
 
 		// 500 characters is allowed
 		validDesc := strings.Repeat("a", 500)
-		_, err = uc.Execute(ctx, tenantID, actorID, posuc.CreatePositionInput{Name: "Valid", Description: validDesc})
+		_, err = uc.Execute(ctx, tenantID, actorID, postypes.CreatePositionInput{Name: "Valid", Description: validDesc})
 		require.NoError(t, err)
 	})
 
@@ -164,7 +164,7 @@ func TestCreatePositionUseCase_Execute(t *testing.T) {
 		}
 		uc := NewCreatePositionUseCase(repo, &mockAuditRepo{}, nil)
 
-		_, err := uc.Execute(ctx, tenantID, actorID, posuc.CreatePositionInput{Name: "Existing"})
+		_, err := uc.Execute(ctx, tenantID, actorID, postypes.CreatePositionInput{Name: "Existing"})
 		require.ErrorIs(t, err, domainerrors.ErrPositionNameTaken)
 	})
 
@@ -177,7 +177,7 @@ func TestCreatePositionUseCase_Execute(t *testing.T) {
 		}
 		uc := NewCreatePositionUseCase(repo, &mockAuditRepo{}, nil)
 
-		_, err := uc.Execute(ctx, tenantID, actorID, posuc.CreatePositionInput{Name: "Valid"})
+		_, err := uc.Execute(ctx, tenantID, actorID, postypes.CreatePositionInput{Name: "Valid"})
 		require.ErrorIs(t, err, expectedErr)
 	})
 }

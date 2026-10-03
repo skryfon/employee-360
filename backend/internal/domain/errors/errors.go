@@ -59,4 +59,6 @@ var (
 	ErrPositionInactive        = errors.New("position is inactive")
 	ErrPositionNameTaken       = errors.New("position name already exists in this tenant")
 	ErrPositionInUse           = errors.New("position is currently assigned to users or invitations")
+	ErrAuditLogNotFound        = errors.New("audit log not found")
+	ErrInvalidAuditLogFilter   = errors.New("invalid audit log filter")
 )

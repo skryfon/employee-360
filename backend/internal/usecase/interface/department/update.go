@@ -5,17 +5,10 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/skryfon/employee360/backend/internal/domain/entity"
+	depttypes "github.com/skryfon/employee360/backend/internal/types/department"
 )
-
-// UpdateDepartmentInput specifies the department to modify and its new attributes.
-type UpdateDepartmentInput struct {
-	ID          uuid.UUID
-	Name        string
-	Description string
-	IsActive    *bool // nil keeps the current value
-}
 
 // UpdateDepartmentUseCase defines the contract for updating a department within the caller's tenant.
 type UpdateDepartmentUseCase interface {
-	Execute(ctx context.Context, tenantID, actorID uuid.UUID, input UpdateDepartmentInput) (*entity.Department, error)
+	Execute(ctx context.Context, tenantID, actorID uuid.UUID, input depttypes.UpdateDepartmentInput) (*entity.Department, error)
 }

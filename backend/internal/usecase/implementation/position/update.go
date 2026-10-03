@@ -10,6 +10,7 @@ import (
 	"github.com/skryfon/employee360/backend/internal/domain/entity"
 	domainerrors "github.com/skryfon/employee360/backend/internal/domain/errors"
 	"github.com/skryfon/employee360/backend/internal/domain/repository"
+	postypes "github.com/skryfon/employee360/backend/internal/types/position"
 	"github.com/skryfon/employee360/backend/internal/usecase/implementation/ucshared"
 	posuc "github.com/skryfon/employee360/backend/internal/usecase/interface/position"
 )
@@ -36,7 +37,7 @@ func NewUpdatePositionUseCase(
 	}
 }
 
-func (uc *updatePositionUseCase) Execute(c context.Context, tenantID, actorID uuid.UUID, input posuc.UpdatePositionInput) (*entity.Position, error) {
+func (uc *updatePositionUseCase) Execute(c context.Context, tenantID, actorID uuid.UUID, input postypes.UpdatePositionInput) (*entity.Position, error) {
 	if tenantID == uuid.Nil || actorID == uuid.Nil {
 		return nil, domainerrors.ErrUnauthorized
 	}

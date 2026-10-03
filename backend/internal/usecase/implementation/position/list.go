@@ -6,6 +6,7 @@ import (
 	"github.com/google/uuid"
 	domainerrors "github.com/skryfon/employee360/backend/internal/domain/errors"
 	"github.com/skryfon/employee360/backend/internal/domain/repository"
+	postypes "github.com/skryfon/employee360/backend/internal/types/position"
 	posuc "github.com/skryfon/employee360/backend/internal/usecase/interface/position"
 )
 
@@ -18,7 +19,7 @@ func NewListPositionsUseCase(repo repository.PositionRepository) posuc.ListPosit
 	return &listPositionsUseCase{repo: repo}
 }
 
-func (uc *listPositionsUseCase) Execute(c context.Context, tenantID uuid.UUID, input posuc.ListPositionsInput) (*posuc.ListPositionsOutput, error) {
+func (uc *listPositionsUseCase) Execute(c context.Context, tenantID uuid.UUID, input postypes.ListPositionsQuery) (*postypes.ListPositionsResult, error) {
 	if tenantID == uuid.Nil {
 		return nil, domainerrors.ErrUnauthorized
 	}
@@ -41,7 +42,7 @@ func (uc *listPositionsUseCase) Execute(c context.Context, tenantID uuid.UUID, i
 		return nil, err
 	}
 
-	return &posuc.ListPositionsOutput{
+	return &postypes.ListPositionsResult{
 		Positions: items,
 		Total:     total,
 		Page:      page,

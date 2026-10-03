@@ -7,6 +7,7 @@ import (
 	"github.com/skryfon/employee360/backend/internal/domain/entity"
 	domainerrors "github.com/skryfon/employee360/backend/internal/domain/errors"
 	"github.com/skryfon/employee360/backend/internal/domain/repository"
+	postypes "github.com/skryfon/employee360/backend/internal/types/position"
 	posuc "github.com/skryfon/employee360/backend/internal/usecase/interface/position"
 )
 
@@ -19,7 +20,7 @@ func NewGetPositionUseCase(repo repository.PositionRepository) posuc.GetPosition
 	return &getPositionUseCase{repo: repo}
 }
 
-func (uc *getPositionUseCase) Execute(c context.Context, tenantID uuid.UUID, input posuc.GetPositionInput) (*entity.Position, error) {
+func (uc *getPositionUseCase) Execute(c context.Context, tenantID uuid.UUID, input postypes.GetPositionQuery) (*entity.Position, error) {
 	if tenantID == uuid.Nil {
 		return nil, domainerrors.ErrUnauthorized
 	}

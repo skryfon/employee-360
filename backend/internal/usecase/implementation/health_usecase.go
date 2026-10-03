@@ -4,6 +4,8 @@ package usecaseimpl
 import (
 	"context"
 
+	healthtypes "github.com/skryfon/employee360/backend/internal/types/health"
+
 	"github.com/skryfon/employee360/backend/internal/domain/service"
 	usecaseinterface "github.com/skryfon/employee360/backend/internal/usecase/interface"
 	"github.com/skryfon/employee360/backend/shared"
@@ -24,7 +26,7 @@ func NewHealthUseCase(pinger service.DatabasePinger, cachePinger service.CachePi
 }
 
 // Execute checks application and database health status.
-func (u *HealthUseCaseImpl) Execute(ctx context.Context) usecaseinterface.HealthResult {
+func (u *HealthUseCaseImpl) Execute(ctx context.Context) healthtypes.HealthResult {
 	database := "ok"
 	if err := u.pinger.Ping(ctx); err != nil {
 		database = "unreachable"
@@ -39,7 +41,7 @@ func (u *HealthUseCaseImpl) Execute(ctx context.Context) usecaseinterface.Health
 		}
 	}
 
-	return usecaseinterface.HealthResult{
+	return healthtypes.HealthResult{
 		App:      shared.AppName,
 		Database: database,
 		Redis:    redis,

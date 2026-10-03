@@ -38,4 +38,7 @@ func TestNew_ConstructsWithoutTouchingDB(t *testing.T) {
 	if c.Position == nil || c.Position.Handler == nil {
 		t.Fatal("expected Position sub-container and its handler to be wired")
 	}
+	if c.AuditLog == nil || c.AuditLog.Handler == nil {
+		t.Fatal("expected AuditLog sub-container and its handler to be wired")
+	}
 }

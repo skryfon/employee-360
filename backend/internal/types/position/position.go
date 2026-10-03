@@ -47,3 +47,43 @@ func ToPositionResponse(p *entity.Position) PositionResponse {
 		UpdatedAt:   p.UpdatedAt,
 	}
 }
+
+// CreatePositionInput holds validated data required to create a position.
+type CreatePositionInput struct {
+	Name        string
+	Description string
+	IsActive    *bool // nil defaults to true
+}
+
+// UpdatePositionInput specifies the position to modify and its new attributes.
+type UpdatePositionInput struct {
+	ID          uuid.UUID
+	Name        string
+	Description string
+	IsActive    *bool // nil keeps the current value
+}
+
+// DeletePositionInput specifies the position to remove.
+type DeletePositionInput struct {
+	ID uuid.UUID
+}
+
+// GetPositionQuery specifies the position to look up.
+type GetPositionQuery struct {
+	ID uuid.UUID
+}
+
+// ListPositionsQuery holds pagination parameters for listing positions.
+type ListPositionsQuery struct {
+	Page     int
+	PageSize int
+	IsActive *bool // nil returns all positions
+}
+
+// ListPositionsResult contains paginated positions and pagination metadata.
+type ListPositionsResult struct {
+	Positions []*entity.Position
+	Total     int64
+	Page      int
+	PageSize  int
+}

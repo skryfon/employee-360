@@ -179,6 +179,20 @@ func registerRoutes(engine *gin.Engine, c *container.Container) {
 				posGroup.DELETE("/:id", ph.Delete)
 			}
 		}
+
+		// Audit log viewer: read-only, tenant-scoped (admin/super_admin only).
+		if c.AuditLog != nil && c.AuditLog.Handler != nil && c.Auth != nil && c.Auth.TokenService != nil {
+			ah := c.AuditLog.Handler
+			auditGroup := v1.Group("/audit-logs",
+				middleware.Auth(c.Auth.TokenService, c.Auth.IdentityVerifier),
+				middleware.Tenant(),
+				middleware.RequireRole(entity.RoleAdmin, entity.RoleSuperAdmin),
+			)
+			{
+				auditGroup.GET("", ah.List)
+				auditGroup.GET("/:id", ah.GetByID)
+			}
+		}
 	}
 
 	// Swagger UI: interactive API docs, always available (no environment gating).

@@ -6,6 +6,7 @@ import (
 	"github.com/google/uuid"
 	domainerrors "github.com/skryfon/employee360/backend/internal/domain/errors"
 	"github.com/skryfon/employee360/backend/internal/domain/repository"
+	depttypes "github.com/skryfon/employee360/backend/internal/types/department"
 	deptuc "github.com/skryfon/employee360/backend/internal/usecase/interface/department"
 )
 
@@ -18,7 +19,7 @@ func NewListDepartmentsUseCase(repo repository.DepartmentRepository) deptuc.List
 	return &listDepartmentsUseCase{repo: repo}
 }
 
-func (uc *listDepartmentsUseCase) Execute(c context.Context, tenantID uuid.UUID, input deptuc.ListDepartmentsInput) (*deptuc.ListDepartmentsOutput, error) {
+func (uc *listDepartmentsUseCase) Execute(c context.Context, tenantID uuid.UUID, input depttypes.ListDepartmentsQuery) (*depttypes.ListDepartmentsResult, error) {
 	if tenantID == uuid.Nil {
 		return nil, domainerrors.ErrUnauthorized
 	}
@@ -41,7 +42,7 @@ func (uc *listDepartmentsUseCase) Execute(c context.Context, tenantID uuid.UUID,
 		return nil, err
 	}
 
-	return &deptuc.ListDepartmentsOutput{
+	return &depttypes.ListDepartmentsResult{
 		Departments: items,
 		Total:       total,
 		Page:        page,

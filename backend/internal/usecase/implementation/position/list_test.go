@@ -11,7 +11,7 @@ import (
 
 	"github.com/skryfon/employee360/backend/internal/domain/entity"
 	domainerrors "github.com/skryfon/employee360/backend/internal/domain/errors"
-	posuc "github.com/skryfon/employee360/backend/internal/usecase/interface/position"
+	postypes "github.com/skryfon/employee360/backend/internal/types/position"
 )
 
 func TestListPositionsUseCase_Execute(t *testing.T) {
@@ -34,7 +34,7 @@ func TestListPositionsUseCase_Execute(t *testing.T) {
 		}
 		uc := NewListPositionsUseCase(repo)
 
-		out, err := uc.Execute(ctx, tenantID, posuc.ListPositionsInput{
+		out, err := uc.Execute(ctx, tenantID, postypes.ListPositionsQuery{
 			Page:     3,
 			PageSize: 10,
 		})
@@ -55,7 +55,7 @@ func TestListPositionsUseCase_Execute(t *testing.T) {
 		}
 		uc := NewListPositionsUseCase(repo)
 
-		out, err := uc.Execute(ctx, tenantID, posuc.ListPositionsInput{
+		out, err := uc.Execute(ctx, tenantID, postypes.ListPositionsQuery{
 			Page:     0,
 			PageSize: 0,
 		})
@@ -64,7 +64,7 @@ func TestListPositionsUseCase_Execute(t *testing.T) {
 		assert.Equal(t, 20, out.PageSize)
 
 		// Page size > 100 clamped to 20
-		out, err = uc.Execute(ctx, tenantID, posuc.ListPositionsInput{
+		out, err = uc.Execute(ctx, tenantID, postypes.ListPositionsQuery{
 			Page:     -5,
 			PageSize: 500,
 		})
@@ -83,7 +83,7 @@ func TestListPositionsUseCase_Execute(t *testing.T) {
 		}
 		uc := NewListPositionsUseCase(repo)
 
-		_, err := uc.Execute(ctx, tenantID, posuc.ListPositionsInput{
+		_, err := uc.Execute(ctx, tenantID, postypes.ListPositionsQuery{
 			IsActive: &tr,
 		})
 		require.NoError(t, err)
@@ -92,7 +92,7 @@ func TestListPositionsUseCase_Execute(t *testing.T) {
 	t.Run("unauthorized on nil tenantID", func(t *testing.T) {
 		uc := NewListPositionsUseCase(&mockPositionRepo{})
 
-		_, err := uc.Execute(ctx, uuid.Nil, posuc.ListPositionsInput{})
+		_, err := uc.Execute(ctx, uuid.Nil, postypes.ListPositionsQuery{})
 		require.ErrorIs(t, err, domainerrors.ErrUnauthorized)
 	})
 
@@ -105,7 +105,7 @@ func TestListPositionsUseCase_Execute(t *testing.T) {
 		}
 		uc := NewListPositionsUseCase(repo)
 
-		_, err := uc.Execute(ctx, tenantID, posuc.ListPositionsInput{})
+		_, err := uc.Execute(ctx, tenantID, postypes.ListPositionsQuery{})
 		require.ErrorIs(t, err, expectedErr)
 	})
 }

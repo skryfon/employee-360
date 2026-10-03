@@ -11,7 +11,7 @@ import (
 
 	"github.com/skryfon/employee360/backend/internal/domain/entity"
 	domainerrors "github.com/skryfon/employee360/backend/internal/domain/errors"
-	deptuc "github.com/skryfon/employee360/backend/internal/usecase/interface/department"
+	depttypes "github.com/skryfon/employee360/backend/internal/types/department"
 )
 
 func TestListDepartmentsUseCase(t *testing.T) {
@@ -31,7 +31,7 @@ func TestListDepartmentsUseCase(t *testing.T) {
 		}
 
 		uc := NewListDepartmentsUseCase(repo)
-		out, err := uc.Execute(bg, tenantID, deptuc.ListDepartmentsInput{})
+		out, err := uc.Execute(bg, tenantID, depttypes.ListDepartmentsQuery{})
 		require.NoError(t, err)
 		assert.Equal(t, int64(1), out.Total)
 		assert.Equal(t, 1, out.Page)
@@ -48,7 +48,7 @@ func TestListDepartmentsUseCase(t *testing.T) {
 				return []*entity.Department{}, 0, nil
 			},
 		}
-		_, err := NewListDepartmentsUseCase(repo).Execute(bg, tenantID, deptuc.ListDepartmentsInput{IsActive: &f})
+		_, err := NewListDepartmentsUseCase(repo).Execute(bg, tenantID, depttypes.ListDepartmentsQuery{IsActive: &f})
 		require.NoError(t, err)
 	})
 
@@ -63,7 +63,7 @@ func TestListDepartmentsUseCase(t *testing.T) {
 		}
 
 		uc := NewListDepartmentsUseCase(repo)
-		out, err := uc.Execute(bg, tenantID, deptuc.ListDepartmentsInput{
+		out, err := uc.Execute(bg, tenantID, depttypes.ListDepartmentsQuery{
 			Page:     3,
 			PageSize: 10,
 		})
@@ -75,7 +75,7 @@ func TestListDepartmentsUseCase(t *testing.T) {
 
 	t.Run("nil tenant returns unauthorized", func(t *testing.T) {
 		uc := NewListDepartmentsUseCase(&mockDepartmentRepo{})
-		_, err := uc.Execute(bg, uuid.Nil, deptuc.ListDepartmentsInput{})
+		_, err := uc.Execute(bg, uuid.Nil, depttypes.ListDepartmentsQuery{})
 		require.ErrorIs(t, err, domainerrors.ErrUnauthorized)
 	})
 
@@ -88,7 +88,7 @@ func TestListDepartmentsUseCase(t *testing.T) {
 		}
 
 		uc := NewListDepartmentsUseCase(repo)
-		_, err := uc.Execute(bg, tenantID, deptuc.ListDepartmentsInput{})
+		_, err := uc.Execute(bg, tenantID, depttypes.ListDepartmentsQuery{})
 		require.ErrorIs(t, err, boom)
 	})
 }

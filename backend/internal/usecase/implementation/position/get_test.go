@@ -11,7 +11,7 @@ import (
 
 	"github.com/skryfon/employee360/backend/internal/domain/entity"
 	domainerrors "github.com/skryfon/employee360/backend/internal/domain/errors"
-	posuc "github.com/skryfon/employee360/backend/internal/usecase/interface/position"
+	postypes "github.com/skryfon/employee360/backend/internal/types/position"
 )
 
 func TestGetPositionUseCase_Execute(t *testing.T) {
@@ -36,7 +36,7 @@ func TestGetPositionUseCase_Execute(t *testing.T) {
 		}
 		uc := NewGetPositionUseCase(repo)
 
-		res, err := uc.Execute(ctx, tenantID, posuc.GetPositionInput{ID: posID})
+		res, err := uc.Execute(ctx, tenantID, postypes.GetPositionQuery{ID: posID})
 		require.NoError(t, err)
 		assert.Equal(t, expected, res)
 	})
@@ -44,14 +44,14 @@ func TestGetPositionUseCase_Execute(t *testing.T) {
 	t.Run("nil tenantID returns ErrUnauthorized", func(t *testing.T) {
 		uc := NewGetPositionUseCase(&mockPositionRepo{})
 
-		_, err := uc.Execute(ctx, uuid.Nil, posuc.GetPositionInput{ID: posID})
+		_, err := uc.Execute(ctx, uuid.Nil, postypes.GetPositionQuery{ID: posID})
 		require.ErrorIs(t, err, domainerrors.ErrUnauthorized)
 	})
 
 	t.Run("nil uuid returns ErrPositionNotFound", func(t *testing.T) {
 		uc := NewGetPositionUseCase(&mockPositionRepo{})
 
-		_, err := uc.Execute(ctx, tenantID, posuc.GetPositionInput{ID: uuid.Nil})
+		_, err := uc.Execute(ctx, tenantID, postypes.GetPositionQuery{ID: uuid.Nil})
 		require.ErrorIs(t, err, domainerrors.ErrPositionNotFound)
 	})
 
@@ -63,7 +63,7 @@ func TestGetPositionUseCase_Execute(t *testing.T) {
 		}
 		uc := NewGetPositionUseCase(repo)
 
-		_, err := uc.Execute(ctx, tenantID, posuc.GetPositionInput{ID: posID})
+		_, err := uc.Execute(ctx, tenantID, postypes.GetPositionQuery{ID: posID})
 		require.ErrorIs(t, err, domainerrors.ErrPositionNotFound)
 	})
 
@@ -76,7 +76,7 @@ func TestGetPositionUseCase_Execute(t *testing.T) {
 		}
 		uc := NewGetPositionUseCase(repo)
 
-		_, err := uc.Execute(ctx, tenantID, posuc.GetPositionInput{ID: posID})
+		_, err := uc.Execute(ctx, tenantID, postypes.GetPositionQuery{ID: posID})
 		require.ErrorIs(t, err, expectedErr)
 	})
 }

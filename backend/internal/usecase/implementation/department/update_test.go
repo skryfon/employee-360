@@ -12,7 +12,7 @@ import (
 
 	"github.com/skryfon/employee360/backend/internal/domain/entity"
 	domainerrors "github.com/skryfon/employee360/backend/internal/domain/errors"
-	deptuc "github.com/skryfon/employee360/backend/internal/usecase/interface/department"
+	depttypes "github.com/skryfon/employee360/backend/internal/types/department"
 )
 
 func TestUpdateDepartmentUseCase(t *testing.T) {
@@ -56,7 +56,7 @@ func TestUpdateDepartmentUseCase(t *testing.T) {
 		}
 
 		uc := NewUpdateDepartmentUseCase(repo, auditRepo, nil)
-		updated, err := uc.Execute(bg, tenantID, actorID, deptuc.UpdateDepartmentInput{
+		updated, err := uc.Execute(bg, tenantID, actorID, depttypes.UpdateDepartmentInput{
 			ID:          deptID,
 			Name:        "  New Name  ",
 			Description: "  New Desc  ",
@@ -96,7 +96,7 @@ func TestUpdateDepartmentUseCase(t *testing.T) {
 		}
 
 		uc := NewUpdateDepartmentUseCase(repo, nil, nil)
-		updated, err := uc.Execute(bg, tenantID, actorID, deptuc.UpdateDepartmentInput{
+		updated, err := uc.Execute(bg, tenantID, actorID, depttypes.UpdateDepartmentInput{
 			ID:          deptID,
 			Name:        "old name",
 			Description: "Updated desc only",
@@ -132,7 +132,7 @@ func TestUpdateDepartmentUseCase(t *testing.T) {
 						return nil
 					},
 				}
-				out, err := NewUpdateDepartmentUseCase(repo, auditRepo, nil).Execute(bg, tenantID, actorID, deptuc.UpdateDepartmentInput{ID: deptID, Name: "Same", IsActive: tc.input})
+				out, err := NewUpdateDepartmentUseCase(repo, auditRepo, nil).Execute(bg, tenantID, actorID, depttypes.UpdateDepartmentInput{ID: deptID, Name: "Same", IsActive: tc.input})
 				require.NoError(t, err)
 				assert.Equal(t, tc.wantActive, out.IsActive)
 				assert.Equal(t, tc.wantActive, persisted)
@@ -159,7 +159,7 @@ func TestUpdateDepartmentUseCase(t *testing.T) {
 		}
 
 		uc := NewUpdateDepartmentUseCase(repo, nil, nil)
-		_, err := uc.Execute(bg, tenantID, actorID, deptuc.UpdateDepartmentInput{
+		_, err := uc.Execute(bg, tenantID, actorID, depttypes.UpdateDepartmentInput{
 			ID:   deptID,
 			Name: "Taken Name",
 		})
@@ -168,7 +168,7 @@ func TestUpdateDepartmentUseCase(t *testing.T) {
 
 	t.Run("nil uuid returns ErrDepartmentNotFound", func(t *testing.T) {
 		uc := NewUpdateDepartmentUseCase(&mockDepartmentRepo{}, nil, nil)
-		_, err := uc.Execute(bg, tenantID, actorID, deptuc.UpdateDepartmentInput{
+		_, err := uc.Execute(bg, tenantID, actorID, depttypes.UpdateDepartmentInput{
 			ID:   uuid.Nil,
 			Name: "Some Name",
 		})
@@ -182,7 +182,7 @@ func TestUpdateDepartmentUseCase(t *testing.T) {
 			},
 		}
 		uc := NewUpdateDepartmentUseCase(repo, nil, nil)
-		_, err := uc.Execute(bg, tenantID, actorID, deptuc.UpdateDepartmentInput{
+		_, err := uc.Execute(bg, tenantID, actorID, depttypes.UpdateDepartmentInput{
 			ID:   deptID,
 			Name: "Some Name",
 		})
@@ -191,7 +191,7 @@ func TestUpdateDepartmentUseCase(t *testing.T) {
 
 	t.Run("empty name returns validation error", func(t *testing.T) {
 		uc := NewUpdateDepartmentUseCase(&mockDepartmentRepo{}, nil, nil)
-		_, err := uc.Execute(bg, tenantID, actorID, deptuc.UpdateDepartmentInput{
+		_, err := uc.Execute(bg, tenantID, actorID, depttypes.UpdateDepartmentInput{
 			ID:   deptID,
 			Name: "  ",
 		})
@@ -200,7 +200,7 @@ func TestUpdateDepartmentUseCase(t *testing.T) {
 
 	t.Run("name too long returns validation error", func(t *testing.T) {
 		uc := NewUpdateDepartmentUseCase(&mockDepartmentRepo{}, nil, nil)
-		_, err := uc.Execute(bg, tenantID, actorID, deptuc.UpdateDepartmentInput{
+		_, err := uc.Execute(bg, tenantID, actorID, depttypes.UpdateDepartmentInput{
 			ID:   deptID,
 			Name: strings.Repeat("x", 101),
 		})
@@ -214,7 +214,7 @@ func TestUpdateDepartmentUseCase(t *testing.T) {
 			},
 		}
 		uc := NewUpdateDepartmentUseCase(repo, nil, nil)
-		dept, err := uc.Execute(bg, tenantID, actorID, deptuc.UpdateDepartmentInput{
+		dept, err := uc.Execute(bg, tenantID, actorID, depttypes.UpdateDepartmentInput{
 			ID:          deptID,
 			Name:        strings.Repeat("é", 100),
 			Description: strings.Repeat("日", 500),
@@ -222,19 +222,19 @@ func TestUpdateDepartmentUseCase(t *testing.T) {
 		require.NoError(t, err)
 		assert.Equal(t, strings.Repeat("é", 100), dept.Name)
 
-		_, err = uc.Execute(bg, tenantID, actorID, deptuc.UpdateDepartmentInput{ID: deptID, Name: strings.Repeat("é", 101)})
+		_, err = uc.Execute(bg, tenantID, actorID, depttypes.UpdateDepartmentInput{ID: deptID, Name: strings.Repeat("é", 101)})
 		require.ErrorIs(t, err, ErrDepartmentNameTooLong)
 	})
 
 	t.Run("nil tenant or actor returns unauthorized", func(t *testing.T) {
 		uc := NewUpdateDepartmentUseCase(&mockDepartmentRepo{}, nil, nil)
-		_, err := uc.Execute(bg, uuid.Nil, actorID, deptuc.UpdateDepartmentInput{
+		_, err := uc.Execute(bg, uuid.Nil, actorID, depttypes.UpdateDepartmentInput{
 			ID:   deptID,
 			Name: "Valid Name",
 		})
 		require.ErrorIs(t, err, domainerrors.ErrUnauthorized)
 
-		_, err = uc.Execute(bg, tenantID, uuid.Nil, deptuc.UpdateDepartmentInput{
+		_, err = uc.Execute(bg, tenantID, uuid.Nil, depttypes.UpdateDepartmentInput{
 			ID:   deptID,
 			Name: "Valid Name",
 		})

@@ -6,6 +6,9 @@
  * OpenAPI spec version: 1.0
  */
 
+export * from './getApiV1AuditLogs200.ts';
+export * from './getApiV1AuditLogsId200.ts';
+export * from './getApiV1AuditLogsParams.ts';
 export * from './getApiV1DashboardAdmin200.ts';
 export * from './getApiV1DashboardSuperAdmin200.ts';
 export * from './getApiV1Departments200.ts';
@@ -31,6 +34,9 @@ export * from './githubComSkryfonEmployee360BackendInternalDeliveryHttpResponseM
 export * from './githubComSkryfonEmployee360BackendInternalDomainEntityInvitationStatus.ts';
 export * from './githubComSkryfonEmployee360BackendInternalDomainEntityRole.ts';
 export * from './githubComSkryfonEmployee360BackendInternalDomainEntityUser.ts';
+export * from './githubComSkryfonEmployee360BackendInternalTypesAuditlogAuditActorResponse.ts';
+export * from './githubComSkryfonEmployee360BackendInternalTypesAuditlogAuditLogResponse.ts';
+export * from './githubComSkryfonEmployee360BackendInternalTypesAuditlogAuditLogResponseMetadata.ts';
 export * from './githubComSkryfonEmployee360BackendInternalTypesAuthForgotPasswordRequest.ts';
 export * from './githubComSkryfonEmployee360BackendInternalTypesAuthLoginRequest.ts';
 export * from './githubComSkryfonEmployee360BackendInternalTypesAuthLoginResponse.ts';

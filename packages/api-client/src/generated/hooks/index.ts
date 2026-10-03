@@ -1,3 +1,4 @@
+export * from './audit-logs/audit-logs.ts';
 export * from './auth/auth.ts';
 export * from './dashboard/dashboard.ts';
 export * from './departments/departments.ts';

@@ -7,6 +7,7 @@ import (
 	"github.com/skryfon/employee360/backend/internal/domain/entity"
 	domainerrors "github.com/skryfon/employee360/backend/internal/domain/errors"
 	"github.com/skryfon/employee360/backend/internal/domain/repository"
+	depttypes "github.com/skryfon/employee360/backend/internal/types/department"
 	deptuc "github.com/skryfon/employee360/backend/internal/usecase/interface/department"
 )
 
@@ -19,7 +20,7 @@ func NewGetDepartmentUseCase(repo repository.DepartmentRepository) deptuc.GetDep
 	return &getDepartmentUseCase{repo: repo}
 }
 
-func (uc *getDepartmentUseCase) Execute(c context.Context, tenantID uuid.UUID, input deptuc.GetDepartmentInput) (*entity.Department, error) {
+func (uc *getDepartmentUseCase) Execute(c context.Context, tenantID uuid.UUID, input depttypes.GetDepartmentQuery) (*entity.Department, error) {
 	if tenantID == uuid.Nil {
 		return nil, domainerrors.ErrUnauthorized
 	}

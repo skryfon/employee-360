@@ -4,6 +4,7 @@ package handlers
 import (
 	"github.com/gin-gonic/gin"
 	"github.com/skryfon/employee360/backend/internal/delivery/http/response"
+	healthtypes "github.com/skryfon/employee360/backend/internal/types/health"
 	usecaseinterface "github.com/skryfon/employee360/backend/internal/usecase/interface"
 )
 
@@ -17,14 +18,8 @@ func NewHealthHandler(healthUseCase usecaseinterface.HealthUseCase) *HealthHandl
 	return &HealthHandler{healthUseCase: healthUseCase}
 }
 
-// HealthResponse is the health endpoint's response body.
-type HealthResponse struct {
-	Status   string `json:"status"`
-	App      string `json:"app"`
-	Database string `json:"database"`
-	// Redis is "ok", "unreachable", or "disabled"; it never changes the HTTP status.
-	Redis string `json:"redis"`
-}
+// HealthResponse aliases the health response DTO; the alias keeps the swagger definition name stable.
+type HealthResponse = healthtypes.HealthResponse
 
 // Health handles health check requests and returns system status.
 //

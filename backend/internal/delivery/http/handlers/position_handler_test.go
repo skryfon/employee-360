@@ -19,14 +19,13 @@ import (
 	domainerrors "github.com/skryfon/employee360/backend/internal/domain/errors"
 	postypes "github.com/skryfon/employee360/backend/internal/types/position"
 	posimpl "github.com/skryfon/employee360/backend/internal/usecase/implementation/position"
-	posuc "github.com/skryfon/employee360/backend/internal/usecase/interface/position"
 )
 
 type mockCreatePositionUC struct {
-	executeFn func(ctx context.Context, tenantID, actorID uuid.UUID, input posuc.CreatePositionInput) (*entity.Position, error)
+	executeFn func(ctx context.Context, tenantID, actorID uuid.UUID, input postypes.CreatePositionInput) (*entity.Position, error)
 }
 
-func (m *mockCreatePositionUC) Execute(ctx context.Context, tenantID, actorID uuid.UUID, input posuc.CreatePositionInput) (*entity.Position, error) {
+func (m *mockCreatePositionUC) Execute(ctx context.Context, tenantID, actorID uuid.UUID, input postypes.CreatePositionInput) (*entity.Position, error) {
 	if m.executeFn != nil {
 		return m.executeFn(ctx, tenantID, actorID, input)
 	}
@@ -34,10 +33,10 @@ func (m *mockCreatePositionUC) Execute(ctx context.Context, tenantID, actorID uu
 }
 
 type mockGetPositionUC struct {
-	executeFn func(ctx context.Context, tenantID uuid.UUID, input posuc.GetPositionInput) (*entity.Position, error)
+	executeFn func(ctx context.Context, tenantID uuid.UUID, input postypes.GetPositionQuery) (*entity.Position, error)
 }
 
-func (m *mockGetPositionUC) Execute(ctx context.Context, tenantID uuid.UUID, input posuc.GetPositionInput) (*entity.Position, error) {
+func (m *mockGetPositionUC) Execute(ctx context.Context, tenantID uuid.UUID, input postypes.GetPositionQuery) (*entity.Position, error) {
 	if m.executeFn != nil {
 		return m.executeFn(ctx, tenantID, input)
 	}
@@ -45,10 +44,10 @@ func (m *mockGetPositionUC) Execute(ctx context.Context, tenantID uuid.UUID, inp
 }
 
 type mockListPositionsUC struct {
-	executeFn func(ctx context.Context, tenantID uuid.UUID, input posuc.ListPositionsInput) (*posuc.ListPositionsOutput, error)
+	executeFn func(ctx context.Context, tenantID uuid.UUID, input postypes.ListPositionsQuery) (*postypes.ListPositionsResult, error)
 }
 
-func (m *mockListPositionsUC) Execute(ctx context.Context, tenantID uuid.UUID, input posuc.ListPositionsInput) (*posuc.ListPositionsOutput, error) {
+func (m *mockListPositionsUC) Execute(ctx context.Context, tenantID uuid.UUID, input postypes.ListPositionsQuery) (*postypes.ListPositionsResult, error) {
 	if m.executeFn != nil {
 		return m.executeFn(ctx, tenantID, input)
 	}
@@ -56,10 +55,10 @@ func (m *mockListPositionsUC) Execute(ctx context.Context, tenantID uuid.UUID, i
 }
 
 type mockUpdatePositionUC struct {
-	executeFn func(ctx context.Context, tenantID, actorID uuid.UUID, input posuc.UpdatePositionInput) (*entity.Position, error)
+	executeFn func(ctx context.Context, tenantID, actorID uuid.UUID, input postypes.UpdatePositionInput) (*entity.Position, error)
 }
 
-func (m *mockUpdatePositionUC) Execute(ctx context.Context, tenantID, actorID uuid.UUID, input posuc.UpdatePositionInput) (*entity.Position, error) {
+func (m *mockUpdatePositionUC) Execute(ctx context.Context, tenantID, actorID uuid.UUID, input postypes.UpdatePositionInput) (*entity.Position, error) {
 	if m.executeFn != nil {
 		return m.executeFn(ctx, tenantID, actorID, input)
 	}
@@ -67,10 +66,10 @@ func (m *mockUpdatePositionUC) Execute(ctx context.Context, tenantID, actorID uu
 }
 
 type mockDeletePositionUC struct {
-	executeFn func(ctx context.Context, tenantID, actorID uuid.UUID, input posuc.DeletePositionInput) error
+	executeFn func(ctx context.Context, tenantID, actorID uuid.UUID, input postypes.DeletePositionInput) error
 }
 
-func (m *mockDeletePositionUC) Execute(ctx context.Context, tenantID, actorID uuid.UUID, input posuc.DeletePositionInput) error {
+func (m *mockDeletePositionUC) Execute(ctx context.Context, tenantID, actorID uuid.UUID, input postypes.DeletePositionInput) error {
 	if m.executeFn != nil {
 		return m.executeFn(ctx, tenantID, actorID, input)
 	}
@@ -95,7 +94,7 @@ func TestPositionHandler_Create(t *testing.T) {
 	t.Run("success 201", func(t *testing.T) {
 		posID := uuid.New()
 		createUC := &mockCreatePositionUC{
-			executeFn: func(ctx context.Context, tenantID, actorID uuid.UUID, input posuc.CreatePositionInput) (*entity.Position, error) {
+			executeFn: func(ctx context.Context, tenantID, actorID uuid.UUID, input postypes.CreatePositionInput) (*entity.Position, error) {
 				assert.Equal(t, testTenantID, tenantID)
 				assert.Equal(t, testActorID, actorID)
 				return &entity.Position{
@@ -141,7 +140,7 @@ func TestPositionHandler_Create(t *testing.T) {
 
 	t.Run("validation error from UC 400", func(t *testing.T) {
 		createUC := &mockCreatePositionUC{
-			executeFn: func(ctx context.Context, tenantID, actorID uuid.UUID, input posuc.CreatePositionInput) (*entity.Position, error) {
+			executeFn: func(ctx context.Context, tenantID, actorID uuid.UUID, input postypes.CreatePositionInput) (*entity.Position, error) {
 				return nil, posimpl.ErrPositionNameRequired
 			},
 		}
@@ -160,7 +159,7 @@ func TestPositionHandler_Create(t *testing.T) {
 
 	t.Run("duplicate name 409", func(t *testing.T) {
 		createUC := &mockCreatePositionUC{
-			executeFn: func(ctx context.Context, tenantID, actorID uuid.UUID, input posuc.CreatePositionInput) (*entity.Position, error) {
+			executeFn: func(ctx context.Context, tenantID, actorID uuid.UUID, input postypes.CreatePositionInput) (*entity.Position, error) {
 				return nil, domainerrors.ErrPositionNameTaken
 			},
 		}
@@ -183,7 +182,7 @@ func TestPositionHandler_GetByID(t *testing.T) {
 
 	t.Run("success 200", func(t *testing.T) {
 		getUC := &mockGetPositionUC{
-			executeFn: func(ctx context.Context, tenantID uuid.UUID, input posuc.GetPositionInput) (*entity.Position, error) {
+			executeFn: func(ctx context.Context, tenantID uuid.UUID, input postypes.GetPositionQuery) (*entity.Position, error) {
 				assert.Equal(t, testTenantID, tenantID)
 				assert.Equal(t, posID, input.ID)
 				return &entity.Position{
@@ -220,7 +219,7 @@ func TestPositionHandler_GetByID(t *testing.T) {
 
 	t.Run("not found 404", func(t *testing.T) {
 		getUC := &mockGetPositionUC{
-			executeFn: func(ctx context.Context, tenantID uuid.UUID, input posuc.GetPositionInput) (*entity.Position, error) {
+			executeFn: func(ctx context.Context, tenantID uuid.UUID, input postypes.GetPositionQuery) (*entity.Position, error) {
 				return nil, domainerrors.ErrPositionNotFound
 			},
 		}
@@ -239,11 +238,11 @@ func TestPositionHandler_GetByID(t *testing.T) {
 func TestPositionHandler_List(t *testing.T) {
 	t.Run("success 200", func(t *testing.T) {
 		listUC := &mockListPositionsUC{
-			executeFn: func(ctx context.Context, tenantID uuid.UUID, input posuc.ListPositionsInput) (*posuc.ListPositionsOutput, error) {
+			executeFn: func(ctx context.Context, tenantID uuid.UUID, input postypes.ListPositionsQuery) (*postypes.ListPositionsResult, error) {
 				assert.Equal(t, testTenantID, tenantID)
 				assert.Equal(t, 1, input.Page)
 				assert.Equal(t, 20, input.PageSize)
-				return &posuc.ListPositionsOutput{
+				return &postypes.ListPositionsResult{
 					Positions: []*entity.Position{
 						{ID: uuid.New(), TenantID: tenantID, Name: "A", IsActive: true},
 					},
@@ -267,9 +266,9 @@ func TestPositionHandler_List(t *testing.T) {
 	t.Run("is_active filter parsing", func(t *testing.T) {
 		tr := true
 		listUC := &mockListPositionsUC{
-			executeFn: func(ctx context.Context, tenantID uuid.UUID, input posuc.ListPositionsInput) (*posuc.ListPositionsOutput, error) {
+			executeFn: func(ctx context.Context, tenantID uuid.UUID, input postypes.ListPositionsQuery) (*postypes.ListPositionsResult, error) {
 				assert.Equal(t, &tr, input.IsActive)
-				return &posuc.ListPositionsOutput{}, nil
+				return &postypes.ListPositionsResult{}, nil
 			},
 		}
 
@@ -310,7 +309,7 @@ func TestPositionHandler_Update(t *testing.T) {
 
 	t.Run("success 200", func(t *testing.T) {
 		updateUC := &mockUpdatePositionUC{
-			executeFn: func(ctx context.Context, tenantID, actorID uuid.UUID, input posuc.UpdatePositionInput) (*entity.Position, error) {
+			executeFn: func(ctx context.Context, tenantID, actorID uuid.UUID, input postypes.UpdatePositionInput) (*entity.Position, error) {
 				assert.Equal(t, testTenantID, tenantID)
 				assert.Equal(t, testActorID, actorID)
 				assert.Equal(t, posID, input.ID)
@@ -351,7 +350,7 @@ func TestPositionHandler_Update(t *testing.T) {
 
 	t.Run("not found 404", func(t *testing.T) {
 		updateUC := &mockUpdatePositionUC{
-			executeFn: func(ctx context.Context, tenantID, actorID uuid.UUID, input posuc.UpdatePositionInput) (*entity.Position, error) {
+			executeFn: func(ctx context.Context, tenantID, actorID uuid.UUID, input postypes.UpdatePositionInput) (*entity.Position, error) {
 				return nil, domainerrors.ErrPositionNotFound
 			},
 		}
@@ -370,7 +369,7 @@ func TestPositionHandler_Update(t *testing.T) {
 
 	t.Run("name taken 409", func(t *testing.T) {
 		updateUC := &mockUpdatePositionUC{
-			executeFn: func(ctx context.Context, tenantID, actorID uuid.UUID, input posuc.UpdatePositionInput) (*entity.Position, error) {
+			executeFn: func(ctx context.Context, tenantID, actorID uuid.UUID, input postypes.UpdatePositionInput) (*entity.Position, error) {
 				return nil, domainerrors.ErrPositionNameTaken
 			},
 		}
@@ -393,7 +392,7 @@ func TestPositionHandler_Delete(t *testing.T) {
 
 	t.Run("success 200", func(t *testing.T) {
 		deleteUC := &mockDeletePositionUC{
-			executeFn: func(ctx context.Context, tenantID, actorID uuid.UUID, input posuc.DeletePositionInput) error {
+			executeFn: func(ctx context.Context, tenantID, actorID uuid.UUID, input postypes.DeletePositionInput) error {
 				assert.Equal(t, testTenantID, tenantID)
 				assert.Equal(t, testActorID, actorID)
 				assert.Equal(t, posID, input.ID)
@@ -424,7 +423,7 @@ func TestPositionHandler_Delete(t *testing.T) {
 
 	t.Run("not found 404", func(t *testing.T) {
 		deleteUC := &mockDeletePositionUC{
-			executeFn: func(ctx context.Context, tenantID, actorID uuid.UUID, input posuc.DeletePositionInput) error {
+			executeFn: func(ctx context.Context, tenantID, actorID uuid.UUID, input postypes.DeletePositionInput) error {
 				return domainerrors.ErrPositionNotFound
 			},
 		}
@@ -441,7 +440,7 @@ func TestPositionHandler_Delete(t *testing.T) {
 
 	t.Run("in use 409", func(t *testing.T) {
 		deleteUC := &mockDeletePositionUC{
-			executeFn: func(ctx context.Context, tenantID, actorID uuid.UUID, input posuc.DeletePositionInput) error {
+			executeFn: func(ctx context.Context, tenantID, actorID uuid.UUID, input postypes.DeletePositionInput) error {
 				return domainerrors.ErrPositionInUse
 			},
 		}

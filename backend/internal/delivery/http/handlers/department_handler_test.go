@@ -18,14 +18,13 @@ import (
 	"github.com/skryfon/employee360/backend/internal/domain/entity"
 	domainerrors "github.com/skryfon/employee360/backend/internal/domain/errors"
 	depttypes "github.com/skryfon/employee360/backend/internal/types/department"
-	deptuc "github.com/skryfon/employee360/backend/internal/usecase/interface/department"
 )
 
 type mockCreateDepartmentUC struct {
-	executeFn func(ctx context.Context, tenantID, actorID uuid.UUID, input deptuc.CreateDepartmentInput) (*entity.Department, error)
+	executeFn func(ctx context.Context, tenantID, actorID uuid.UUID, input depttypes.CreateDepartmentInput) (*entity.Department, error)
 }
 
-func (m *mockCreateDepartmentUC) Execute(ctx context.Context, tenantID, actorID uuid.UUID, input deptuc.CreateDepartmentInput) (*entity.Department, error) {
+func (m *mockCreateDepartmentUC) Execute(ctx context.Context, tenantID, actorID uuid.UUID, input depttypes.CreateDepartmentInput) (*entity.Department, error) {
 	if m.executeFn != nil {
 		return m.executeFn(ctx, tenantID, actorID, input)
 	}
@@ -33,10 +32,10 @@ func (m *mockCreateDepartmentUC) Execute(ctx context.Context, tenantID, actorID 
 }
 
 type mockGetDepartmentUC struct {
-	executeFn func(ctx context.Context, tenantID uuid.UUID, input deptuc.GetDepartmentInput) (*entity.Department, error)
+	executeFn func(ctx context.Context, tenantID uuid.UUID, input depttypes.GetDepartmentQuery) (*entity.Department, error)
 }
 
-func (m *mockGetDepartmentUC) Execute(ctx context.Context, tenantID uuid.UUID, input deptuc.GetDepartmentInput) (*entity.Department, error) {
+func (m *mockGetDepartmentUC) Execute(ctx context.Context, tenantID uuid.UUID, input depttypes.GetDepartmentQuery) (*entity.Department, error) {
 	if m.executeFn != nil {
 		return m.executeFn(ctx, tenantID, input)
 	}
@@ -44,10 +43,10 @@ func (m *mockGetDepartmentUC) Execute(ctx context.Context, tenantID uuid.UUID, i
 }
 
 type mockListDepartmentsUC struct {
-	executeFn func(ctx context.Context, tenantID uuid.UUID, input deptuc.ListDepartmentsInput) (*deptuc.ListDepartmentsOutput, error)
+	executeFn func(ctx context.Context, tenantID uuid.UUID, input depttypes.ListDepartmentsQuery) (*depttypes.ListDepartmentsResult, error)
 }
 
-func (m *mockListDepartmentsUC) Execute(ctx context.Context, tenantID uuid.UUID, input deptuc.ListDepartmentsInput) (*deptuc.ListDepartmentsOutput, error) {
+func (m *mockListDepartmentsUC) Execute(ctx context.Context, tenantID uuid.UUID, input depttypes.ListDepartmentsQuery) (*depttypes.ListDepartmentsResult, error) {
 	if m.executeFn != nil {
 		return m.executeFn(ctx, tenantID, input)
 	}
@@ -55,10 +54,10 @@ func (m *mockListDepartmentsUC) Execute(ctx context.Context, tenantID uuid.UUID,
 }
 
 type mockUpdateDepartmentUC struct {
-	executeFn func(ctx context.Context, tenantID, actorID uuid.UUID, input deptuc.UpdateDepartmentInput) (*entity.Department, error)
+	executeFn func(ctx context.Context, tenantID, actorID uuid.UUID, input depttypes.UpdateDepartmentInput) (*entity.Department, error)
 }
 
-func (m *mockUpdateDepartmentUC) Execute(ctx context.Context, tenantID, actorID uuid.UUID, input deptuc.UpdateDepartmentInput) (*entity.Department, error) {
+func (m *mockUpdateDepartmentUC) Execute(ctx context.Context, tenantID, actorID uuid.UUID, input depttypes.UpdateDepartmentInput) (*entity.Department, error) {
 	if m.executeFn != nil {
 		return m.executeFn(ctx, tenantID, actorID, input)
 	}
@@ -66,10 +65,10 @@ func (m *mockUpdateDepartmentUC) Execute(ctx context.Context, tenantID, actorID 
 }
 
 type mockDeleteDepartmentUC struct {
-	executeFn func(ctx context.Context, tenantID, actorID uuid.UUID, input deptuc.DeleteDepartmentInput) error
+	executeFn func(ctx context.Context, tenantID, actorID uuid.UUID, input depttypes.DeleteDepartmentInput) error
 }
 
-func (m *mockDeleteDepartmentUC) Execute(ctx context.Context, tenantID, actorID uuid.UUID, input deptuc.DeleteDepartmentInput) error {
+func (m *mockDeleteDepartmentUC) Execute(ctx context.Context, tenantID, actorID uuid.UUID, input depttypes.DeleteDepartmentInput) error {
 	if m.executeFn != nil {
 		return m.executeFn(ctx, tenantID, actorID, input)
 	}
@@ -94,7 +93,7 @@ func TestDepartmentHandler_Create(t *testing.T) {
 	t.Run("success 201", func(t *testing.T) {
 		deptID := uuid.New()
 		createUC := &mockCreateDepartmentUC{
-			executeFn: func(ctx context.Context, tenantID, actorID uuid.UUID, input deptuc.CreateDepartmentInput) (*entity.Department, error) {
+			executeFn: func(ctx context.Context, tenantID, actorID uuid.UUID, input depttypes.CreateDepartmentInput) (*entity.Department, error) {
 				assert.Equal(t, testTenantID, tenantID)
 				assert.Equal(t, testActorID, actorID)
 				return &entity.Department{
@@ -128,7 +127,7 @@ func TestDepartmentHandler_Create(t *testing.T) {
 
 	t.Run("conflict 409 when name taken", func(t *testing.T) {
 		createUC := &mockCreateDepartmentUC{
-			executeFn: func(ctx context.Context, tenantID, actorID uuid.UUID, input deptuc.CreateDepartmentInput) (*entity.Department, error) {
+			executeFn: func(ctx context.Context, tenantID, actorID uuid.UUID, input depttypes.CreateDepartmentInput) (*entity.Department, error) {
 				return nil, domainerrors.ErrDepartmentNameTaken
 			},
 		}
@@ -178,7 +177,7 @@ func TestDepartmentHandler_GetByID(t *testing.T) {
 
 	t.Run("success 200", func(t *testing.T) {
 		getUC := &mockGetDepartmentUC{
-			executeFn: func(ctx context.Context, tenantID uuid.UUID, input deptuc.GetDepartmentInput) (*entity.Department, error) {
+			executeFn: func(ctx context.Context, tenantID uuid.UUID, input depttypes.GetDepartmentQuery) (*entity.Department, error) {
 				assert.Equal(t, testTenantID, tenantID)
 				return &entity.Department{
 					ID:   deptID,
@@ -199,7 +198,7 @@ func TestDepartmentHandler_GetByID(t *testing.T) {
 
 	t.Run("not found 404", func(t *testing.T) {
 		getUC := &mockGetDepartmentUC{
-			executeFn: func(ctx context.Context, tenantID uuid.UUID, input deptuc.GetDepartmentInput) (*entity.Department, error) {
+			executeFn: func(ctx context.Context, tenantID uuid.UUID, input depttypes.GetDepartmentQuery) (*entity.Department, error) {
 				return nil, domainerrors.ErrDepartmentNotFound
 			},
 		}
@@ -229,9 +228,9 @@ func TestDepartmentHandler_GetByID(t *testing.T) {
 func TestDepartmentHandler_List(t *testing.T) {
 	t.Run("success 200 paginated", func(t *testing.T) {
 		listUC := &mockListDepartmentsUC{
-			executeFn: func(ctx context.Context, tenantID uuid.UUID, input deptuc.ListDepartmentsInput) (*deptuc.ListDepartmentsOutput, error) {
+			executeFn: func(ctx context.Context, tenantID uuid.UUID, input depttypes.ListDepartmentsQuery) (*depttypes.ListDepartmentsResult, error) {
 				assert.Equal(t, testTenantID, tenantID)
-				return &deptuc.ListDepartmentsOutput{
+				return &depttypes.ListDepartmentsResult{
 					Departments: []*entity.Department{
 						{ID: uuid.New(), Name: "HR"},
 					},
@@ -259,9 +258,9 @@ func TestDepartmentHandler_List(t *testing.T) {
 	t.Run("non-numeric page or page_size returns 400", func(t *testing.T) {
 		called := false
 		listUC := &mockListDepartmentsUC{
-			executeFn: func(ctx context.Context, tenantID uuid.UUID, input deptuc.ListDepartmentsInput) (*deptuc.ListDepartmentsOutput, error) {
+			executeFn: func(ctx context.Context, tenantID uuid.UUID, input depttypes.ListDepartmentsQuery) (*depttypes.ListDepartmentsResult, error) {
 				called = true
-				return &deptuc.ListDepartmentsOutput{}, nil
+				return &depttypes.ListDepartmentsResult{}, nil
 			},
 		}
 		h := NewDepartmentHandler(&mockCreateDepartmentUC{}, &mockGetDepartmentUC{}, listUC, &mockUpdateDepartmentUC{}, &mockDeleteDepartmentUC{})
@@ -280,9 +279,9 @@ func TestDepartmentHandler_List(t *testing.T) {
 		for q, want := range map[string]*bool{"": nil, "?is_active=true": boolP(true), "?is_active=false": boolP(false)} {
 			var got *bool
 			listUC := &mockListDepartmentsUC{
-				executeFn: func(ctx context.Context, tenantID uuid.UUID, input deptuc.ListDepartmentsInput) (*deptuc.ListDepartmentsOutput, error) {
+				executeFn: func(ctx context.Context, tenantID uuid.UUID, input depttypes.ListDepartmentsQuery) (*depttypes.ListDepartmentsResult, error) {
 					got = input.IsActive
-					return &deptuc.ListDepartmentsOutput{Page: 1, PageSize: 20}, nil
+					return &depttypes.ListDepartmentsResult{Page: 1, PageSize: 20}, nil
 				},
 			}
 			h := NewDepartmentHandler(&mockCreateDepartmentUC{}, &mockGetDepartmentUC{}, listUC, &mockUpdateDepartmentUC{}, &mockDeleteDepartmentUC{})
@@ -297,9 +296,9 @@ func TestDepartmentHandler_List(t *testing.T) {
 	t.Run("invalid is_active returns 400", func(t *testing.T) {
 		called := false
 		listUC := &mockListDepartmentsUC{
-			executeFn: func(ctx context.Context, tenantID uuid.UUID, input deptuc.ListDepartmentsInput) (*deptuc.ListDepartmentsOutput, error) {
+			executeFn: func(ctx context.Context, tenantID uuid.UUID, input depttypes.ListDepartmentsQuery) (*depttypes.ListDepartmentsResult, error) {
 				called = true
-				return &deptuc.ListDepartmentsOutput{}, nil
+				return &depttypes.ListDepartmentsResult{}, nil
 			},
 		}
 		h := NewDepartmentHandler(&mockCreateDepartmentUC{}, &mockGetDepartmentUC{}, listUC, &mockUpdateDepartmentUC{}, &mockDeleteDepartmentUC{})
@@ -314,10 +313,10 @@ func TestDepartmentHandler_List(t *testing.T) {
 
 	t.Run("empty page params use defaults", func(t *testing.T) {
 		listUC := &mockListDepartmentsUC{
-			executeFn: func(ctx context.Context, tenantID uuid.UUID, input deptuc.ListDepartmentsInput) (*deptuc.ListDepartmentsOutput, error) {
+			executeFn: func(ctx context.Context, tenantID uuid.UUID, input depttypes.ListDepartmentsQuery) (*depttypes.ListDepartmentsResult, error) {
 				assert.Equal(t, 1, input.Page)
 				assert.Equal(t, 20, input.PageSize)
-				return &deptuc.ListDepartmentsOutput{Page: 1, PageSize: 20}, nil
+				return &depttypes.ListDepartmentsResult{Page: 1, PageSize: 20}, nil
 			},
 		}
 		h := NewDepartmentHandler(&mockCreateDepartmentUC{}, &mockGetDepartmentUC{}, listUC, &mockUpdateDepartmentUC{}, &mockDeleteDepartmentUC{})
@@ -335,7 +334,7 @@ func TestDepartmentHandler_Update(t *testing.T) {
 
 	t.Run("success 200", func(t *testing.T) {
 		updateUC := &mockUpdateDepartmentUC{
-			executeFn: func(ctx context.Context, tenantID, actorID uuid.UUID, input deptuc.UpdateDepartmentInput) (*entity.Department, error) {
+			executeFn: func(ctx context.Context, tenantID, actorID uuid.UUID, input depttypes.UpdateDepartmentInput) (*entity.Department, error) {
 				assert.Equal(t, testTenantID, tenantID)
 				assert.Equal(t, testActorID, actorID)
 				return &entity.Department{
@@ -359,7 +358,7 @@ func TestDepartmentHandler_Update(t *testing.T) {
 
 	t.Run("conflict 409", func(t *testing.T) {
 		updateUC := &mockUpdateDepartmentUC{
-			executeFn: func(ctx context.Context, tenantID, actorID uuid.UUID, input deptuc.UpdateDepartmentInput) (*entity.Department, error) {
+			executeFn: func(ctx context.Context, tenantID, actorID uuid.UUID, input depttypes.UpdateDepartmentInput) (*entity.Department, error) {
 				return nil, domainerrors.ErrDepartmentNameTaken
 			},
 		}
@@ -382,7 +381,7 @@ func TestDepartmentHandler_Delete(t *testing.T) {
 
 	t.Run("success 200", func(t *testing.T) {
 		deleteUC := &mockDeleteDepartmentUC{
-			executeFn: func(ctx context.Context, tenantID, actorID uuid.UUID, input deptuc.DeleteDepartmentInput) error {
+			executeFn: func(ctx context.Context, tenantID, actorID uuid.UUID, input depttypes.DeleteDepartmentInput) error {
 				assert.Equal(t, testTenantID, tenantID)
 				assert.Equal(t, testActorID, actorID)
 				return nil
@@ -401,7 +400,7 @@ func TestDepartmentHandler_Delete(t *testing.T) {
 
 	t.Run("conflict 409 when department in use", func(t *testing.T) {
 		deleteUC := &mockDeleteDepartmentUC{
-			executeFn: func(ctx context.Context, tenantID, actorID uuid.UUID, input deptuc.DeleteDepartmentInput) error {
+			executeFn: func(ctx context.Context, tenantID, actorID uuid.UUID, input depttypes.DeleteDepartmentInput) error {
 				return domainerrors.ErrDepartmentInUse
 			},
 		}
@@ -418,7 +417,7 @@ func TestDepartmentHandler_Delete(t *testing.T) {
 
 	t.Run("not found 404", func(t *testing.T) {
 		deleteUC := &mockDeleteDepartmentUC{
-			executeFn: func(ctx context.Context, tenantID, actorID uuid.UUID, input deptuc.DeleteDepartmentInput) error {
+			executeFn: func(ctx context.Context, tenantID, actorID uuid.UUID, input depttypes.DeleteDepartmentInput) error {
 				return domainerrors.ErrDepartmentNotFound
 			},
 		}

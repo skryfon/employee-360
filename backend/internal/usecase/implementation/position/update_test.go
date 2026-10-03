@@ -13,7 +13,7 @@ import (
 
 	"github.com/skryfon/employee360/backend/internal/domain/entity"
 	domainerrors "github.com/skryfon/employee360/backend/internal/domain/errors"
-	posuc "github.com/skryfon/employee360/backend/internal/usecase/interface/position"
+	postypes "github.com/skryfon/employee360/backend/internal/types/position"
 )
 
 func TestUpdatePositionUseCase_Execute(t *testing.T) {
@@ -57,7 +57,7 @@ func TestUpdatePositionUseCase_Execute(t *testing.T) {
 		auditRepo := &mockAuditRepo{}
 		uc := NewUpdatePositionUseCase(repo, auditRepo, nil)
 
-		res, err := uc.Execute(ctx, tenantID, actorID, posuc.UpdatePositionInput{
+		res, err := uc.Execute(ctx, tenantID, actorID, postypes.UpdatePositionInput{
 			ID:          posID,
 			Name:        "Senior Engineer",
 			Description: "New desc",
@@ -86,7 +86,7 @@ func TestUpdatePositionUseCase_Execute(t *testing.T) {
 		uc := NewUpdatePositionUseCase(repo, auditRepo, nil)
 
 		fl := false
-		res, err := uc.Execute(ctx, tenantID, actorID, posuc.UpdatePositionInput{
+		res, err := uc.Execute(ctx, tenantID, actorID, postypes.UpdatePositionInput{
 			ID:       posID,
 			Name:     "Software Engineer", // unchanged name
 			IsActive: &fl,
@@ -114,7 +114,7 @@ func TestUpdatePositionUseCase_Execute(t *testing.T) {
 		uc := NewUpdatePositionUseCase(repo, auditRepo, nil)
 
 		tr := true
-		res, err := uc.Execute(ctx, tenantID, actorID, posuc.UpdatePositionInput{
+		res, err := uc.Execute(ctx, tenantID, actorID, postypes.UpdatePositionInput{
 			ID:       posID,
 			Name:     "Software Engineer",
 			IsActive: &tr,
@@ -139,7 +139,7 @@ func TestUpdatePositionUseCase_Execute(t *testing.T) {
 		}
 		uc := NewUpdatePositionUseCase(repo, &mockAuditRepo{}, nil)
 
-		_, err := uc.Execute(ctx, tenantID, actorID, posuc.UpdatePositionInput{
+		_, err := uc.Execute(ctx, tenantID, actorID, postypes.UpdatePositionInput{
 			ID:   posID,
 			Name: "Existing Different Position",
 		})
@@ -149,17 +149,17 @@ func TestUpdatePositionUseCase_Execute(t *testing.T) {
 	t.Run("unauthorized on nil tenantID or actorID", func(t *testing.T) {
 		uc := NewUpdatePositionUseCase(&mockPositionRepo{}, &mockAuditRepo{}, nil)
 
-		_, err := uc.Execute(ctx, uuid.Nil, actorID, posuc.UpdatePositionInput{ID: posID, Name: "Test"})
+		_, err := uc.Execute(ctx, uuid.Nil, actorID, postypes.UpdatePositionInput{ID: posID, Name: "Test"})
 		require.ErrorIs(t, err, domainerrors.ErrUnauthorized)
 
-		_, err = uc.Execute(ctx, tenantID, uuid.Nil, posuc.UpdatePositionInput{ID: posID, Name: "Test"})
+		_, err = uc.Execute(ctx, tenantID, uuid.Nil, postypes.UpdatePositionInput{ID: posID, Name: "Test"})
 		require.ErrorIs(t, err, domainerrors.ErrUnauthorized)
 	})
 
 	t.Run("nil uuid returns ErrPositionNotFound", func(t *testing.T) {
 		uc := NewUpdatePositionUseCase(&mockPositionRepo{}, &mockAuditRepo{}, nil)
 
-		_, err := uc.Execute(ctx, tenantID, actorID, posuc.UpdatePositionInput{ID: uuid.Nil, Name: "Test"})
+		_, err := uc.Execute(ctx, tenantID, actorID, postypes.UpdatePositionInput{ID: uuid.Nil, Name: "Test"})
 		require.ErrorIs(t, err, domainerrors.ErrPositionNotFound)
 	})
 
@@ -171,28 +171,28 @@ func TestUpdatePositionUseCase_Execute(t *testing.T) {
 		}
 		uc := NewUpdatePositionUseCase(repo, &mockAuditRepo{}, nil)
 
-		_, err := uc.Execute(ctx, tenantID, actorID, posuc.UpdatePositionInput{ID: posID, Name: "Test"})
+		_, err := uc.Execute(ctx, tenantID, actorID, postypes.UpdatePositionInput{ID: posID, Name: "Test"})
 		require.ErrorIs(t, err, domainerrors.ErrPositionNotFound)
 	})
 
 	t.Run("validation: name required", func(t *testing.T) {
 		uc := NewUpdatePositionUseCase(&mockPositionRepo{}, &mockAuditRepo{}, nil)
 
-		_, err := uc.Execute(ctx, tenantID, actorID, posuc.UpdatePositionInput{ID: posID, Name: ""})
+		_, err := uc.Execute(ctx, tenantID, actorID, postypes.UpdatePositionInput{ID: posID, Name: ""})
 		require.ErrorIs(t, err, ErrPositionNameRequired)
 	})
 
 	t.Run("validation: name too long", func(t *testing.T) {
 		uc := NewUpdatePositionUseCase(&mockPositionRepo{}, &mockAuditRepo{}, nil)
 
-		_, err := uc.Execute(ctx, tenantID, actorID, posuc.UpdatePositionInput{ID: posID, Name: strings.Repeat("x", 101)})
+		_, err := uc.Execute(ctx, tenantID, actorID, postypes.UpdatePositionInput{ID: posID, Name: strings.Repeat("x", 101)})
 		require.ErrorIs(t, err, ErrPositionNameTooLong)
 	})
 
 	t.Run("validation: description too long", func(t *testing.T) {
 		uc := NewUpdatePositionUseCase(&mockPositionRepo{}, &mockAuditRepo{}, nil)
 
-		_, err := uc.Execute(ctx, tenantID, actorID, posuc.UpdatePositionInput{
+		_, err := uc.Execute(ctx, tenantID, actorID, postypes.UpdatePositionInput{
 			ID:          posID,
 			Name:        "Valid",
 			Description: strings.Repeat("x", 501),
@@ -213,7 +213,7 @@ func TestUpdatePositionUseCase_Execute(t *testing.T) {
 		}
 		uc := NewUpdatePositionUseCase(repo, &mockAuditRepo{}, nil)
 
-		_, err := uc.Execute(ctx, tenantID, actorID, posuc.UpdatePositionInput{ID: posID, Name: "Software Engineer"})
+		_, err := uc.Execute(ctx, tenantID, actorID, postypes.UpdatePositionInput{ID: posID, Name: "Software Engineer"})
 		require.ErrorIs(t, err, expectedErr)
 	})
 }
