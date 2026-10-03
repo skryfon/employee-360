@@ -71,24 +71,3 @@ func (m *mockPositionRepo) IsReferenced(ctx context.Context, tenantID, id uuid.U
 	}
 	return false, nil
 }
-
-type mockAuditRepo struct {
-	createFn func(ctx context.Context, log *entity.AuditLog) error
-	logs     []*entity.AuditLog
-}
-
-func (m *mockAuditRepo) Create(ctx context.Context, log *entity.AuditLog) error {
-	m.logs = append(m.logs, log)
-	if m.createFn != nil {
-		return m.createFn(ctx, log)
-	}
-	return nil
-}
-
-func (m *mockAuditRepo) ListByTenantID(ctx context.Context, tenantID uuid.UUID, limit, offset int) ([]*entity.AuditLog, int64, error) {
-	return nil, 0, nil
-}
-
-func (m *mockAuditRepo) ListByEntity(ctx context.Context, tenantID uuid.UUID, entityType string, entityID uuid.UUID, limit, offset int) ([]*entity.AuditLog, int64, error) {
-	return nil, 0, nil
-}

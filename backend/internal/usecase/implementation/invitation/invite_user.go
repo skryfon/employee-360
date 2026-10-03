@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+	domainaudit "github.com/skryfon/employee360/backend/internal/domain/audit"
 	"github.com/skryfon/employee360/backend/internal/domain/entity"
 	domainerrors "github.com/skryfon/employee360/backend/internal/domain/errors"
 	"github.com/skryfon/employee360/backend/internal/domain/event"
@@ -26,7 +27,7 @@ type InviteUserUseCaseImpl struct {
 	orgRefRepo     repository.OrgReferenceRepository
 	tenantDomains  repository.TenantDomainRepository
 	tenantRepo     repository.TenantRepository
-	auditRepo      repository.AuditRepository
+	audit          service.AuditRecorder
 	hashService    service.HashService
 	eventPublisher service.EventPublisher
 	transactor     ucshared.Transactor
@@ -45,7 +46,7 @@ func NewInviteUserUseCase(
 	orgRefRepo repository.OrgReferenceRepository,
 	tenantDomains repository.TenantDomainRepository,
 	tenantRepo repository.TenantRepository,
-	auditRepo repository.AuditRepository,
+	audit service.AuditRecorder,
 	hashService service.HashService,
 	eventPublisher service.EventPublisher,
 	transactor ucshared.Transactor,
@@ -53,7 +54,7 @@ func NewInviteUserUseCase(
 ) *InviteUserUseCaseImpl {
 	return &InviteUserUseCaseImpl{
 		userRepo: userRepo, userRoleRepo: userRoleRepo, roleRepo: roleRepo,
-		invitationRepo: invitationRepo, orgRefRepo: orgRefRepo, tenantDomains: tenantDomains, tenantRepo: tenantRepo, auditRepo: auditRepo, hashService: hashService,
+		invitationRepo: invitationRepo, orgRefRepo: orgRefRepo, tenantDomains: tenantDomains, tenantRepo: tenantRepo, audit: audit, hashService: hashService,
 		eventPublisher: eventPublisher, transactor: transactor,
 		expiry:  defaultInvitationExpiry,
 		appURLs: appURLs,
@@ -195,7 +196,7 @@ func (u *InviteUserUseCaseImpl) Execute(c context.Context, tenantID, inviterID u
 		if err := u.invitationRepo.Create(txCtx, inv); err != nil {
 			return err
 		}
-		if err := writeAudit(txCtx, u.auditRepo, tenantID, inviterID, inv.ID, auditActionInvite,
+		if err := u.audit.Record(txCtx, tenantID, inviterID, domainaudit.ActionInvitationInvite, domainaudit.EntityInvitation, inv.ID,
 			map[string]any{"email": email, "role_id": role.ID, "user_id": user.ID}); err != nil {
 			return err
 		}

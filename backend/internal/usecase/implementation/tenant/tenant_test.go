@@ -3,6 +3,8 @@ package tenant
 import (
 	"context"
 	"errors"
+	domainservice "github.com/skryfon/employee360/backend/internal/domain/service"
+	"github.com/skryfon/employee360/backend/internal/usecase/implementation/ucshared/ucsharedtest"
 	"sort"
 	"strings"
 	"testing"
@@ -168,27 +170,25 @@ func (r domainRepoFake) SoftDelete(c context.Context, tid, id, actor uuid.UUID, 
 	return nil
 }
 
-type auditRepoFake struct{ s *fakeStore }
-
-func (r auditRepoFake) Create(_ context.Context, l *entity.AuditLog) error {
-	if r.s.failAudit {
-		return errors.New("audit down")
+// recorder fakes the AuditRecorder; entries land in the store so transactional
+// rollback drops them, and failAudit simulates an audit-write failure.
+func (s *fakeStore) recorder() *ucsharedtest.RecordingAuditRecorder {
+	return &ucsharedtest.RecordingAuditRecorder{
+		ErrFn: func() error {
+			if s.failAudit {
+				return errors.New("audit down")
+			}
+			return nil
+		},
+		OnRecord: func(l *entity.AuditLog) { s.audits = append(s.audits, l) },
 	}
-	r.s.audits = append(r.s.audits, l)
-	return nil
-}
-func (auditRepoFake) ListByTenantID(context.Context, uuid.UUID, int, int) ([]*entity.AuditLog, int64, error) {
-	return nil, 0, nil
-}
-func (auditRepoFake) ListByEntity(context.Context, uuid.UUID, string, uuid.UUID, int, int) ([]*entity.AuditLog, int64, error) {
-	return nil, 0, nil
 }
 
 type env struct {
 	s     *fakeStore
 	tr    tenantRepoFake
 	dr    domainRepoFake
-	ar    auditRepoFake
+	ar    domainservice.AuditRecorder
 	tx    fakeTx
 	actor uuid.UUID
 	c     context.Context
@@ -196,7 +196,7 @@ type env struct {
 
 func newEnv() *env {
 	s := newStore()
-	return &env{s: s, tr: tenantRepoFake{s}, dr: domainRepoFake{s}, ar: auditRepoFake{s}, tx: fakeTx{s}, actor: uuid.New(), c: context.Background()}
+	return &env{s: s, tr: tenantRepoFake{s}, dr: domainRepoFake{s}, ar: s.recorder(), tx: fakeTx{s}, actor: uuid.New(), c: context.Background()}
 }
 
 func (e *env) seedTenant(active bool, domains ...string) uuid.UUID {

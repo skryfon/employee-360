@@ -3,6 +3,8 @@ package position
 import (
 	"context"
 	"errors"
+	domainaudit "github.com/skryfon/employee360/backend/internal/domain/audit"
+	"github.com/skryfon/employee360/backend/internal/usecase/implementation/ucshared/ucsharedtest"
 	"strings"
 	"testing"
 	"time"
@@ -54,7 +56,7 @@ func TestUpdatePositionUseCase_Execute(t *testing.T) {
 				return nil
 			},
 		}
-		auditRepo := &mockAuditRepo{}
+		auditRepo := &ucsharedtest.RecordingAuditRecorder{}
 		uc := NewUpdatePositionUseCase(repo, auditRepo, nil)
 
 		res, err := uc.Execute(ctx, tenantID, actorID, postypes.UpdatePositionInput{
@@ -68,8 +70,8 @@ func TestUpdatePositionUseCase_Execute(t *testing.T) {
 		assert.True(t, res.IsActive)
 		assert.Equal(t, updatedPos, res)
 
-		require.Len(t, auditRepo.logs, 1)
-		assert.Equal(t, auditActionUpdate, auditRepo.logs[0].Action)
+		require.Len(t, auditRepo.Logs, 1)
+		assert.Equal(t, domainaudit.ActionPositionUpdate, auditRepo.Logs[0].Action)
 	})
 
 	t.Run("deactivate triggers both update and deactivate audit logs", func(t *testing.T) {
@@ -82,7 +84,7 @@ func TestUpdatePositionUseCase_Execute(t *testing.T) {
 				return nil
 			},
 		}
-		auditRepo := &mockAuditRepo{}
+		auditRepo := &ucsharedtest.RecordingAuditRecorder{}
 		uc := NewUpdatePositionUseCase(repo, auditRepo, nil)
 
 		fl := false
@@ -94,9 +96,9 @@ func TestUpdatePositionUseCase_Execute(t *testing.T) {
 		require.NoError(t, err)
 		assert.False(t, res.IsActive)
 
-		require.Len(t, auditRepo.logs, 2)
-		assert.Equal(t, auditActionUpdate, auditRepo.logs[0].Action)
-		assert.Equal(t, auditActionDeactivate, auditRepo.logs[1].Action)
+		require.Len(t, auditRepo.Logs, 2)
+		assert.Equal(t, domainaudit.ActionPositionUpdate, auditRepo.Logs[0].Action)
+		assert.Equal(t, domainaudit.ActionPositionDeactivate, auditRepo.Logs[1].Action)
 	})
 
 	t.Run("activate triggers both update and activate audit logs", func(t *testing.T) {
@@ -110,7 +112,7 @@ func TestUpdatePositionUseCase_Execute(t *testing.T) {
 				return nil
 			},
 		}
-		auditRepo := &mockAuditRepo{}
+		auditRepo := &ucsharedtest.RecordingAuditRecorder{}
 		uc := NewUpdatePositionUseCase(repo, auditRepo, nil)
 
 		tr := true
@@ -122,9 +124,9 @@ func TestUpdatePositionUseCase_Execute(t *testing.T) {
 		require.NoError(t, err)
 		assert.True(t, res.IsActive)
 
-		require.Len(t, auditRepo.logs, 2)
-		assert.Equal(t, auditActionUpdate, auditRepo.logs[0].Action)
-		assert.Equal(t, auditActionActivate, auditRepo.logs[1].Action)
+		require.Len(t, auditRepo.Logs, 2)
+		assert.Equal(t, domainaudit.ActionPositionUpdate, auditRepo.Logs[0].Action)
+		assert.Equal(t, domainaudit.ActionPositionActivate, auditRepo.Logs[1].Action)
 	})
 
 	t.Run("changing name to duplicate returns ErrPositionNameTaken", func(t *testing.T) {
@@ -137,7 +139,7 @@ func TestUpdatePositionUseCase_Execute(t *testing.T) {
 				return true, nil
 			},
 		}
-		uc := NewUpdatePositionUseCase(repo, &mockAuditRepo{}, nil)
+		uc := NewUpdatePositionUseCase(repo, &ucsharedtest.RecordingAuditRecorder{}, nil)
 
 		_, err := uc.Execute(ctx, tenantID, actorID, postypes.UpdatePositionInput{
 			ID:   posID,
@@ -147,7 +149,7 @@ func TestUpdatePositionUseCase_Execute(t *testing.T) {
 	})
 
 	t.Run("unauthorized on nil tenantID or actorID", func(t *testing.T) {
-		uc := NewUpdatePositionUseCase(&mockPositionRepo{}, &mockAuditRepo{}, nil)
+		uc := NewUpdatePositionUseCase(&mockPositionRepo{}, &ucsharedtest.RecordingAuditRecorder{}, nil)
 
 		_, err := uc.Execute(ctx, uuid.Nil, actorID, postypes.UpdatePositionInput{ID: posID, Name: "Test"})
 		require.ErrorIs(t, err, domainerrors.ErrUnauthorized)
@@ -157,7 +159,7 @@ func TestUpdatePositionUseCase_Execute(t *testing.T) {
 	})
 
 	t.Run("nil uuid returns ErrPositionNotFound", func(t *testing.T) {
-		uc := NewUpdatePositionUseCase(&mockPositionRepo{}, &mockAuditRepo{}, nil)
+		uc := NewUpdatePositionUseCase(&mockPositionRepo{}, &ucsharedtest.RecordingAuditRecorder{}, nil)
 
 		_, err := uc.Execute(ctx, tenantID, actorID, postypes.UpdatePositionInput{ID: uuid.Nil, Name: "Test"})
 		require.ErrorIs(t, err, domainerrors.ErrPositionNotFound)
@@ -169,28 +171,28 @@ func TestUpdatePositionUseCase_Execute(t *testing.T) {
 				return nil, domainerrors.ErrPositionNotFound
 			},
 		}
-		uc := NewUpdatePositionUseCase(repo, &mockAuditRepo{}, nil)
+		uc := NewUpdatePositionUseCase(repo, &ucsharedtest.RecordingAuditRecorder{}, nil)
 
 		_, err := uc.Execute(ctx, tenantID, actorID, postypes.UpdatePositionInput{ID: posID, Name: "Test"})
 		require.ErrorIs(t, err, domainerrors.ErrPositionNotFound)
 	})
 
 	t.Run("validation: name required", func(t *testing.T) {
-		uc := NewUpdatePositionUseCase(&mockPositionRepo{}, &mockAuditRepo{}, nil)
+		uc := NewUpdatePositionUseCase(&mockPositionRepo{}, &ucsharedtest.RecordingAuditRecorder{}, nil)
 
 		_, err := uc.Execute(ctx, tenantID, actorID, postypes.UpdatePositionInput{ID: posID, Name: ""})
 		require.ErrorIs(t, err, ErrPositionNameRequired)
 	})
 
 	t.Run("validation: name too long", func(t *testing.T) {
-		uc := NewUpdatePositionUseCase(&mockPositionRepo{}, &mockAuditRepo{}, nil)
+		uc := NewUpdatePositionUseCase(&mockPositionRepo{}, &ucsharedtest.RecordingAuditRecorder{}, nil)
 
 		_, err := uc.Execute(ctx, tenantID, actorID, postypes.UpdatePositionInput{ID: posID, Name: strings.Repeat("x", 101)})
 		require.ErrorIs(t, err, ErrPositionNameTooLong)
 	})
 
 	t.Run("validation: description too long", func(t *testing.T) {
-		uc := NewUpdatePositionUseCase(&mockPositionRepo{}, &mockAuditRepo{}, nil)
+		uc := NewUpdatePositionUseCase(&mockPositionRepo{}, &ucsharedtest.RecordingAuditRecorder{}, nil)
 
 		_, err := uc.Execute(ctx, tenantID, actorID, postypes.UpdatePositionInput{
 			ID:          posID,
@@ -211,7 +213,7 @@ func TestUpdatePositionUseCase_Execute(t *testing.T) {
 				return expectedErr
 			},
 		}
-		uc := NewUpdatePositionUseCase(repo, &mockAuditRepo{}, nil)
+		uc := NewUpdatePositionUseCase(repo, &ucsharedtest.RecordingAuditRecorder{}, nil)
 
 		_, err := uc.Execute(ctx, tenantID, actorID, postypes.UpdatePositionInput{ID: posID, Name: "Software Engineer"})
 		require.ErrorIs(t, err, expectedErr)

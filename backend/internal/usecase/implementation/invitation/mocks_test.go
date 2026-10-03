@@ -3,6 +3,7 @@ package invitation
 import (
 	"context"
 	"errors"
+	"github.com/skryfon/employee360/backend/internal/usecase/implementation/ucshared/ucsharedtest"
 	"time"
 
 	"github.com/google/uuid"
@@ -182,18 +183,9 @@ func (r fakeUserRoleRepo) DeleteByUserID(_ context.Context, _, uid uuid.UUID) er
 	return nil
 }
 
-// AuditRepository
-type fakeAuditRepo struct{ s *fakeStore }
-
-func (r fakeAuditRepo) Create(_ context.Context, l *entity.AuditLog) error {
-	r.s.audits = append(r.s.audits, l)
-	return nil
-}
-func (r fakeAuditRepo) ListByTenantID(context.Context, uuid.UUID, int, int) ([]*entity.AuditLog, int64, error) {
-	return nil, 0, nil
-}
-func (r fakeAuditRepo) ListByEntity(context.Context, uuid.UUID, string, uuid.UUID, int, int) ([]*entity.AuditLog, int64, error) {
-	return nil, 0, nil
+// AuditRecorder: entries land in the store so transactional rollback drops them.
+func (s *fakeStore) recorder() *ucsharedtest.RecordingAuditRecorder {
+	return &ucsharedtest.RecordingAuditRecorder{OnRecord: func(l *entity.AuditLog) { s.audits = append(s.audits, l) }}
 }
 
 // OrgReferenceRepository

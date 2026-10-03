@@ -3,6 +3,7 @@ package invitation
 import (
 	"context"
 	"errors"
+	domainaudit "github.com/skryfon/employee360/backend/internal/domain/audit"
 	"testing"
 	"time"
 
@@ -16,13 +17,13 @@ import (
 )
 
 func (f *fixture) invite() *InviteUserUseCaseImpl {
-	return NewInviteUserUseCase(f.s, fakeUserRoleRepo{f.s}, fakeRoleRepo{f.s}, fakeInvRepo{f.s}, fakeOrgRepo{f.s}, fakeTenantDomainRepo{f.s}, fakeTenantRepo{f.s}, fakeAuditRepo{f.s}, f.hash, f.s, f.s, AppURLs{Default: "http://app/", Admin: "http://admin.app/"})
+	return NewInviteUserUseCase(f.s, fakeUserRoleRepo{f.s}, fakeRoleRepo{f.s}, fakeInvRepo{f.s}, fakeOrgRepo{f.s}, fakeTenantDomainRepo{f.s}, fakeTenantRepo{f.s}, f.s.recorder(), f.hash, f.s, f.s, AppURLs{Default: "http://app/", Admin: "http://admin.app/"})
 }
 func (f *fixture) resend() *ResendInvitationUseCaseImpl {
-	return NewResendInvitationUseCase(fakeRoleRepo{f.s}, fakeInvRepo{f.s}, fakeAuditRepo{f.s}, f.hash, f.s, f.s, AppURLs{Default: "http://app"})
+	return NewResendInvitationUseCase(fakeRoleRepo{f.s}, fakeInvRepo{f.s}, f.s.recorder(), f.hash, f.s, f.s, AppURLs{Default: "http://app"})
 }
 func (f *fixture) revoke() *RevokeInvitationUseCaseImpl {
-	return NewRevokeInvitationUseCase(fakeInvRepo{f.s}, f.s, fakeUserRoleRepo{f.s}, fakeAuditRepo{f.s}, f.s)
+	return NewRevokeInvitationUseCase(fakeInvRepo{f.s}, f.s, fakeUserRoleRepo{f.s}, f.s.recorder(), f.s)
 }
 func (f *fixture) accept() *AcceptInvitationUseCaseImpl {
 	return NewAcceptInvitationUseCase(f.s, fakeInvRepo{f.s}, f.hash, f.s)
@@ -355,7 +356,7 @@ func TestAudit_InviteResendRevoke(t *testing.T) {
 	require.NoError(t, f.revoke().Execute(bg, f.tenantA, f.adminID, inv.ID))
 
 	require.Len(t, f.s.audits, 3)
-	want := []string{auditActionInvite, auditActionResend, auditActionRevoke}
+	want := []string{domainaudit.ActionInvitationInvite, domainaudit.ActionInvitationResend, domainaudit.ActionInvitationRevoke}
 	for i, a := range f.s.audits {
 		assert.Equal(t, want[i], a.Action)
 		assert.Equal(t, f.tenantA, a.TenantID)

@@ -5,9 +5,11 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+	domainaudit "github.com/skryfon/employee360/backend/internal/domain/audit"
 	"github.com/skryfon/employee360/backend/internal/domain/entity"
 	domainerrors "github.com/skryfon/employee360/backend/internal/domain/errors"
 	"github.com/skryfon/employee360/backend/internal/domain/repository"
+	"github.com/skryfon/employee360/backend/internal/domain/service"
 	tenanttypes "github.com/skryfon/employee360/backend/internal/types/tenant"
 	"github.com/skryfon/employee360/backend/internal/usecase/implementation/ucshared"
 	tenantusecase "github.com/skryfon/employee360/backend/internal/usecase/interface/tenant"
@@ -49,15 +51,15 @@ func (u *GetTenantUseCaseImpl) Execute(c context.Context, tenantID uuid.UUID) (*
 // RenameTenantUseCaseImpl implements tenantusecase.RenameTenantUseCase.
 type RenameTenantUseCaseImpl struct {
 	tenantRepo repository.TenantRepository
-	auditRepo  repository.AuditRepository
+	audit      service.AuditRecorder
 	transactor ucshared.Transactor
 }
 
 var _ tenantusecase.RenameTenantUseCase = (*RenameTenantUseCaseImpl)(nil)
 
 // NewRenameTenantUseCase constructs a RenameTenantUseCaseImpl.
-func NewRenameTenantUseCase(tenantRepo repository.TenantRepository, auditRepo repository.AuditRepository, transactor ucshared.Transactor) *RenameTenantUseCaseImpl {
-	return &RenameTenantUseCaseImpl{tenantRepo: tenantRepo, auditRepo: auditRepo, transactor: transactor}
+func NewRenameTenantUseCase(tenantRepo repository.TenantRepository, audit service.AuditRecorder, transactor ucshared.Transactor) *RenameTenantUseCaseImpl {
+	return &RenameTenantUseCaseImpl{tenantRepo: tenantRepo, audit: audit, transactor: transactor}
 }
 
 // Execute renames the tenant.
@@ -85,7 +87,7 @@ func (u *RenameTenantUseCaseImpl) Execute(c context.Context, actorID, tenantID u
 		}
 		t.Name, t.UpdatedAt, t.UpdatedBy = name, now, &actorID
 		out = t
-		return writeAudit(txCtx, u.auditRepo, tenantID, actorID, tenantID, auditEntityTenant, auditActionRename,
+		return u.audit.Record(txCtx, tenantID, actorID, domainaudit.ActionTenantRename, domainaudit.EntityTenant, tenantID,
 			map[string]any{"old_name": old, "new_name": name})
 	})
 	if err != nil {
@@ -124,15 +126,15 @@ func (u *ListTenantDomainsUseCaseImpl) Execute(c context.Context, tenantID uuid.
 type AddTenantDomainUseCaseImpl struct {
 	tenantRepo repository.TenantRepository
 	domainRepo repository.TenantDomainManager
-	auditRepo  repository.AuditRepository
+	audit      service.AuditRecorder
 	transactor ucshared.Transactor
 }
 
 var _ tenantusecase.AddTenantDomainUseCase = (*AddTenantDomainUseCaseImpl)(nil)
 
 // NewAddTenantDomainUseCase constructs an AddTenantDomainUseCaseImpl.
-func NewAddTenantDomainUseCase(tenantRepo repository.TenantRepository, domainRepo repository.TenantDomainManager, auditRepo repository.AuditRepository, transactor ucshared.Transactor) *AddTenantDomainUseCaseImpl {
-	return &AddTenantDomainUseCaseImpl{tenantRepo: tenantRepo, domainRepo: domainRepo, auditRepo: auditRepo, transactor: transactor}
+func NewAddTenantDomainUseCase(tenantRepo repository.TenantRepository, domainRepo repository.TenantDomainManager, audit service.AuditRecorder, transactor ucshared.Transactor) *AddTenantDomainUseCaseImpl {
+	return &AddTenantDomainUseCaseImpl{tenantRepo: tenantRepo, domainRepo: domainRepo, audit: audit, transactor: transactor}
 }
 
 // Execute registers a normalised, globally unique domain for the tenant.
@@ -156,7 +158,7 @@ func (u *AddTenantDomainUseCaseImpl) Execute(c context.Context, actorID, tenantI
 		if err := u.domainRepo.Create(txCtx, d); err != nil {
 			return err
 		}
-		return writeAudit(txCtx, u.auditRepo, tenantID, actorID, d.ID, auditEntityTenantDomain, auditActionDomainAdd,
+		return u.audit.Record(txCtx, tenantID, actorID, domainaudit.ActionTenantDomainAdd, domainaudit.EntityTenantDomain, d.ID,
 			map[string]any{"domain": domain})
 	})
 	if err != nil {
@@ -169,15 +171,15 @@ func (u *AddTenantDomainUseCaseImpl) Execute(c context.Context, actorID, tenantI
 type UpdateTenantDomainUseCaseImpl struct {
 	tenantRepo repository.TenantRepository
 	domainRepo repository.TenantDomainManager
-	auditRepo  repository.AuditRepository
+	audit      service.AuditRecorder
 	transactor ucshared.Transactor
 }
 
 var _ tenantusecase.UpdateTenantDomainUseCase = (*UpdateTenantDomainUseCaseImpl)(nil)
 
 // NewUpdateTenantDomainUseCase constructs an UpdateTenantDomainUseCaseImpl.
-func NewUpdateTenantDomainUseCase(tenantRepo repository.TenantRepository, domainRepo repository.TenantDomainManager, auditRepo repository.AuditRepository, transactor ucshared.Transactor) *UpdateTenantDomainUseCaseImpl {
-	return &UpdateTenantDomainUseCaseImpl{tenantRepo: tenantRepo, domainRepo: domainRepo, auditRepo: auditRepo, transactor: transactor}
+func NewUpdateTenantDomainUseCase(tenantRepo repository.TenantRepository, domainRepo repository.TenantDomainManager, audit service.AuditRecorder, transactor ucshared.Transactor) *UpdateTenantDomainUseCaseImpl {
+	return &UpdateTenantDomainUseCaseImpl{tenantRepo: tenantRepo, domainRepo: domainRepo, audit: audit, transactor: transactor}
 }
 
 // Execute changes the value of one of the tenant's live domains (same
@@ -221,7 +223,7 @@ func (u *UpdateTenantDomainUseCaseImpl) Execute(c context.Context, actorID, tena
 			return err
 		}
 		d.Domain, d.UpdatedAt, d.UpdatedBy = domain, now, &actorID
-		return writeAudit(txCtx, u.auditRepo, tenantID, actorID, domainID, auditEntityTenantDomain, auditActionDomainUpd,
+		return u.audit.Record(txCtx, tenantID, actorID, domainaudit.ActionTenantDomainUpdate, domainaudit.EntityTenantDomain, domainID,
 			map[string]any{"old_domain": old, "new_domain": domain})
 	})
 	if err != nil {
@@ -234,15 +236,15 @@ func (u *UpdateTenantDomainUseCaseImpl) Execute(c context.Context, actorID, tena
 type RemoveTenantDomainUseCaseImpl struct {
 	tenantRepo repository.TenantRepository
 	domainRepo repository.TenantDomainManager
-	auditRepo  repository.AuditRepository
+	audit      service.AuditRecorder
 	transactor ucshared.Transactor
 }
 
 var _ tenantusecase.RemoveTenantDomainUseCase = (*RemoveTenantDomainUseCaseImpl)(nil)
 
 // NewRemoveTenantDomainUseCase constructs a RemoveTenantDomainUseCaseImpl.
-func NewRemoveTenantDomainUseCase(tenantRepo repository.TenantRepository, domainRepo repository.TenantDomainManager, auditRepo repository.AuditRepository, transactor ucshared.Transactor) *RemoveTenantDomainUseCaseImpl {
-	return &RemoveTenantDomainUseCaseImpl{tenantRepo: tenantRepo, domainRepo: domainRepo, auditRepo: auditRepo, transactor: transactor}
+func NewRemoveTenantDomainUseCase(tenantRepo repository.TenantRepository, domainRepo repository.TenantDomainManager, audit service.AuditRecorder, transactor ucshared.Transactor) *RemoveTenantDomainUseCaseImpl {
+	return &RemoveTenantDomainUseCaseImpl{tenantRepo: tenantRepo, domainRepo: domainRepo, audit: audit, transactor: transactor}
 }
 
 // Execute soft-deletes the domain unless users still sign in with it
@@ -279,7 +281,7 @@ func (u *RemoveTenantDomainUseCaseImpl) Execute(c context.Context, actorID, tena
 		if err := u.domainRepo.SoftDelete(txCtx, tenantID, domainID, actorID, time.Now().UTC()); err != nil {
 			return err
 		}
-		return writeAudit(txCtx, u.auditRepo, tenantID, actorID, domainID, auditEntityTenantDomain, auditActionDomainDel,
+		return u.audit.Record(txCtx, tenantID, actorID, domainaudit.ActionTenantDomainRemove, domainaudit.EntityTenantDomain, domainID,
 			map[string]any{"domain": d.Domain})
 	})
 }

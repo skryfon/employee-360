@@ -6,8 +6,10 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+	domainaudit "github.com/skryfon/employee360/backend/internal/domain/audit"
 	domainerrors "github.com/skryfon/employee360/backend/internal/domain/errors"
 	"github.com/skryfon/employee360/backend/internal/domain/repository"
+	"github.com/skryfon/employee360/backend/internal/domain/service"
 	"github.com/skryfon/employee360/backend/internal/usecase/implementation/ucshared"
 	invusecase "github.com/skryfon/employee360/backend/internal/usecase/interface/invitation"
 )
@@ -17,7 +19,7 @@ type RevokeInvitationUseCaseImpl struct {
 	invitationRepo repository.UserInvitationRepository
 	userRepo       repository.UserRepository
 	userRoleRepo   repository.UserRoleRepository
-	auditRepo      repository.AuditRepository
+	audit          service.AuditRecorder
 	transactor     ucshared.Transactor
 }
 
@@ -28,12 +30,12 @@ func NewRevokeInvitationUseCase(
 	invitationRepo repository.UserInvitationRepository,
 	userRepo repository.UserRepository,
 	userRoleRepo repository.UserRoleRepository,
-	auditRepo repository.AuditRepository,
+	audit service.AuditRecorder,
 	transactor ucshared.Transactor,
 ) *RevokeInvitationUseCaseImpl {
 	return &RevokeInvitationUseCaseImpl{
 		invitationRepo: invitationRepo, userRepo: userRepo, userRoleRepo: userRoleRepo,
-		auditRepo: auditRepo, transactor: transactor,
+		audit: audit, transactor: transactor,
 	}
 }
 
@@ -71,7 +73,7 @@ func (u *RevokeInvitationUseCaseImpl) Execute(c context.Context, tenantID, actor
 			}
 			removed = true
 		}
-		return writeAudit(txCtx, u.auditRepo, tenantID, actorID, inv.ID, auditActionRevoke,
+		return u.audit.Record(txCtx, tenantID, actorID, domainaudit.ActionInvitationRevoke, domainaudit.EntityInvitation, inv.ID,
 			map[string]any{"email": inv.Email, "pending_user_removed": removed})
 	})
 }

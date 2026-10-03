@@ -5,7 +5,6 @@ import (
 	"context"
 	"crypto/rand"
 	"encoding/hex"
-	"encoding/json"
 	"errors"
 	"strings"
 	"time"
@@ -16,28 +15,6 @@ import (
 	"github.com/skryfon/employee360/backend/internal/domain/repository"
 	"github.com/skryfon/employee360/backend/internal/domain/service"
 )
-
-const (
-	auditEntityInvitation = "user_invitation"
-	auditActionInvite     = "invitation.invite"
-	auditActionResend     = "invitation.resend"
-	auditActionRevoke     = "invitation.revoke"
-)
-
-// writeAudit records an admin mutation. Call it inside the mutation's
-// transaction so the audit entry commits or rolls back with it.
-func writeAudit(c context.Context, repo repository.AuditRepository, tenantID, actorID, entityID uuid.UUID, action string, meta map[string]any) error {
-	raw, err := json.Marshal(meta)
-	if err != nil {
-		return err
-	}
-	now := time.Now().UTC()
-	return repo.Create(c, &entity.AuditLog{
-		ID: uuid.New(), TenantID: tenantID, ActorUserID: &actorID,
-		Action: action, EntityType: auditEntityInvitation, EntityID: entityID,
-		Metadata: string(raw), CreatedAt: now, UpdatedAt: now,
-	})
-}
 
 const (
 	defaultInvitationExpiry = 7 * 24 * time.Hour

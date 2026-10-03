@@ -1,6 +1,8 @@
 package container
 
 import (
+	domainservice "github.com/skryfon/employee360/backend/internal/domain/service"
+	infraservice "github.com/skryfon/employee360/backend/internal/infrastructure/service"
 	"gorm.io/gorm"
 
 	"github.com/skryfon/employee360/backend/internal/delivery/http/handlers"
@@ -25,21 +27,21 @@ type DepartmentContainer struct {
 }
 
 // NewDepartmentContainer initializes and wires all department-related repository, usecases, and handler.
-func NewDepartmentContainer(db *gorm.DB, auditRepo repository.AuditRepository, transactor ucshared.Transactor) (*DepartmentContainer, error) {
+func NewDepartmentContainer(db *gorm.DB, recorder domainservice.AuditRecorder, transactor ucshared.Transactor) (*DepartmentContainer, error) {
 	repo := persistence.NewGormDepartmentRepository(db)
 
-	if auditRepo == nil && db != nil {
-		auditRepo = persistence.NewGormAuditRepository(db)
+	if recorder == nil && db != nil {
+		recorder = infraservice.NewAuditRecorder(persistence.NewGormAuditRepository(db))
 	}
 	if transactor == nil {
 		transactor = ucshared.NewNopTransactor()
 	}
 
-	createUC := deptimpl.NewCreateDepartmentUseCase(repo, auditRepo, transactor)
+	createUC := deptimpl.NewCreateDepartmentUseCase(repo, recorder, transactor)
 	getUC := deptimpl.NewGetDepartmentUseCase(repo)
 	listUC := deptimpl.NewListDepartmentsUseCase(repo)
-	updateUC := deptimpl.NewUpdateDepartmentUseCase(repo, auditRepo, transactor)
-	deleteUC := deptimpl.NewDeleteDepartmentUseCase(repo, auditRepo, transactor)
+	updateUC := deptimpl.NewUpdateDepartmentUseCase(repo, recorder, transactor)
+	deleteUC := deptimpl.NewDeleteDepartmentUseCase(repo, recorder, transactor)
 
 	handler := handlers.NewDepartmentHandler(createUC, getUC, listUC, updateUC, deleteUC)
 

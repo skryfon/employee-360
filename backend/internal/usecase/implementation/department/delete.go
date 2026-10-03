@@ -4,8 +4,10 @@ import (
 	"context"
 
 	"github.com/google/uuid"
+	domainaudit "github.com/skryfon/employee360/backend/internal/domain/audit"
 	domainerrors "github.com/skryfon/employee360/backend/internal/domain/errors"
 	"github.com/skryfon/employee360/backend/internal/domain/repository"
+	"github.com/skryfon/employee360/backend/internal/domain/service"
 	depttypes "github.com/skryfon/employee360/backend/internal/types/department"
 	"github.com/skryfon/employee360/backend/internal/usecase/implementation/ucshared"
 	deptuc "github.com/skryfon/employee360/backend/internal/usecase/interface/department"
@@ -13,14 +15,14 @@ import (
 
 type deleteDepartmentUseCase struct {
 	repo       repository.DepartmentRepository
-	auditRepo  repository.AuditRepository
+	audit      service.AuditRecorder
 	transactor ucshared.Transactor
 }
 
 // NewDeleteDepartmentUseCase creates a new DeleteDepartmentUseCase.
 func NewDeleteDepartmentUseCase(
 	repo repository.DepartmentRepository,
-	auditRepo repository.AuditRepository,
+	audit service.AuditRecorder,
 	transactor ucshared.Transactor,
 ) deptuc.DeleteDepartmentUseCase {
 	if transactor == nil {
@@ -28,7 +30,7 @@ func NewDeleteDepartmentUseCase(
 	}
 	return &deleteDepartmentUseCase{
 		repo:       repo,
-		auditRepo:  auditRepo,
+		audit:      audit,
 		transactor: transactor,
 	}
 }
@@ -62,7 +64,7 @@ func (uc *deleteDepartmentUseCase) Execute(c context.Context, tenantID, actorID 
 			return err
 		}
 
-		return writeAudit(txCtx, uc.auditRepo, tenantID, actorID, dept.ID, auditActionDelete, map[string]any{
+		return uc.audit.Record(txCtx, tenantID, actorID, domainaudit.ActionDepartmentDelete, domainaudit.EntityDepartment, dept.ID, map[string]any{
 			"name": dept.Name,
 		})
 	})

@@ -3,6 +3,8 @@ package position
 import (
 	"context"
 	"errors"
+	domainaudit "github.com/skryfon/employee360/backend/internal/domain/audit"
+	"github.com/skryfon/employee360/backend/internal/usecase/implementation/ucshared/ucsharedtest"
 	"strings"
 	"testing"
 
@@ -35,7 +37,7 @@ func TestCreatePositionUseCase_Execute(t *testing.T) {
 				return nil
 			},
 		}
-		auditRepo := &mockAuditRepo{}
+		auditRepo := &ucsharedtest.RecordingAuditRecorder{}
 		uc := NewCreatePositionUseCase(repo, auditRepo, nil)
 
 		res, err := uc.Execute(ctx, tenantID, actorID, postypes.CreatePositionInput{
@@ -51,12 +53,12 @@ func TestCreatePositionUseCase_Execute(t *testing.T) {
 		assert.NotEqual(t, uuid.Nil, res.ID)
 		assert.Equal(t, createdPos, res)
 
-		require.Len(t, auditRepo.logs, 1)
-		log := auditRepo.logs[0]
+		require.Len(t, auditRepo.Logs, 1)
+		log := auditRepo.Logs[0]
 		assert.Equal(t, tenantID, log.TenantID)
 		assert.Equal(t, &actorID, log.ActorUserID)
-		assert.Equal(t, auditEntityPosition, log.EntityType)
-		assert.Equal(t, auditActionCreate, log.Action)
+		assert.Equal(t, domainaudit.EntityPosition, log.EntityType)
+		assert.Equal(t, domainaudit.ActionPositionCreate, log.Action)
 		assert.Equal(t, res.ID, log.EntityID)
 		assert.Contains(t, log.Metadata, "Software Engineer")
 		assert.Contains(t, log.Metadata, `"is_active":true`)
@@ -64,7 +66,7 @@ func TestCreatePositionUseCase_Execute(t *testing.T) {
 
 	t.Run("defaults is_active to true when nil", func(t *testing.T) {
 		repo := &mockPositionRepo{}
-		auditRepo := &mockAuditRepo{}
+		auditRepo := &ucsharedtest.RecordingAuditRecorder{}
 		uc := NewCreatePositionUseCase(repo, auditRepo, nil)
 
 		res, err := uc.Execute(ctx, tenantID, actorID, postypes.CreatePositionInput{
@@ -77,7 +79,7 @@ func TestCreatePositionUseCase_Execute(t *testing.T) {
 
 	t.Run("honors is_active = false", func(t *testing.T) {
 		repo := &mockPositionRepo{}
-		auditRepo := &mockAuditRepo{}
+		auditRepo := &ucsharedtest.RecordingAuditRecorder{}
 		uc := NewCreatePositionUseCase(repo, auditRepo, nil)
 
 		fl := false
@@ -87,13 +89,13 @@ func TestCreatePositionUseCase_Execute(t *testing.T) {
 		})
 		require.NoError(t, err)
 		assert.False(t, res.IsActive)
-		require.Len(t, auditRepo.logs, 1)
-		assert.Contains(t, auditRepo.logs[0].Metadata, `"is_active":false`)
+		require.Len(t, auditRepo.Logs, 1)
+		assert.Contains(t, auditRepo.Logs[0].Metadata, `"is_active":false`)
 	})
 
 	t.Run("trims whitespace from name and description", func(t *testing.T) {
 		repo := &mockPositionRepo{}
-		auditRepo := &mockAuditRepo{}
+		auditRepo := &ucsharedtest.RecordingAuditRecorder{}
 		uc := NewCreatePositionUseCase(repo, auditRepo, nil)
 
 		res, err := uc.Execute(ctx, tenantID, actorID, postypes.CreatePositionInput{
@@ -106,7 +108,7 @@ func TestCreatePositionUseCase_Execute(t *testing.T) {
 	})
 
 	t.Run("unauthorized when tenantID or actorID is nil", func(t *testing.T) {
-		uc := NewCreatePositionUseCase(&mockPositionRepo{}, &mockAuditRepo{}, nil)
+		uc := NewCreatePositionUseCase(&mockPositionRepo{}, &ucsharedtest.RecordingAuditRecorder{}, nil)
 
 		_, err := uc.Execute(ctx, uuid.Nil, actorID, postypes.CreatePositionInput{Name: "Engineering"})
 		require.ErrorIs(t, err, domainerrors.ErrUnauthorized)
@@ -116,7 +118,7 @@ func TestCreatePositionUseCase_Execute(t *testing.T) {
 	})
 
 	t.Run("validation: name required", func(t *testing.T) {
-		uc := NewCreatePositionUseCase(&mockPositionRepo{}, &mockAuditRepo{}, nil)
+		uc := NewCreatePositionUseCase(&mockPositionRepo{}, &ucsharedtest.RecordingAuditRecorder{}, nil)
 
 		_, err := uc.Execute(ctx, tenantID, actorID, postypes.CreatePositionInput{Name: ""})
 		require.ErrorIs(t, err, ErrPositionNameRequired)
@@ -126,7 +128,7 @@ func TestCreatePositionUseCase_Execute(t *testing.T) {
 	})
 
 	t.Run("validation: name too long", func(t *testing.T) {
-		uc := NewCreatePositionUseCase(&mockPositionRepo{}, &mockAuditRepo{}, nil)
+		uc := NewCreatePositionUseCase(&mockPositionRepo{}, &ucsharedtest.RecordingAuditRecorder{}, nil)
 
 		longName := strings.Repeat("a", 101)
 		_, err := uc.Execute(ctx, tenantID, actorID, postypes.CreatePositionInput{Name: longName})
@@ -144,7 +146,7 @@ func TestCreatePositionUseCase_Execute(t *testing.T) {
 	})
 
 	t.Run("validation: description too long", func(t *testing.T) {
-		uc := NewCreatePositionUseCase(&mockPositionRepo{}, &mockAuditRepo{}, nil)
+		uc := NewCreatePositionUseCase(&mockPositionRepo{}, &ucsharedtest.RecordingAuditRecorder{}, nil)
 
 		longDesc := strings.Repeat("a", 501)
 		_, err := uc.Execute(ctx, tenantID, actorID, postypes.CreatePositionInput{Name: "Valid", Description: longDesc})
@@ -162,7 +164,7 @@ func TestCreatePositionUseCase_Execute(t *testing.T) {
 				return true, nil
 			},
 		}
-		uc := NewCreatePositionUseCase(repo, &mockAuditRepo{}, nil)
+		uc := NewCreatePositionUseCase(repo, &ucsharedtest.RecordingAuditRecorder{}, nil)
 
 		_, err := uc.Execute(ctx, tenantID, actorID, postypes.CreatePositionInput{Name: "Existing"})
 		require.ErrorIs(t, err, domainerrors.ErrPositionNameTaken)
@@ -175,7 +177,7 @@ func TestCreatePositionUseCase_Execute(t *testing.T) {
 				return expectedErr
 			},
 		}
-		uc := NewCreatePositionUseCase(repo, &mockAuditRepo{}, nil)
+		uc := NewCreatePositionUseCase(repo, &ucsharedtest.RecordingAuditRecorder{}, nil)
 
 		_, err := uc.Execute(ctx, tenantID, actorID, postypes.CreatePositionInput{Name: "Valid"})
 		require.ErrorIs(t, err, expectedErr)

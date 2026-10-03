@@ -5,43 +5,15 @@ package tenant
 
 import (
 	"context"
-	"encoding/json"
 	"regexp"
 	"strings"
-	"time"
 	"unicode/utf8"
 
 	"github.com/google/uuid"
-	"github.com/skryfon/employee360/backend/internal/domain/entity"
 	domainerrors "github.com/skryfon/employee360/backend/internal/domain/errors"
 	"github.com/skryfon/employee360/backend/internal/domain/repository"
 	tenanttypes "github.com/skryfon/employee360/backend/internal/types/tenant"
 )
-
-const (
-	auditEntityTenant       = "tenant"
-	auditEntityTenantDomain = "tenant_domain"
-
-	auditActionRename    = "tenant.rename"
-	auditActionDomainAdd = "tenant.domain.add"
-	auditActionDomainUpd = "tenant.domain.update"
-	auditActionDomainDel = "tenant.domain.remove"
-)
-
-// writeAudit records a mutation against the caller's tenant's audit trail. Call it inside the mutation's transaction so the entry commits or
-// rolls back with it.
-func writeAudit(c context.Context, repo repository.AuditRepository, tenantID, actorID, entityID uuid.UUID, entityType, action string, meta map[string]any) error {
-	raw, err := json.Marshal(meta)
-	if err != nil {
-		return err
-	}
-	now := time.Now().UTC()
-	return repo.Create(c, &entity.AuditLog{
-		ID: uuid.New(), TenantID: tenantID, ActorUserID: &actorID,
-		Action: action, EntityType: entityType, EntityID: entityID,
-		Metadata: string(raw), CreatedAt: now, UpdatedAt: now,
-	})
-}
 
 func requireActor(actorID uuid.UUID) error {
 	if actorID == uuid.Nil {

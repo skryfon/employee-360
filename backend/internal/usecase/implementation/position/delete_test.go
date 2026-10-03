@@ -3,6 +3,8 @@ package position
 import (
 	"context"
 	"errors"
+	domainaudit "github.com/skryfon/employee360/backend/internal/domain/audit"
+	"github.com/skryfon/employee360/backend/internal/usecase/implementation/ucshared/ucsharedtest"
 	"testing"
 
 	"github.com/google/uuid"
@@ -46,7 +48,7 @@ func TestDeletePositionUseCase_Execute(t *testing.T) {
 				return nil
 			},
 		}
-		auditRepo := &mockAuditRepo{}
+		auditRepo := &ucsharedtest.RecordingAuditRecorder{}
 		uc := NewDeletePositionUseCase(repo, auditRepo, nil)
 
 		err := uc.Execute(ctx, tenantID, actorID, postypes.DeletePositionInput{ID: posID})
@@ -54,16 +56,16 @@ func TestDeletePositionUseCase_Execute(t *testing.T) {
 		assert.Equal(t, posID, deletedID)
 		assert.Equal(t, 1, repo.forUpdateCalls)
 
-		require.Len(t, auditRepo.logs, 1)
-		log := auditRepo.logs[0]
-		assert.Equal(t, auditActionDelete, log.Action)
-		assert.Equal(t, auditEntityPosition, log.EntityType)
+		require.Len(t, auditRepo.Logs, 1)
+		log := auditRepo.Logs[0]
+		assert.Equal(t, domainaudit.ActionPositionDelete, log.Action)
+		assert.Equal(t, domainaudit.EntityPosition, log.EntityType)
 		assert.Equal(t, posID, log.EntityID)
 		assert.Contains(t, log.Metadata, "Lead Engineer")
 	})
 
 	t.Run("unauthorized on nil tenantID or actorID", func(t *testing.T) {
-		uc := NewDeletePositionUseCase(&mockPositionRepo{}, &mockAuditRepo{}, nil)
+		uc := NewDeletePositionUseCase(&mockPositionRepo{}, &ucsharedtest.RecordingAuditRecorder{}, nil)
 
 		err := uc.Execute(ctx, uuid.Nil, actorID, postypes.DeletePositionInput{ID: posID})
 		require.ErrorIs(t, err, domainerrors.ErrUnauthorized)
@@ -73,7 +75,7 @@ func TestDeletePositionUseCase_Execute(t *testing.T) {
 	})
 
 	t.Run("nil uuid returns ErrPositionNotFound", func(t *testing.T) {
-		uc := NewDeletePositionUseCase(&mockPositionRepo{}, &mockAuditRepo{}, nil)
+		uc := NewDeletePositionUseCase(&mockPositionRepo{}, &ucsharedtest.RecordingAuditRecorder{}, nil)
 
 		err := uc.Execute(ctx, tenantID, actorID, postypes.DeletePositionInput{ID: uuid.Nil})
 		require.ErrorIs(t, err, domainerrors.ErrPositionNotFound)
@@ -85,7 +87,7 @@ func TestDeletePositionUseCase_Execute(t *testing.T) {
 				return nil, domainerrors.ErrPositionNotFound
 			},
 		}
-		uc := NewDeletePositionUseCase(repo, &mockAuditRepo{}, nil)
+		uc := NewDeletePositionUseCase(repo, &ucsharedtest.RecordingAuditRecorder{}, nil)
 
 		err := uc.Execute(ctx, tenantID, actorID, postypes.DeletePositionInput{ID: posID})
 		require.ErrorIs(t, err, domainerrors.ErrPositionNotFound)
@@ -100,7 +102,7 @@ func TestDeletePositionUseCase_Execute(t *testing.T) {
 				return true, nil
 			},
 		}
-		uc := NewDeletePositionUseCase(repo, &mockAuditRepo{}, nil)
+		uc := NewDeletePositionUseCase(repo, &ucsharedtest.RecordingAuditRecorder{}, nil)
 
 		err := uc.Execute(ctx, tenantID, actorID, postypes.DeletePositionInput{ID: posID})
 		require.ErrorIs(t, err, domainerrors.ErrPositionInUse)
@@ -119,7 +121,7 @@ func TestDeletePositionUseCase_Execute(t *testing.T) {
 				return expectedErr
 			},
 		}
-		uc := NewDeletePositionUseCase(repo, &mockAuditRepo{}, nil)
+		uc := NewDeletePositionUseCase(repo, &ucsharedtest.RecordingAuditRecorder{}, nil)
 
 		err := uc.Execute(ctx, tenantID, actorID, postypes.DeletePositionInput{ID: posID})
 		require.ErrorIs(t, err, expectedErr)
