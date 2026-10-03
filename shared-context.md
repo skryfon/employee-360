@@ -35,12 +35,10 @@ work; it is the authoritative current scope**, not the tech-stack description be
   employee OTP login, forgot/reset password, admin invitation-management UI,
   invitation-accept page). →
   `plan/cycles/cycle-02-auth-onboarding.md`
-- **Cycle 3 (planned, blocked on Cycle 2)** — Holiday Calendar: migrations +
-  seeding only. No handlers, no routes, no frontend. →
+- **Cycle 3 (planned, blocked on Cycle 2)** — Holiday Calendar, full stack:
+  migrations + seeding, backend API (holiday/category CRUD, year-wise queries,
+  calendar settings), and admin/employee frontend (calendar + list views). →
   `plan/cycles/cycle-03-holiday-calendar-migrations-seeding.md`
-- Backend API and frontend for Holiday Calendar are later, not-yet-filed cycles —
-  don't build them yet, even though the target architecture is described below for
-  context.
 - Further modules (Work Status, Leave Management, Courses/Certifications, Benefits,
   Career Growth, Salary/Taxation, Appraisal, Company Policies): no cycle file until
   work starts on them — don't foreclose them.
