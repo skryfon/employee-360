@@ -162,6 +162,23 @@ func registerRoutes(engine *gin.Engine, c *container.Container) {
 				deptGroup.DELETE("/:id", dh.Delete)
 			}
 		}
+
+		// Positions: tenant-scoped position CRUD (admin/super_admin only).
+		if c.Position != nil && c.Position.Handler != nil && c.Auth != nil && c.Auth.TokenService != nil {
+			ph := c.Position.Handler
+			posGroup := v1.Group("/positions",
+				middleware.Auth(c.Auth.TokenService, c.Auth.IdentityVerifier),
+				middleware.Tenant(),
+				middleware.RequireRole(entity.RoleAdmin, entity.RoleSuperAdmin),
+			)
+			{
+				posGroup.POST("", ph.Create)
+				posGroup.GET("", ph.List)
+				posGroup.GET("/:id", ph.GetByID)
+				posGroup.PUT("/:id", ph.Update)
+				posGroup.DELETE("/:id", ph.Delete)
+			}
+		}
 	}
 
 	// Swagger UI: interactive API docs, always available (no environment gating).

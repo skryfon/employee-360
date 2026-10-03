@@ -32,4 +32,7 @@ func TestNew_ConstructsWithoutTouchingDB(t *testing.T) {
 	if c.Department == nil || c.Department.Handler == nil {
 		t.Fatal("expected Department sub-container and its handler to be wired")
 	}
+	if c.Position == nil || c.Position.Handler == nil {
+		t.Fatal("expected Position sub-container and its handler to be wired")
+	}
 }

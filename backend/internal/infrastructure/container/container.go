@@ -28,6 +28,7 @@ type AppContainer struct {
 	Health     *HealthContainer
 	Auth       *AuthContainer
 	Department *DepartmentContainer
+	Position   *PositionContainer
 }
 
 // NewAppContainer wires the full dependency graph for the application.
@@ -64,6 +65,11 @@ func NewAppContainer(cfg *config.Config, db *gorm.DB, log zerolog.Logger) (*AppC
 		return nil, err
 	}
 
+	positionContainer, err := NewPositionContainer(db, authContainer.AuditRepo, transactor)
+	if err != nil {
+		return nil, err
+	}
+
 	return &AppContainer{
 		Config:     cfg,
 		Log:        log,
@@ -71,6 +77,7 @@ func NewAppContainer(cfg *config.Config, db *gorm.DB, log zerolog.Logger) (*AppC
 		Health:     healthContainer,
 		Auth:       authContainer,
 		Department: departmentContainer,
+		Position:   positionContainer,
 	}, nil
 }
 
