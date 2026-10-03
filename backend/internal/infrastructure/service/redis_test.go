@@ -153,3 +153,22 @@ func TestNoopCache(t *testing.T) {
 	require.ErrorIs(t, err, domainservice.ErrCacheUnavailable)
 	require.ErrorIs(t, n.Ping(ctx), domainservice.ErrCacheUnavailable)
 }
+
+func TestRedisCache_ErrorChainPreservesCause(t *testing.T) {
+	c, _ := newTestCache(t)
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	_, err := c.Get(ctx, "k")
+	require.Error(t, err)
+	assert.ErrorIs(t, err, domainservice.ErrCacheUnavailable)
+	assert.ErrorIs(t, err, context.Canceled)
+}
+
+func TestRedisCache_PingBoundedWhenDown(t *testing.T) {
+	c, mr := newTestCache(t)
+	mr.Close()
+	start := time.Now()
+	err := c.Ping(context.Background())
+	require.ErrorIs(t, err, domainservice.ErrCacheUnavailable)
+	assert.Less(t, time.Since(start), 3*time.Second)
+}

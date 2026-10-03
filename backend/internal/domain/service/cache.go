@@ -19,6 +19,9 @@ var (
 // Cache is the domain port for a key/value store with expiry. Every write
 // requires a positive TTL so entries can never live forever by accident.
 //
+// Keys are raw strings for now; a typed key is deferred to the first consumer
+// ticket.
+//
 // Keys must be built with CacheKey / GlobalCacheKey so tenant data is
 // namespaced. Failure policy is decided by each consumer (for example rate
 // limiting falls back to in-memory; identity caching fails closed).

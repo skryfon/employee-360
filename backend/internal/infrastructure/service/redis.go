@@ -5,7 +5,6 @@ import (
 	"crypto/tls"
 	"errors"
 	"fmt"
-	"os"
 	"time"
 
 	"github.com/redis/go-redis/v9"
@@ -84,8 +83,18 @@ func NewRedisCache(client *redis.Client, log zerolog.Logger) *RedisCache {
 
 func (c *RedisCache) fail(op string, err error) error {
 	c.log.Warn().Err(err).Str("op", op).Msg("redis cache operation failed")
-	return fmt.Errorf("%w: %s: %v", domainservice.ErrCacheUnavailable, op, err)
+	return wrapCacheErr(op, err)
 }
+
+// wrapCacheErr wraps the cause with ErrCacheUnavailable while preserving the
+// cause chain, so errors.Is works for both (e.g. context.Canceled).
+func wrapCacheErr(op string, err error) error {
+	return fmt.Errorf("%w: %s: %w", domainservice.ErrCacheUnavailable, op, err)
+}
+
+// pingTimeout bounds a single health Ping so /health stays responsive when
+// Redis is down.
+const pingTimeout = 2 * time.Second
 
 // Get returns the value at key or domainservice.ErrCacheMiss.
 func (c *RedisCache) Get(ctx context.Context, key string) (string, error) {
@@ -136,8 +145,16 @@ func (c *RedisCache) Incr(ctx context.Context, key string, ttl time.Duration) (i
 
 // Ping checks Redis reachability.
 func (c *RedisCache) Ping(ctx context.Context) error {
+	timeout := pingTimeout
+	if rt := c.client.Options().ReadTimeout; rt > 0 && rt < timeout {
+		timeout = rt
+	}
+	ctx, cancel := context.WithTimeout(ctx, timeout)
+	defer cancel()
 	if err := c.client.Ping(ctx).Err(); err != nil {
-		return c.fail("ping", err)
+		// Debug: health probes hit this repeatedly while Redis is down.
+		c.log.Debug().Err(err).Str("op", "ping").Msg("redis ping failed")
+		return wrapCacheErr("ping", err)
 	}
 	return nil
 }
@@ -145,11 +162,4 @@ func (c *RedisCache) Ping(ctx context.Context) error {
 // Close releases the connection pool; call during shutdown.
 func (c *RedisCache) Close() error {
 	return c.client.Close()
-}
-
-// FailFast writes "redis unreachable: <err>" to stderr and exits with code 1.
-// Used at startup when Redis is enabled but cannot be reached.
-func FailFast(err error) {
-	fmt.Fprintf(os.Stderr, "redis unreachable: %v\n", err)
-	os.Exit(1)
 }

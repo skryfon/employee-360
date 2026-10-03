@@ -53,7 +53,8 @@ func main() {
 	if cfg.Redis.Enabled {
 		redisClient, err := infraservice.NewRedisClient(cfg.Redis)
 		if err != nil {
-			infraservice.FailFast(err)
+			fmt.Fprintf(os.Stderr, "redis unreachable: %v\n", err)
+			os.Exit(1)
 		}
 		redisCache = infraservice.NewRedisCache(redisClient, log)
 		appCache = redisCache
