@@ -10,6 +10,7 @@ import { useAuthStore } from '../../../stores/authStore'
 import { toast } from 'sonner'
 
 let mock: MockAdapter
+const POS_ID = '33333333-3333-4333-8333-333333333333'
 const DEPT_ID = '22222222-2222-4222-8222-222222222222'
 const ROLE_ID = '11111111-1111-4111-8111-111111111111'
 
@@ -41,6 +42,7 @@ beforeEach(() => {
   mock.onGet('/api/v1/users/invitations').reply(() => [200, { success: true, data: rows, meta: { total_pages: 1 } }])
   mock.onGet('/api/v1/roles').reply(200, { success: true, data: [{ id: ROLE_ID, name: 'admin' }] })
   mock.onGet('/api/v1/departments').reply(200, { success: true, data: [{ id: DEPT_ID, name: 'Engineering', is_active: true }], meta: { page: 1, page_size: 100, total_items: 1, total_pages: 1 } })
+  mock.onGet('/api/v1/positions').reply(200, { success: true, data: [{ id: POS_ID, name: 'Engineer', is_active: true }], meta: { page: 1, page_size: 100, total_items: 1, total_pages: 1 } })
   clearSession()
   useAuthStore.getState().clear()
   localStorage.clear()
@@ -249,6 +251,47 @@ describe('invitations', () => {
     renderAt('/invitations/new')
     const link = await screen.findByRole('link', { name: 'Create one in Departments' })
     expect(link).toHaveAttribute('href', '/departments')
+  })
+
+  it('sends the selected position_id from active positions', async () => {
+    signIn()
+    mock.onPost('/api/v1/users/invitations').reply(201, { success: true, data: rows[0] })
+    renderAt('/invitations/new')
+    await screen.findByRole('option', { name: 'Engineer' })
+    const req = mock.history.get.find((r) => r.url === '/api/v1/positions')
+    expect(req?.params).toMatchObject({ is_active: true, page_size: 100 })
+    await userEvent.type(screen.getByLabelText('Email'), 'new@x.com')
+    await screen.findByRole('option', { name: 'admin' })
+    await userEvent.selectOptions(screen.getByLabelText('Role'), ROLE_ID)
+    await userEvent.selectOptions(screen.getByLabelText('Position (optional)'), POS_ID)
+    await userEvent.click(screen.getByRole('button', { name: 'Send invitation' }))
+    await waitFor(() => expect(mock.history.post).toHaveLength(1))
+    expect(JSON.parse(mock.history.post[0].data)).toEqual({ email: 'new@x.com', role_id: ROLE_ID, position_id: POS_ID })
+  })
+
+  it('maps POSITION_INACTIVE to the position field and refetches options', async () => {
+    signIn()
+    const msg = 'Position is inactive'
+    mock.onPost('/api/v1/users/invitations').reply(400, { success: false, error: { code: 'POSITION_INACTIVE', message: msg } })
+    renderAt('/invitations/new')
+    await screen.findByRole('option', { name: 'Engineer' })
+    await userEvent.type(screen.getByLabelText('Email'), 'new@x.com')
+    await screen.findByRole('option', { name: 'admin' })
+    await userEvent.selectOptions(screen.getByLabelText('Role'), ROLE_ID)
+    await userEvent.selectOptions(screen.getByLabelText('Position (optional)'), POS_ID)
+    const before = mock.history.get.filter((r) => r.url === '/api/v1/positions').length
+    await userEvent.click(screen.getByRole('button', { name: 'Send invitation' }))
+    expect(await screen.findByText(msg)).toBeInTheDocument()
+    expect(screen.getByLabelText('Position (optional)')).toHaveAttribute('aria-invalid', 'true')
+    await waitFor(() => expect(mock.history.get.filter((r) => r.url === '/api/v1/positions').length).toBeGreaterThan(before))
+  })
+
+  it('shows an empty state linking to positions when none are active', async () => {
+    signIn()
+    mock.onGet('/api/v1/positions').reply(200, { success: true, data: [], meta: { page: 1, page_size: 100, total_items: 0, total_pages: 0 } })
+    renderAt('/invitations/new')
+    const link = await screen.findByRole('link', { name: 'Create one in Positions' })
+    expect(link).toHaveAttribute('href', '/positions')
   })
 
   it('shows an error when departments fail to load', async () => {

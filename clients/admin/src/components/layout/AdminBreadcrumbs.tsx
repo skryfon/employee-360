@@ -8,6 +8,8 @@ export const CRUMBS: CrumbConfig = {
   '/invitations': 'Invitations',
   '/invitations/new': 'Invite user',
   '/departments': 'Departments',
+  '/positions': 'Positions',
+  '/audit-logs': 'Audit log',
   '/settings/organization': 'Organization',
   // One crumb per organization tab (Organization > Domains).
   ...Object.fromEntries(ORGANIZATION_TABS.map((t) => [`${ORGANIZATION_BASE}/${t.path}`, t.label])),

@@ -6,6 +6,8 @@ import { invitationRoutes } from './features/invitations/routes'
 import { AppToaster } from './components/feedback/AppToaster'
 import { tenantRoutes } from './features/tenants/routes'
 import { departmentRoutes } from './features/departments/routes'
+import { positionRoutes } from './features/positions/routes'
+import { auditLogRoutes } from './features/audit-logs/routes'
 import { dashboardRoutes } from './features/dashboard/routes'
 
 export default function App() {
@@ -18,6 +20,8 @@ export default function App() {
             {dashboardRoutes}
             {invitationRoutes}
             {departmentRoutes}
+            {positionRoutes}
+            {auditLogRoutes}
             {tenantRoutes}
           </Route>
         </Route>
