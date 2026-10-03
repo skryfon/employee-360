@@ -30,7 +30,8 @@ work; it is the authoritative current scope**, not the tech-stack description be
   auth/tenant middleware (replacing Cycle 1's stubs), admin email+password login,
   employee passwordless (OTP) login, forgot/reset password, an asynchronous
   event-driven transactional email service (River-backed outbox), and admin-driven
-  user onboarding invitations. Full stack,
+  user onboarding invitations, plus department/position CRUD and the optional Redis
+  foundation (formerly Cycle 5, no consumers). Full stack,
   migrations through handlers **and the frontend that consumes them** (admin login,
   employee OTP login, forgot/reset password, admin invitation-management UI,
   invitation-accept page). →
@@ -38,11 +39,6 @@ work; it is the authoritative current scope**, not the tech-stack description be
 - **Cycle 3 (planned, blocked on Cycle 2)** — Holiday Calendar: migrations +
   seeding only. No handlers, no routes, no frontend. →
   `plan/cycles/cycle-03-holiday-calendar-migrations-seeding.md`
-- **Cycle 5 (EPIC-F, EMPLOYEE36-29)** — Redis foundation (backend only): optional
-  Redis service in compose, config, `Cache` port + go-redis adapter, tenant-scoped
-  key helper, health check, DI and CI. **No consumers** (rate limiting, OTP counters,
-  JWT revocation are follow-up tickets). Reverses Cycle 2's "no Redis" non-goal. →
-  `plan/cycles/cycle-05-redis-foundation.md`
 - Backend API and frontend for Holiday Calendar are later, not-yet-filed cycles —
   don't build them yet, even though the target architecture is described below for
   context.
