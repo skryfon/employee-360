@@ -9,9 +9,11 @@ import (
 
 	"github.com/skryfon/employee360/backend/config"
 	deliveryhttp "github.com/skryfon/employee360/backend/internal/delivery/http"
+	domainservice "github.com/skryfon/employee360/backend/internal/domain/service"
 	"github.com/skryfon/employee360/backend/internal/infrastructure/container"
 	"github.com/skryfon/employee360/backend/internal/infrastructure/database"
 	"github.com/skryfon/employee360/backend/internal/infrastructure/server"
+	infraservice "github.com/skryfon/employee360/backend/internal/infrastructure/service"
 	"github.com/skryfon/employee360/backend/pkg/logger"
 )
 
@@ -44,8 +46,25 @@ func main() {
 
 	log.Info().Msg("employee360 api: connected to database")
 
+	// Connect to Redis only when enabled (fail fast if unreachable); otherwise
+	// the container falls back to a no-op cache and health reports "disabled".
+	var redisCache *infraservice.RedisCache
+	var appCache domainservice.Cache
+	if cfg.Redis.Enabled {
+		redisClient, err := infraservice.NewRedisClient(cfg.Redis)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "redis unreachable: %v\n", err)
+			os.Exit(1)
+		}
+		redisCache = infraservice.NewRedisCache(redisClient, log)
+		appCache = redisCache
+		log.Info().Msg("employee360 api: connected to redis")
+	} else {
+		log.Info().Msg("employee360 api: redis disabled (REDIS_ENABLED=false)")
+	}
+
 	// Wire dependencies.
-	c, err := container.New(cfg, db, log)
+	c, err := container.New(cfg, db, appCache, log)
 	if err != nil {
 		log.Error().Err(err).Msg("failed to wire dependencies")
 		os.Exit(1)
@@ -81,6 +100,12 @@ func main() {
 		if err := srv.Shutdown(shutdownCtx); err != nil {
 			log.Error().Err(err).Msg("employee360 api: graceful shutdown failed")
 			os.Exit(1)
+		}
+
+		if redisCache != nil {
+			if err := redisCache.Close(); err != nil {
+				log.Warn().Err(err).Msg("employee360 api: closing redis failed")
+			}
 		}
 
 		log.Info().Msg("employee360 api: shutdown complete")

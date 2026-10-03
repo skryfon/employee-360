@@ -24,6 +24,9 @@ type AppContainer struct {
 	Config *config.Config
 	Log    zerolog.Logger
 	DB     *gorm.DB
+	// Cache is the Redis-backed cache, or a no-op cache when Redis is disabled.
+	// No consumers yet; it is wired for follow-up tickets.
+	Cache domainservice.Cache
 
 	Health     *HealthContainer
 	Auth       *AuthContainer
@@ -31,8 +34,14 @@ type AppContainer struct {
 }
 
 // NewAppContainer wires the full dependency graph for the application.
-func NewAppContainer(cfg *config.Config, db *gorm.DB, log zerolog.Logger) (*AppContainer, error) {
-	healthContainer := NewHealthContainer(db)
+//
+// cache may be nil when Redis is disabled; the container then exposes a no-op
+// cache and health reports redis as "disabled".
+func NewAppContainer(cfg *config.Config, db *gorm.DB, cache domainservice.Cache, log zerolog.Logger) (*AppContainer, error) {
+	healthContainer := NewHealthContainer(db, cache)
+	if cache == nil {
+		cache = infraservice.NewNoopCache()
+	}
 
 	// Transactional outbox: the GORM transactor and River-backed publisher share
 	// the in-flight transaction via context. A nil db (construction-only tests)
@@ -68,6 +77,7 @@ func NewAppContainer(cfg *config.Config, db *gorm.DB, log zerolog.Logger) (*AppC
 		Config:     cfg,
 		Log:        log,
 		DB:         db,
+		Cache:      cache,
 		Health:     healthContainer,
 		Auth:       authContainer,
 		Department: departmentContainer,
@@ -78,8 +88,8 @@ func NewAppContainer(cfg *config.Config, db *gorm.DB, log zerolog.Logger) (*AppC
 type Container = AppContainer
 
 // New is an alias for NewAppContainer.
-func New(cfg *config.Config, db *gorm.DB, log zerolog.Logger) (*AppContainer, error) {
-	return NewAppContainer(cfg, db, log)
+func New(cfg *config.Config, db *gorm.DB, cache domainservice.Cache, log zerolog.Logger) (*AppContainer, error) {
+	return NewAppContainer(cfg, db, cache, log)
 }
 
 // WorkerContainer holds the dependencies of the cmd/worker process.

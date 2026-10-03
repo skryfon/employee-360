@@ -762,7 +762,7 @@ const docTemplate = `{
         },
         "/api/v1/health": {
             "get": {
-                "description": "Returns application and database connectivity status. Used by load balancers, Kubernetes probes, monitoring, and client SDK smoke tests.",
+                "description": "Returns application, database and (optional) Redis connectivity status. Redis reports ok, unreachable or disabled and never changes the HTTP status. Used by load balancers, Kubernetes probes, monitoring, and client SDK smoke tests.",
                 "produces": [
                     "application/json"
                 ],
@@ -1629,7 +1629,7 @@ const docTemplate = `{
         },
         "/health": {
             "get": {
-                "description": "Returns application and database connectivity status. Used by load balancers, Kubernetes probes, monitoring, and client SDK smoke tests.",
+                "description": "Returns application, database and (optional) Redis connectivity status. Redis reports ok, unreachable or disabled and never changes the HTTP status. Used by load balancers, Kubernetes probes, monitoring, and client SDK smoke tests.",
                 "produces": [
                     "application/json"
                 ],
@@ -1661,7 +1661,7 @@ const docTemplate = `{
         },
         "/healthz": {
             "get": {
-                "description": "Returns application and database connectivity status. Used by load balancers, Kubernetes probes, monitoring, and client SDK smoke tests.",
+                "description": "Returns application, database and (optional) Redis connectivity status. Redis reports ok, unreachable or disabled and never changes the HTTP status. Used by load balancers, Kubernetes probes, monitoring, and client SDK smoke tests.",
                 "produces": [
                     "application/json"
                 ],
@@ -2343,6 +2343,10 @@ const docTemplate = `{
                     "type": "string"
                 },
                 "database": {
+                    "type": "string"
+                },
+                "redis": {
+                    "description": "Redis is \"ok\", \"unreachable\", or \"disabled\"; it never changes the HTTP status.",
                     "type": "string"
                 },
                 "status": {

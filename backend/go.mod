@@ -3,11 +3,13 @@ module github.com/skryfon/employee360/backend
 go 1.26.0
 
 require (
+	github.com/alicebob/miniredis/v2 v2.39.0
 	github.com/gin-gonic/gin v1.12.0
 	github.com/golang-jwt/jwt/v5 v5.3.1
 	github.com/golang-migrate/migrate/v4 v4.20.1
 	github.com/google/uuid v1.6.0
 	github.com/joho/godotenv v1.5.1
+	github.com/redis/go-redis/v9 v9.22.0
 	github.com/riverqueue/river v0.47.0
 	github.com/riverqueue/river/riverdriver/riverdatabasesql v0.47.0
 	github.com/rs/zerolog v1.35.1
@@ -19,6 +21,12 @@ require (
 	golang.org/x/crypto v0.55.0
 	gorm.io/driver/postgres v1.6.3
 	gorm.io/gorm v1.31.2
+)
+
+require (
+	github.com/cespare/xxhash/v2 v2.3.0 // indirect
+	github.com/yuin/gopher-lua v1.1.1 // indirect
+	go.uber.org/atomic v1.11.0 // indirect
 )
 
 require (

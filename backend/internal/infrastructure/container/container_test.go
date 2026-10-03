@@ -16,7 +16,7 @@ func TestNew_ConstructsWithoutTouchingDB(t *testing.T) {
 		CORS: config.CORSConfig{AllowedOrigins: []string{"*"}},
 	}
 
-	c, err := New(cfg, nil, zerolog.Nop())
+	c, err := New(cfg, nil, nil, zerolog.Nop())
 	if err != nil {
 		t.Fatalf("expected New() to succeed, got: %v", err)
 	}
@@ -28,6 +28,9 @@ func TestNew_ConstructsWithoutTouchingDB(t *testing.T) {
 	}
 	if c.Auth == nil || c.Auth.Handler == nil {
 		t.Fatal("expected Auth sub-container and its handler to be wired")
+	}
+	if c.Cache == nil {
+		t.Fatal("expected a no-op Cache when none is supplied")
 	}
 	if c.Department == nil || c.Department.Handler == nil {
 		t.Fatal("expected Department sub-container and its handler to be wired")

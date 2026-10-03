@@ -70,6 +70,15 @@ jobs:
           --health-interval 10s
           --health-timeout 5s
           --health-retries 5
+      redis:
+        image: redis:8.10.2-alpine
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
     env:
       DATABASE_HOST: localhost
       DATABASE_PORT: 5432
@@ -77,6 +86,8 @@ jobs:
       DATABASE_PASSWORD: postgres
       DATABASE_NAME: employee360
       DATABASE_SSLMODE: disable
+      REDIS_HOST: localhost
+      REDIS_PORT: 6379
     steps:
       - uses: actions/checkout@v4
 

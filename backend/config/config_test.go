@@ -443,3 +443,103 @@ func TestAppURLsOptionalOverrides(t *testing.T) {
 		t.Errorf("unexpected urls: %+v", cfg.App)
 	}
 }
+
+func clearRedisEnv(t *testing.T) {
+	t.Helper()
+	for _, k := range []string{"REDIS_ENABLED", "REDIS_URL", "REDIS_HOST", "REDIS_PORT", "REDIS_PASSWORD", "REDIS_DB", "REDIS_TLS", "REDIS_DIAL_TIMEOUT", "REDIS_READ_TIMEOUT", "REDIS_WRITE_TIMEOUT", "REDIS_POOL_SIZE"} {
+		t.Setenv(k, "")
+		os.Unsetenv(k)
+	}
+}
+
+func TestConfig_RedisDefaults(t *testing.T) {
+	t.Chdir(t.TempDir())
+	clearRedisEnv(t)
+
+	cfg, err := Load()
+	if err != nil {
+		t.Fatalf("expected Load() to succeed, got: %v", err)
+	}
+	r := cfg.Redis
+	if r.Enabled {
+		t.Error("expected Redis disabled by default")
+	}
+	if r.Host != "localhost" || r.Port != 6379 || r.DB != 0 || r.TLS {
+		t.Errorf("unexpected defaults: %+v", r)
+	}
+	if r.PoolSize != 10 || r.DialTimeout != 5*time.Second || r.ReadTimeout != 3*time.Second || r.WriteTimeout != 3*time.Second {
+		t.Errorf("unexpected pool/timeout defaults: %+v", r)
+	}
+	if r.Addr() != "localhost:6379" {
+		t.Errorf("unexpected Addr %q", r.Addr())
+	}
+}
+
+func TestConfig_RedisEnvOverrides(t *testing.T) {
+	t.Chdir(t.TempDir())
+	clearRedisEnv(t)
+	t.Setenv("REDIS_ENABLED", "true")
+	t.Setenv("REDIS_HOST", "redis")
+	t.Setenv("REDIS_PORT", "6380")
+	t.Setenv("REDIS_PASSWORD", "s3cret")
+	t.Setenv("REDIS_DB", "2")
+	t.Setenv("REDIS_TLS", "true")
+	t.Setenv("REDIS_POOL_SIZE", "20")
+	t.Setenv("REDIS_DIAL_TIMEOUT", "1s")
+
+	cfg, err := Load()
+	if err != nil {
+		t.Fatalf("expected Load() to succeed, got: %v", err)
+	}
+	r := cfg.Redis
+	if !r.Enabled || r.Host != "redis" || r.Port != 6380 || r.Password != "s3cret" || r.DB != 2 || !r.TLS || r.PoolSize != 20 || r.DialTimeout != time.Second {
+		t.Errorf("env overrides not applied: %+v", r)
+	}
+}
+
+func TestConfig_RedisValidation(t *testing.T) {
+	base := func() *Config {
+		return &Config{
+			App: AppConfig{Environment: "development"},
+			Redis: RedisConfig{Enabled: true, Host: "localhost", Port: 6379, PoolSize: 10,
+				DialTimeout: time.Second, ReadTimeout: time.Second, WriteTimeout: time.Second},
+		}
+	}
+	cases := []struct {
+		name    string
+		mutate  func(c *Config)
+		wantErr bool
+	}{
+		{"valid", func(c *Config) {}, false},
+		{"disabled ignores bad values", func(c *Config) { c.Redis.Enabled = false; c.Redis.Port = 0; c.Redis.PoolSize = 0 }, false},
+		{"port zero", func(c *Config) { c.Redis.Port = 0 }, true},
+		{"port too high", func(c *Config) { c.Redis.Port = 70000 }, true},
+		{"empty host", func(c *Config) { c.Redis.Host = "" }, true},
+		{"pool size zero", func(c *Config) { c.Redis.PoolSize = 0 }, true},
+		{"negative db", func(c *Config) { c.Redis.DB = -1 }, true},
+		{"negative timeout", func(c *Config) { c.Redis.ReadTimeout = -time.Second }, true},
+		{"url bypasses host/port checks", func(c *Config) { c.Redis.URL = "redis://localhost:6379/0"; c.Redis.Host = ""; c.Redis.Port = 0 }, false},
+		{"dev without password ok", func(c *Config) {}, false},
+		{"production without password", func(c *Config) { prodCfg(c) }, true},
+		{"production with password", func(c *Config) { prodCfg(c); c.Redis.Password = "pw" }, false},
+		{"production url with password", func(c *Config) { prodCfg(c); c.Redis.URL = "rediss://:pw@host:6379/0" }, false},
+		{"production url without password", func(c *Config) { prodCfg(c); c.Redis.URL = "rediss://host:6379/0" }, true},
+		{"staging without password", func(c *Config) { prodCfg(c); c.App.Environment = "staging" }, true},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			c := base()
+			tc.mutate(c)
+			err := c.Validate()
+			if (err != nil) != tc.wantErr {
+				t.Fatalf("Validate() err = %v, wantErr %v", err, tc.wantErr)
+			}
+		})
+	}
+}
+
+func prodCfg(c *Config) {
+	c.App.Environment = "production"
+	c.App.FrontendURL = "https://app.example.com"
+	c.JWT.Secret = "a-very-long-custom-secret-that-is-over-32-chars"
+}
