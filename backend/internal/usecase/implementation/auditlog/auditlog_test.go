@@ -69,10 +69,21 @@ func TestListAuditLogs(t *testing.T) {
 			assert.Equal(t, 0, offset)
 			return nil, 0, nil
 		}}
-		out, err := NewListAuditLogsUseCase(repo).Execute(ctx, tenantID, altypes.ListAuditLogsQuery{Page: -1, PageSize: 500, Action: "position.create"})
+		out, err := NewListAuditLogsUseCase(repo).Execute(ctx, tenantID, altypes.ListAuditLogsQuery{Page: -1, PageSize: 0, Action: "position.create"})
 		require.NoError(t, err)
 		assert.Equal(t, 1, out.Page)
 		assert.Equal(t, 20, out.PageSize)
+	})
+
+	t.Run("page size above max is clamped to 100", func(t *testing.T) {
+		repo := &mockRepo{listFn: func(_ context.Context, _ uuid.UUID, _ repository.AuditLogFilter, limit, offset int) ([]*entity.AuditLogEntry, int64, error) {
+			assert.Equal(t, 100, limit)
+			assert.Equal(t, 0, offset)
+			return nil, 0, nil
+		}}
+		out, err := NewListAuditLogsUseCase(repo).Execute(ctx, tenantID, altypes.ListAuditLogsQuery{PageSize: 500})
+		require.NoError(t, err)
+		assert.Equal(t, 100, out.PageSize)
 	})
 
 	t.Run("from after to is invalid", func(t *testing.T) {

@@ -14,6 +14,11 @@ import (
 )
 
 const (
+	defaultPageSize = 20
+	maxPageSize     = 100
+)
+
+const (
 	maxActionLen     = 100
 	maxEntityTypeLen = 100
 )
@@ -46,8 +51,11 @@ func (uc *listAuditLogsUseCase) Execute(c context.Context, tenantID uuid.UUID, i
 		page = 1
 	}
 	pageSize := input.PageSize
-	if pageSize < 1 || pageSize > 100 {
-		pageSize = 20
+	if pageSize < 1 {
+		pageSize = defaultPageSize
+	}
+	if pageSize > maxPageSize {
+		pageSize = maxPageSize
 	}
 
 	filter := repository.AuditLogFilter{

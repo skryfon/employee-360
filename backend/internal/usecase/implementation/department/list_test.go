@@ -73,6 +73,18 @@ func TestListDepartmentsUseCase(t *testing.T) {
 		assert.Equal(t, 10, out.PageSize)
 	})
 
+	t.Run("page size above max is clamped to 100", func(t *testing.T) {
+		repo := &mockDepartmentRepo{
+			listFn: func(ctx context.Context, tID uuid.UUID, isActive *bool, limit, offset int) ([]*entity.Department, int64, error) {
+				assert.Equal(t, 100, limit)
+				return []*entity.Department{}, 0, nil
+			},
+		}
+		out, err := NewListDepartmentsUseCase(repo).Execute(bg, tenantID, depttypes.ListDepartmentsQuery{PageSize: 500})
+		require.NoError(t, err)
+		assert.Equal(t, 100, out.PageSize)
+	})
+
 	t.Run("nil tenant returns unauthorized", func(t *testing.T) {
 		uc := NewListDepartmentsUseCase(&mockDepartmentRepo{})
 		_, err := uc.Execute(bg, uuid.Nil, depttypes.ListDepartmentsQuery{})

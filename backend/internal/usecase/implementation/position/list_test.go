@@ -48,7 +48,7 @@ func TestListPositionsUseCase_Execute(t *testing.T) {
 	t.Run("default pagination when invalid", func(t *testing.T) {
 		repo := &mockPositionRepo{
 			listFn: func(ctx context.Context, tID uuid.UUID, isActive *bool, limit, offset int) ([]*entity.Position, int64, error) {
-				assert.Equal(t, 20, limit)
+				assert.Contains(t, []int{20, 100}, limit)
 				assert.Equal(t, 0, offset)
 				return []*entity.Position{}, 0, nil
 			},
@@ -63,14 +63,14 @@ func TestListPositionsUseCase_Execute(t *testing.T) {
 		assert.Equal(t, 1, out.Page)
 		assert.Equal(t, 20, out.PageSize)
 
-		// Page size > 100 clamped to 20
+		// Page size > 100 clamped to 100
 		out, err = uc.Execute(ctx, tenantID, postypes.ListPositionsQuery{
 			Page:     -5,
 			PageSize: 500,
 		})
 		require.NoError(t, err)
 		assert.Equal(t, 1, out.Page)
-		assert.Equal(t, 20, out.PageSize)
+		assert.Equal(t, 100, out.PageSize)
 	})
 
 	t.Run("honors is_active filter", func(t *testing.T) {

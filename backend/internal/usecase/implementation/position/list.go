@@ -10,6 +10,11 @@ import (
 	posuc "github.com/skryfon/employee360/backend/internal/usecase/interface/position"
 )
 
+const (
+	defaultPageSize = 20
+	maxPageSize     = 100
+)
+
 type listPositionsUseCase struct {
 	repo repository.PositionRepository
 }
@@ -30,8 +35,11 @@ func (uc *listPositionsUseCase) Execute(c context.Context, tenantID uuid.UUID, i
 	}
 
 	pageSize := input.PageSize
-	if pageSize < 1 || pageSize > 100 {
-		pageSize = 20
+	if pageSize < 1 {
+		pageSize = defaultPageSize
+	}
+	if pageSize > maxPageSize {
+		pageSize = maxPageSize
 	}
 
 	limit := pageSize

@@ -10,6 +10,11 @@ import (
 	deptuc "github.com/skryfon/employee360/backend/internal/usecase/interface/department"
 )
 
+const (
+	defaultPageSize = 20
+	maxPageSize     = 100
+)
+
 type listDepartmentsUseCase struct {
 	repo repository.DepartmentRepository
 }
@@ -30,8 +35,11 @@ func (uc *listDepartmentsUseCase) Execute(c context.Context, tenantID uuid.UUID,
 	}
 
 	pageSize := input.PageSize
-	if pageSize < 1 || pageSize > 100 {
-		pageSize = 20
+	if pageSize < 1 {
+		pageSize = defaultPageSize
+	}
+	if pageSize > maxPageSize {
+		pageSize = maxPageSize
 	}
 
 	limit := pageSize
