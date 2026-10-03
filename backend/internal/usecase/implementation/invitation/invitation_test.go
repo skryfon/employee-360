@@ -291,6 +291,19 @@ func TestInvite_RejectsInactiveDepartment(t *testing.T) {
 	assert.Empty(t, f.s.audits)
 }
 
+func TestInvite_RejectsInactivePosition(t *testing.T) {
+	f := newFixture()
+	pos := uuid.New()
+	f.s.positions[pos] = f.tenantA
+	f.s.inactivePositions[pos] = true
+
+	_, err := f.invite().Execute(bg, f.tenantA, f.adminID, invtypes.InviteUserRequest{Email: "i@acme.com", RoleID: f.employeeRl.ID, PositionID: &pos})
+	assert.ErrorIs(t, err, domainerrors.ErrPositionInactive)
+	assert.Empty(t, f.s.users)
+	assert.Empty(t, f.s.invitations)
+	assert.Empty(t, f.s.audits)
+}
+
 func TestRevoke_RemovesPendingUserAndAllowsReinvite(t *testing.T) {
 	f := newFixture()
 	inv, _ := f.doInvite(t, "again@acme.com")

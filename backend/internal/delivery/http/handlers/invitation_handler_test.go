@@ -411,6 +411,8 @@ func TestWriteInvitationError_Mapping(t *testing.T) {
 		{domainerrors.ErrRoleNotFound, http.StatusBadRequest},
 		{domainerrors.ErrDepartmentNotFound, http.StatusBadRequest},
 		{domainerrors.ErrPositionNotFound, http.StatusBadRequest},
+		{domainerrors.ErrPositionInactive, http.StatusBadRequest},
+		{domainerrors.ErrDepartmentInactive, http.StatusBadRequest},
 		{domainerrors.ErrInvalidRole, http.StatusBadRequest},
 		{domainerrors.ErrInvalidEmail, http.StatusBadRequest},
 		{errors.New("db exploded"), http.StatusInternalServerError},

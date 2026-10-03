@@ -73,6 +73,8 @@ func writeInvitationError(c *gin.Context, err error) {
 		response.Error(c, http.StatusBadRequest, "EMAIL_DOMAIN_NOT_ALLOWED", "the email domain is not registered for your organization; invite an address on one of its domains")
 	case errors.Is(err, domainerrors.ErrDepartmentInactive):
 		response.Error(c, http.StatusBadRequest, "DEPARTMENT_INACTIVE", "the selected department is inactive; choose an active department")
+	case errors.Is(err, domainerrors.ErrPositionInactive):
+		response.Error(c, http.StatusBadRequest, "POSITION_INACTIVE", "the selected position is inactive; choose an active position")
 	case errors.Is(err, domainerrors.ErrRoleNotFound),
 		errors.Is(err, domainerrors.ErrDepartmentNotFound),
 		errors.Is(err, domainerrors.ErrPositionNotFound),
@@ -95,7 +97,7 @@ func writeInvitationError(c *gin.Context, err error) {
 // @Security     BearerAuth
 // @Param        request  body      invtypes.InviteUserRequest  true  "Invitation details"
 // @Success      201      {object}  response.Envelope{data=invtypes.InvitationResponse}
-// @Failure      400      {object}  response.Envelope  "Invalid payload, email domain not registered for the tenant (EMAIL_DOMAIN_NOT_ALLOWED), or inactive department (DEPARTMENT_INACTIVE)"
+// @Failure      400      {object}  response.Envelope  "Invalid payload, email domain not registered for the tenant (EMAIL_DOMAIN_NOT_ALLOWED), inactive department (DEPARTMENT_INACTIVE), or inactive position (POSITION_INACTIVE)"
 // @Failure      401      {object}  response.Envelope
 // @Failure      403      {object}  response.Envelope
 // @Failure      409      {object}  response.Envelope

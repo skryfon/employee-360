@@ -18,5 +18,8 @@ type OrgReferenceRepository interface {
 	// It reports whether the department was found and whether it is active.
 	// Must run inside a transaction.
 	LockDepartmentShared(ctx context.Context, tenantID, id uuid.UUID) (found, active bool, err error)
-	PositionExists(ctx context.Context, tenantID, id uuid.UUID) (bool, error)
+	// LockPositionShared is the position counterpart of LockDepartmentShared:
+	// FOR SHARE, tenant-scoped, excluding soft-deleted rows. Must run inside a
+	// transaction.
+	LockPositionShared(ctx context.Context, tenantID, id uuid.UUID) (found, active bool, err error)
 }

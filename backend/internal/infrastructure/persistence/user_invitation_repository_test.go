@@ -196,15 +196,26 @@ func TestGormOrgReferenceRepository_TenantScoped(t *testing.T) {
 	require.NoError(t, err)
 	require.False(t, ok)
 
-	ok, err = repo.PositionExists(c, tA.ID, pos)
+	found, _, err := repo.LockPositionShared(database.WithTx(c, db), tA.ID, pos)
 	require.NoError(t, err)
-	require.True(t, ok)
-	ok, err = repo.PositionExists(c, tB.ID, pos)
+	require.True(t, found)
+	found, _, err = repo.LockPositionShared(database.WithTx(c, db), tB.ID, pos)
 	require.NoError(t, err)
-	require.False(t, ok, "foreign tenant must not see position")
-	ok, err = repo.PositionExists(c, tA.ID, dept)
+	require.False(t, found, "foreign tenant must not see position")
+	found, _, err = repo.LockPositionShared(database.WithTx(c, db), tA.ID, dept)
 	require.NoError(t, err)
-	require.False(t, ok, "a department id is not a position")
+	require.False(t, found, "a department id is not a position")
+
+	inactivePos := uuid.New()
+	require.NoError(t, db.Exec("INSERT INTO positions (id, tenant_id, name, is_active) VALUES (?, ?, 'Old', FALSE)", inactivePos, tA.ID).Error)
+	found, active, err := repo.LockPositionShared(database.WithTx(c, db), tA.ID, inactivePos)
+	require.NoError(t, err)
+	require.True(t, found)
+	require.False(t, active)
+	found, active, err = repo.LockPositionShared(database.WithTx(c, db), tA.ID, pos)
+	require.NoError(t, err)
+	require.True(t, found)
+	require.True(t, active)
 }
 
 func TestGormUserInvitationRepository_ListFilterSearchJoins(t *testing.T) {

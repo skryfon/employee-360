@@ -67,9 +67,9 @@ func TestSoftDeletedRowsAreHiddenFromReads(t *testing.T) {
 	ok, err := org.DepartmentExists(c, tid, dept)
 	require.NoError(t, err)
 	require.False(t, ok)
-	ok, err = org.PositionExists(c, tid, pos)
+	found, _, err := org.LockPositionShared(c, tid, pos)
 	require.NoError(t, err)
-	require.False(t, ok)
+	require.False(t, found)
 }
 
 // Soft-deleted tenants and tenant domains must disappear from the management

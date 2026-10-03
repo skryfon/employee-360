@@ -1887,7 +1887,7 @@ const docTemplate = `{
                         }
                     },
                     "400": {
-                        "description": "Invalid payload, email domain not registered for the tenant (EMAIL_DOMAIN_NOT_ALLOWED), or inactive department (DEPARTMENT_INACTIVE)",
+                        "description": "Invalid payload, email domain not registered for the tenant (EMAIL_DOMAIN_NOT_ALLOWED), inactive department (DEPARTMENT_INACTIVE), or inactive position (POSITION_INACTIVE)",
                         "schema": {
                             "$ref": "#/definitions/github_com_skryfon_employee360_backend_internal_delivery_http_response.Envelope"
                         }
