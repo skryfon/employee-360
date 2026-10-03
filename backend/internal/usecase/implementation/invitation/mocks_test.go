@@ -30,23 +30,25 @@ type fakeStore struct {
 	publishErr  error
 	audits      []*entity.AuditLog
 	// depts/positions map id -> owning tenant.
-	depts         map[uuid.UUID]uuid.UUID
-	inactiveDepts map[uuid.UUID]bool
-	positions     map[uuid.UUID]uuid.UUID
+	depts             map[uuid.UUID]uuid.UUID
+	inactiveDepts     map[uuid.UUID]bool
+	inactivePositions map[uuid.UUID]bool
+	positions         map[uuid.UUID]uuid.UUID
 	// domains maps lowercased domain -> owning tenant.
 	domains map[string]uuid.UUID
 }
 
 func newFakeStore() *fakeStore {
 	return &fakeStore{
-		users:         map[uuid.UUID]*entity.User{},
-		invitations:   map[uuid.UUID]*entity.UserInvitation{},
-		roles:         map[uuid.UUID]*entity.Role{},
-		depts:         map[uuid.UUID]uuid.UUID{},
-		inactiveDepts: map[uuid.UUID]bool{},
-		positions:     map[uuid.UUID]uuid.UUID{},
-		domains:       map[string]uuid.UUID{},
-		tenants:       map[uuid.UUID]bool{},
+		users:             map[uuid.UUID]*entity.User{},
+		invitations:       map[uuid.UUID]*entity.UserInvitation{},
+		roles:             map[uuid.UUID]*entity.Role{},
+		depts:             map[uuid.UUID]uuid.UUID{},
+		inactiveDepts:     map[uuid.UUID]bool{},
+		inactivePositions: map[uuid.UUID]bool{},
+		positions:         map[uuid.UUID]uuid.UUID{},
+		domains:           map[string]uuid.UUID{},
+		tenants:           map[uuid.UUID]bool{},
 	}
 }
 
@@ -205,9 +207,10 @@ func (r fakeOrgRepo) LockDepartmentShared(ctx context.Context, t, id uuid.UUID) 
 	ok, err := r.DepartmentExists(ctx, t, id)
 	return ok, ok && !r.s.inactiveDepts[id], err
 }
-func (r fakeOrgRepo) PositionExists(_ context.Context, t, id uuid.UUID) (bool, error) {
+func (r fakeOrgRepo) LockPositionShared(_ context.Context, t, id uuid.UUID) (bool, bool, error) {
 	owner, ok := r.s.positions[id]
-	return ok && owner == t, nil
+	ok = ok && owner == t
+	return ok, ok && !r.s.inactivePositions[id], nil
 }
 
 // UserInvitationRepository

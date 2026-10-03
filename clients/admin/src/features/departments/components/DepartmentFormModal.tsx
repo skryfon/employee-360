@@ -10,7 +10,7 @@ import {
   type DepartmentFormValues,
 } from '../schemas/departmentSchemas'
 import { useCreateDepartmentMutation, useUpdateDepartmentMutation, type Department } from '../queries/departmentQueries'
-import { useDialogFocus } from '../hooks/useDialogFocus'
+import { useDialogFocus } from '../../../hooks/useDialogFocus'
 import { useToast } from '../../../hooks/useToast'
 
 /** The backend uses CONFLICT for both duplicate name and in-use; on create/update it can only mean a duplicate name. */

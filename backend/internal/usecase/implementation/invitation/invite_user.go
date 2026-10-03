@@ -80,18 +80,8 @@ func (u *InviteUserUseCaseImpl) Execute(c context.Context, tenantID, inviterID u
 		return nil, domainerrors.ErrInvalidRole
 	}
 
-	// Position must belong to the caller's tenant (FKs only check existence).
-	// The department is validated (and share-locked) inside the transaction below.
-	if req.PositionID != nil {
-		ok, err := u.orgRefRepo.PositionExists(c, tenantID, *req.PositionID)
-		if err != nil {
-			return nil, err
-		}
-		if !ok {
-			return nil, domainerrors.ErrPositionNotFound
-		}
-	}
-
+	// Department and position are validated (and share-locked) inside the
+	// transaction below.
 	existing, err := u.userRepo.GetByTenantAndEmail(c, tenantID, email)
 	if err != nil && !errors.Is(err, domainerrors.ErrNotFound) && !errors.Is(err, domainerrors.ErrUserNotFound) {
 		return nil, err
@@ -178,6 +168,19 @@ func (u *InviteUserUseCaseImpl) Execute(c context.Context, tenantID, inviterID u
 			}
 			if !active {
 				return domainerrors.ErrDepartmentInactive
+			}
+		}
+		// Same for the position: must belong to the tenant and be active.
+		if req.PositionID != nil {
+			found, active, err := u.orgRefRepo.LockPositionShared(txCtx, tenantID, *req.PositionID)
+			if err != nil {
+				return err
+			}
+			if !found {
+				return domainerrors.ErrPositionNotFound
+			}
+			if !active {
+				return domainerrors.ErrPositionInactive
 			}
 		}
 		if err := u.userRepo.Create(txCtx, user); err != nil {

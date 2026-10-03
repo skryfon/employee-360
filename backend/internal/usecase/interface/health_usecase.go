@@ -1,17 +1,13 @@
 // Package usecaseinterface defines usecase interfaces (ports) for the application.
 package usecaseinterface
 
-import "context"
+import (
+	"context"
 
-// HealthResult contains the status of the application and its dependencies.
-type HealthResult struct {
-	App      string
-	Database string
-	// Redis is "ok", "unreachable", or "disabled" (Redis is optional).
-	Redis string
-}
+	healthtypes "github.com/skryfon/employee360/backend/internal/types/health"
+)
 
 // HealthUseCase defines the interface for checking system health.
 type HealthUseCase interface {
-	Execute(ctx context.Context) HealthResult
+	Execute(ctx context.Context) healthtypes.HealthResult
 }

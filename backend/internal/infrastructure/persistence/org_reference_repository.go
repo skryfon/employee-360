@@ -50,6 +50,15 @@ func (r *gormOrgReferenceRepository) LockDepartmentShared(c context.Context, ten
 	return true, rows[0], nil
 }
 
-func (r *gormOrgReferenceRepository) PositionExists(c context.Context, tenantID, id uuid.UUID) (bool, error) {
-	return r.exists(c, "positions", tenantID, id)
+func (r *gormOrgReferenceRepository) LockPositionShared(c context.Context, tenantID, id uuid.UUID) (found, active bool, err error) {
+	var rows []bool
+	err = database.DBFromContext(c, r.db).
+		Table("positions").
+		Clauses(clause.Locking{Strength: "SHARE"}).
+		Where("id = ? AND tenant_id = ? AND deleted_at IS NULL", id, tenantID).
+		Pluck("is_active", &rows).Error
+	if err != nil || len(rows) == 0 {
+		return false, false, err
+	}
+	return true, rows[0], nil
 }

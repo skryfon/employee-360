@@ -11,6 +11,7 @@ import (
 	"github.com/skryfon/employee360/backend/internal/domain/entity"
 	domainerrors "github.com/skryfon/employee360/backend/internal/domain/errors"
 	"github.com/skryfon/employee360/backend/internal/domain/repository"
+	depttypes "github.com/skryfon/employee360/backend/internal/types/department"
 	"github.com/skryfon/employee360/backend/internal/usecase/implementation/ucshared"
 	deptuc "github.com/skryfon/employee360/backend/internal/usecase/interface/department"
 )
@@ -43,7 +44,7 @@ func NewCreateDepartmentUseCase(
 	}
 }
 
-func (uc *createDepartmentUseCase) Execute(c context.Context, tenantID, actorID uuid.UUID, input deptuc.CreateDepartmentInput) (*entity.Department, error) {
+func (uc *createDepartmentUseCase) Execute(c context.Context, tenantID, actorID uuid.UUID, input depttypes.CreateDepartmentInput) (*entity.Department, error) {
 	if tenantID == uuid.Nil || actorID == uuid.Nil {
 		return nil, domainerrors.ErrUnauthorized
 	}

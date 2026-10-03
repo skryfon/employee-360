@@ -9,5 +9,7 @@
 export interface InternalDeliveryHttpHandlersHealthResponse {
   app?: string;
   database?: string;
+  /** Redis is "ok", "unreachable", or "disabled"; it never changes the HTTP status. */
+  redis?: string;
   status?: string;
 }

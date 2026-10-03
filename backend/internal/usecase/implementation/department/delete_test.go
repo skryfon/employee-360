@@ -11,7 +11,7 @@ import (
 
 	"github.com/skryfon/employee360/backend/internal/domain/entity"
 	domainerrors "github.com/skryfon/employee360/backend/internal/domain/errors"
-	deptuc "github.com/skryfon/employee360/backend/internal/usecase/interface/department"
+	depttypes "github.com/skryfon/employee360/backend/internal/types/department"
 )
 
 func TestDeleteDepartmentUseCase(t *testing.T) {
@@ -40,7 +40,7 @@ func TestDeleteDepartmentUseCase(t *testing.T) {
 		}
 
 		uc := NewDeleteDepartmentUseCase(repo, auditRepo, nil)
-		err := uc.Execute(bg, tenantID, actorID, deptuc.DeleteDepartmentInput{ID: deptID})
+		err := uc.Execute(bg, tenantID, actorID, depttypes.DeleteDepartmentInput{ID: deptID})
 		require.NoError(t, err)
 		assert.Equal(t, 1, repo.forUpdateCalls, "department row must be locked before the reference check")
 
@@ -54,7 +54,7 @@ func TestDeleteDepartmentUseCase(t *testing.T) {
 
 	t.Run("nil uuid returns ErrDepartmentNotFound", func(t *testing.T) {
 		uc := NewDeleteDepartmentUseCase(&mockDepartmentRepo{}, nil, nil)
-		err := uc.Execute(bg, tenantID, actorID, deptuc.DeleteDepartmentInput{ID: uuid.Nil})
+		err := uc.Execute(bg, tenantID, actorID, depttypes.DeleteDepartmentInput{ID: uuid.Nil})
 		require.ErrorIs(t, err, domainerrors.ErrDepartmentNotFound)
 	})
 
@@ -65,7 +65,7 @@ func TestDeleteDepartmentUseCase(t *testing.T) {
 			},
 		}
 		uc := NewDeleteDepartmentUseCase(repo, nil, nil)
-		err := uc.Execute(bg, tenantID, actorID, deptuc.DeleteDepartmentInput{ID: deptID})
+		err := uc.Execute(bg, tenantID, actorID, depttypes.DeleteDepartmentInput{ID: deptID})
 		require.ErrorIs(t, err, domainerrors.ErrDepartmentNotFound)
 	})
 
@@ -79,16 +79,16 @@ func TestDeleteDepartmentUseCase(t *testing.T) {
 			},
 		}
 		uc := NewDeleteDepartmentUseCase(repo, nil, nil)
-		err := uc.Execute(bg, tenantID, actorID, deptuc.DeleteDepartmentInput{ID: deptID})
+		err := uc.Execute(bg, tenantID, actorID, depttypes.DeleteDepartmentInput{ID: deptID})
 		require.ErrorIs(t, err, domainerrors.ErrDepartmentInUse)
 	})
 
 	t.Run("nil tenant or actor returns unauthorized", func(t *testing.T) {
 		uc := NewDeleteDepartmentUseCase(&mockDepartmentRepo{}, nil, nil)
-		err := uc.Execute(bg, uuid.Nil, actorID, deptuc.DeleteDepartmentInput{ID: deptID})
+		err := uc.Execute(bg, uuid.Nil, actorID, depttypes.DeleteDepartmentInput{ID: deptID})
 		require.ErrorIs(t, err, domainerrors.ErrUnauthorized)
 
-		err = uc.Execute(bg, tenantID, uuid.Nil, deptuc.DeleteDepartmentInput{ID: deptID})
+		err = uc.Execute(bg, tenantID, uuid.Nil, depttypes.DeleteDepartmentInput{ID: deptID})
 		require.ErrorIs(t, err, domainerrors.ErrUnauthorized)
 	})
 
@@ -106,7 +106,7 @@ func TestDeleteDepartmentUseCase(t *testing.T) {
 			},
 		}
 		uc := NewDeleteDepartmentUseCase(repo, nil, nil)
-		err := uc.Execute(bg, tenantID, actorID, deptuc.DeleteDepartmentInput{ID: deptID})
+		err := uc.Execute(bg, tenantID, actorID, depttypes.DeleteDepartmentInput{ID: deptID})
 		require.ErrorIs(t, err, boom)
 	})
 }

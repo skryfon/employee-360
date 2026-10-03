@@ -87,7 +87,7 @@ func (h *DepartmentHandler) Create(c *gin.Context) {
 		return
 	}
 
-	dept, err := h.createUC.Execute(c.Request.Context(), tenantID, actorID, deptuc.CreateDepartmentInput{
+	dept, err := h.createUC.Execute(c.Request.Context(), tenantID, actorID, depttypes.CreateDepartmentInput{
 		Name:        req.Name,
 		Description: req.Description,
 		IsActive:    req.IsActive,
@@ -125,7 +125,7 @@ func (h *DepartmentHandler) GetByID(c *gin.Context) {
 		return
 	}
 
-	dept, err := h.getUC.Execute(c.Request.Context(), tenantID, deptuc.GetDepartmentInput{ID: id})
+	dept, err := h.getUC.Execute(c.Request.Context(), tenantID, depttypes.GetDepartmentQuery{ID: id})
 	if err != nil {
 		writeDepartmentError(c, err)
 		return
@@ -175,7 +175,7 @@ func (h *DepartmentHandler) List(c *gin.Context) {
 		isActive = &v
 	}
 
-	out, err := h.listUC.Execute(c.Request.Context(), tenantID, deptuc.ListDepartmentsInput{
+	out, err := h.listUC.Execute(c.Request.Context(), tenantID, depttypes.ListDepartmentsQuery{
 		Page:     page,
 		PageSize: pageSize,
 		IsActive: isActive,
@@ -233,7 +233,7 @@ func (h *DepartmentHandler) Update(c *gin.Context) {
 		return
 	}
 
-	dept, err := h.updateUC.Execute(c.Request.Context(), tenantID, actorID, deptuc.UpdateDepartmentInput{
+	dept, err := h.updateUC.Execute(c.Request.Context(), tenantID, actorID, depttypes.UpdateDepartmentInput{
 		ID:          id,
 		Name:        req.Name,
 		Description: req.Description,
@@ -273,7 +273,7 @@ func (h *DepartmentHandler) Delete(c *gin.Context) {
 		return
 	}
 
-	if err := h.deleteUC.Execute(c.Request.Context(), tenantID, actorID, deptuc.DeleteDepartmentInput{ID: id}); err != nil {
+	if err := h.deleteUC.Execute(c.Request.Context(), tenantID, actorID, depttypes.DeleteDepartmentInput{ID: id}); err != nil {
 		writeDepartmentError(c, err)
 		return
 	}

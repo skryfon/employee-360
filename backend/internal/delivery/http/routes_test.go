@@ -11,6 +11,8 @@ import (
 	"testing"
 	"time"
 
+	healthtypes "github.com/skryfon/employee360/backend/internal/types/health"
+
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
 	"github.com/rs/zerolog"
@@ -22,18 +24,22 @@ import (
 	domainservice "github.com/skryfon/employee360/backend/internal/domain/service"
 	"github.com/skryfon/employee360/backend/internal/infrastructure/container"
 	infraservice "github.com/skryfon/employee360/backend/internal/infrastructure/service"
+	altypes "github.com/skryfon/employee360/backend/internal/types/auditlog"
 	authtypes "github.com/skryfon/employee360/backend/internal/types/auth"
 	dashtypes "github.com/skryfon/employee360/backend/internal/types/dashboard"
+	depttypes "github.com/skryfon/employee360/backend/internal/types/department"
 	invtypes "github.com/skryfon/employee360/backend/internal/types/invitation"
-	usecaseinterface "github.com/skryfon/employee360/backend/internal/usecase/interface"
+	postypes "github.com/skryfon/employee360/backend/internal/types/position"
+	aluc "github.com/skryfon/employee360/backend/internal/usecase/interface/auditlog"
 	deptuc "github.com/skryfon/employee360/backend/internal/usecase/interface/department"
+	posuc "github.com/skryfon/employee360/backend/internal/usecase/interface/position"
 	"github.com/skryfon/employee360/backend/shared"
 )
 
 type fakeHealthUseCase struct{}
 
-func (f *fakeHealthUseCase) Execute(ctx context.Context) usecaseinterface.HealthResult {
-	return usecaseinterface.HealthResult{App: shared.AppName, Database: "ok", Redis: "disabled"}
+func (f *fakeHealthUseCase) Execute(ctx context.Context) healthtypes.HealthResult {
+	return healthtypes.HealthResult{App: shared.AppName, Database: "ok", Redis: "disabled"}
 }
 
 type fakeLoginUseCase struct{}
@@ -622,7 +628,7 @@ type fakeCreateDept struct {
 	gotActor  string
 }
 
-func (f *fakeCreateDept) Execute(c context.Context, tenantID, actorID uuid.UUID, in deptuc.CreateDepartmentInput) (*entity.Department, error) {
+func (f *fakeCreateDept) Execute(c context.Context, tenantID, actorID uuid.UUID, in depttypes.CreateDepartmentInput) (*entity.Department, error) {
 	f.gotTenant, f.gotActor = tenantID.String(), actorID.String()
 	return &entity.Department{ID: uuid.New(), TenantID: tenantID, Name: in.Name, Description: in.Description}, nil
 }
@@ -632,7 +638,7 @@ type fakeGetDept struct {
 	deptID      uuid.UUID
 }
 
-func (f *fakeGetDept) Execute(c context.Context, tenantID uuid.UUID, in deptuc.GetDepartmentInput) (*entity.Department, error) {
+func (f *fakeGetDept) Execute(c context.Context, tenantID uuid.UUID, in depttypes.GetDepartmentQuery) (*entity.Department, error) {
 	if in.ID == f.deptID && tenantID != f.ownerTenant {
 		return nil, domainerrors.ErrDepartmentNotFound
 	}
@@ -641,8 +647,8 @@ func (f *fakeGetDept) Execute(c context.Context, tenantID uuid.UUID, in deptuc.G
 
 type fakeListDept struct{}
 
-func (fakeListDept) Execute(c context.Context, tenantID uuid.UUID, in deptuc.ListDepartmentsInput) (*deptuc.ListDepartmentsOutput, error) {
-	return &deptuc.ListDepartmentsOutput{
+func (fakeListDept) Execute(c context.Context, tenantID uuid.UUID, in depttypes.ListDepartmentsQuery) (*depttypes.ListDepartmentsResult, error) {
+	return &depttypes.ListDepartmentsResult{
 		Departments: []*entity.Department{{ID: uuid.New(), TenantID: tenantID, Name: "HR"}},
 		Total:       1,
 		Page:        1,
@@ -655,7 +661,7 @@ type fakeUpdateDept struct {
 	deptID      uuid.UUID
 }
 
-func (f *fakeUpdateDept) Execute(c context.Context, tenantID, actorID uuid.UUID, in deptuc.UpdateDepartmentInput) (*entity.Department, error) {
+func (f *fakeUpdateDept) Execute(c context.Context, tenantID, actorID uuid.UUID, in depttypes.UpdateDepartmentInput) (*entity.Department, error) {
 	if in.ID == f.deptID && tenantID != f.ownerTenant {
 		return nil, domainerrors.ErrDepartmentNotFound
 	}
@@ -667,7 +673,7 @@ type fakeDeleteDept struct {
 	deptID      uuid.UUID
 }
 
-func (f *fakeDeleteDept) Execute(c context.Context, tenantID, actorID uuid.UUID, in deptuc.DeleteDepartmentInput) error {
+func (f *fakeDeleteDept) Execute(c context.Context, tenantID, actorID uuid.UUID, in depttypes.DeleteDepartmentInput) error {
 	if in.ID == f.deptID && tenantID != f.ownerTenant {
 		return domainerrors.ErrDepartmentNotFound
 	}
@@ -914,5 +920,324 @@ func TestDashboardRoutes_RoleGuards(t *testing.T) {
 	}
 	if rec := do(engine, http.MethodGet, adminPath, bearer(t, jwtSvc, tenant, entity.RoleSuperAdmin), ""); rec.Code != http.StatusForbidden {
 		t.Errorf("super_admin on admin route: want 403, got %d", rec.Code)
+	}
+}
+
+type fakeCreatePos struct {
+	gotTenant string
+	gotActor  string
+}
+
+func (f *fakeCreatePos) Execute(c context.Context, tenantID, actorID uuid.UUID, in postypes.CreatePositionInput) (*entity.Position, error) {
+	f.gotTenant, f.gotActor = tenantID.String(), actorID.String()
+	return &entity.Position{ID: uuid.New(), TenantID: tenantID, Name: in.Name, Description: in.Description}, nil
+}
+
+type fakeGetPos struct {
+	ownerTenant uuid.UUID
+	posID       uuid.UUID
+}
+
+func (f *fakeGetPos) Execute(c context.Context, tenantID uuid.UUID, in postypes.GetPositionQuery) (*entity.Position, error) {
+	if in.ID == f.posID && tenantID != f.ownerTenant {
+		return nil, domainerrors.ErrPositionNotFound
+	}
+	return &entity.Position{ID: in.ID, TenantID: tenantID, Name: "Developer"}, nil
+}
+
+type fakeListPos struct{}
+
+func (fakeListPos) Execute(c context.Context, tenantID uuid.UUID, in postypes.ListPositionsQuery) (*postypes.ListPositionsResult, error) {
+	return &postypes.ListPositionsResult{
+		Positions: []*entity.Position{{ID: uuid.New(), TenantID: tenantID, Name: "Developer"}},
+		Total:     1,
+		Page:      1,
+		PageSize:  20,
+	}, nil
+}
+
+type fakeUpdatePos struct {
+	ownerTenant uuid.UUID
+	posID       uuid.UUID
+}
+
+func (f *fakeUpdatePos) Execute(c context.Context, tenantID, actorID uuid.UUID, in postypes.UpdatePositionInput) (*entity.Position, error) {
+	if in.ID == f.posID && tenantID != f.ownerTenant {
+		return nil, domainerrors.ErrPositionNotFound
+	}
+	return &entity.Position{ID: in.ID, TenantID: tenantID, Name: in.Name, Description: in.Description}, nil
+}
+
+type fakeDeletePos struct {
+	ownerTenant uuid.UUID
+	posID       uuid.UUID
+}
+
+func (f *fakeDeletePos) Execute(c context.Context, tenantID, actorID uuid.UUID, in postypes.DeletePositionInput) error {
+	if in.ID == f.posID && tenantID != f.ownerTenant {
+		return domainerrors.ErrPositionNotFound
+	}
+	return nil
+}
+
+func positionEngine(
+	t *testing.T,
+	create posuc.CreatePositionUseCase,
+	get posuc.GetPositionUseCase,
+	list posuc.ListPositionsUseCase,
+	update posuc.UpdatePositionUseCase,
+	del posuc.DeletePositionUseCase,
+) (*gin.Engine, domainservice.TokenService) {
+	t.Helper()
+	gin.SetMode(gin.TestMode)
+	jwtSvc := setupTestTokenService(t)
+	cfg := &config.Config{CORS: config.CORSConfig{AllowedOrigins: []string{"*"}}}
+	ctr := testContainer(t, cfg, nil, nil)
+	ctr.Auth = &container.AuthContainer{
+		TokenService:     jwtSvc,
+		IdentityVerifier: verifierOf(jwtSvc),
+	}
+	ctr.Position = &container.PositionContainer{
+		Handler: handlers.NewPositionHandler(create, get, list, update, del),
+	}
+	return SetupRouter(cfg, zerolog.Nop(), ctr), jwtSvc
+}
+
+func TestPositionRoutes_AuthAndRoles(t *testing.T) {
+	posID := uuid.New()
+	tenant := uuid.New()
+
+	engine, jwtSvc := positionEngine(
+		t,
+		&fakeCreatePos{},
+		&fakeGetPos{ownerTenant: tenant, posID: posID},
+		fakeListPos{},
+		&fakeUpdatePos{ownerTenant: tenant, posID: posID},
+		&fakeDeletePos{ownerTenant: tenant, posID: posID},
+	)
+
+	routes := []struct {
+		method, path, body string
+		wantSuccessCode    int
+	}{
+		{http.MethodPost, "/api/v1/positions", `{"name":"Developer","description":"Engineering"}`, http.StatusCreated},
+		{http.MethodGet, "/api/v1/positions", "", http.StatusOK},
+		{http.MethodGet, "/api/v1/positions/" + posID.String(), "", http.StatusOK},
+		{http.MethodPut, "/api/v1/positions/" + posID.String(), `{"name":"Lead Developer","description":"Engineering"}`, http.StatusOK},
+		{http.MethodDelete, "/api/v1/positions/" + posID.String(), "", http.StatusOK},
+	}
+
+	for _, r := range routes {
+		t.Run(r.method+" "+r.path, func(t *testing.T) {
+			// Unauthenticated -> 401
+			if rec := do(engine, r.method, r.path, "", r.body); rec.Code != http.StatusUnauthorized {
+				t.Errorf("no token: want 401, got %d", rec.Code)
+			}
+			// Bad token -> 401
+			if rec := do(engine, r.method, r.path, "Bearer invalid-token", r.body); rec.Code != http.StatusUnauthorized {
+				t.Errorf("bad token: want 401, got %d", rec.Code)
+			}
+			// Employee -> 403
+			if rec := do(engine, r.method, r.path, bearer(t, jwtSvc, tenant, "employee"), r.body); rec.Code != http.StatusForbidden {
+				t.Errorf("employee: want 403, got %d", rec.Code)
+			}
+			// Admin -> 200/201
+			rec := do(engine, r.method, r.path, bearer(t, jwtSvc, tenant, "admin"), r.body)
+			if rec.Code != r.wantSuccessCode {
+				t.Errorf("admin: want %d, got %d: %s", r.wantSuccessCode, rec.Code, rec.Body.String())
+			}
+			// Super Admin -> 200/201 (scoped to tenant)
+			rec = do(engine, r.method, r.path, bearer(t, jwtSvc, tenant, "super_admin"), r.body)
+			if rec.Code != r.wantSuccessCode {
+				t.Errorf("super_admin: want %d, got %d: %s", r.wantSuccessCode, rec.Code, rec.Body.String())
+			}
+		})
+	}
+}
+
+func TestPositionRoutes_CrossTenant404(t *testing.T) {
+	tenantA := uuid.New()
+	tenantB := uuid.New()
+	posID := uuid.New()
+
+	engine, jwtSvc := positionEngine(
+		t,
+		&fakeCreatePos{},
+		&fakeGetPos{ownerTenant: tenantA, posID: posID},
+		fakeListPos{},
+		&fakeUpdatePos{ownerTenant: tenantA, posID: posID},
+		&fakeDeletePos{ownerTenant: tenantA, posID: posID},
+	)
+
+	routes := []struct {
+		method, path, body string
+	}{
+		{http.MethodGet, "/api/v1/positions/" + posID.String(), ""},
+		{http.MethodPut, "/api/v1/positions/" + posID.String(), `{"name":"Hacked","description":"Cross-tenant"}`},
+		{http.MethodDelete, "/api/v1/positions/" + posID.String(), ""},
+	}
+
+	for _, r := range routes {
+		t.Run("tenantB accessing tenantA position "+r.method, func(t *testing.T) {
+			rec := do(engine, r.method, r.path, bearer(t, jwtSvc, tenantB, "admin"), r.body)
+			if rec.Code != http.StatusNotFound {
+				t.Errorf("cross-tenant admin: want 404, got %d: %s", rec.Code, rec.Body.String())
+			}
+
+			// Super Admin in tenantB also receives 404 (no cross-tenant bypass)
+			rec = do(engine, r.method, r.path, bearer(t, jwtSvc, tenantB, "super_admin"), r.body)
+			if rec.Code != http.StatusNotFound {
+				t.Errorf("cross-tenant super_admin: want 404, got %d: %s", rec.Code, rec.Body.String())
+			}
+		})
+	}
+}
+
+func TestPositionRoutes_TenantFromTokenNotClient(t *testing.T) {
+	create := &fakeCreatePos{}
+	engine, jwtSvc := positionEngine(
+		t,
+		create,
+		&fakeGetPos{},
+		fakeListPos{},
+		&fakeUpdatePos{},
+		&fakeDeletePos{},
+	)
+
+	tenantA := uuid.New()
+	spoofedTenant := uuid.New()
+
+	body := `{"name":"Developer","description":"Test","tenant_id":"` + spoofedTenant.String() + `"}`
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/positions", bytes.NewBufferString(body))
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Authorization", bearer(t, jwtSvc, tenantA, "admin"))
+	req.Header.Set("X-Tenant-ID", spoofedTenant.String())
+	rec := httptest.NewRecorder()
+	engine.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusCreated {
+		t.Fatalf("want 201, got %d: %s", rec.Code, rec.Body.String())
+	}
+	if create.gotTenant != tenantA.String() {
+		t.Errorf("usecase saw tenant %q, want token tenant %q", create.gotTenant, tenantA)
+	}
+}
+
+func TestPositionRoutes_AllRegistered(t *testing.T) {
+	engine, _ := positionEngine(t, &fakeCreatePos{}, &fakeGetPos{}, fakeListPos{}, &fakeUpdatePos{}, &fakeDeletePos{})
+	registered := map[string]bool{}
+	for _, r := range engine.Routes() {
+		registered[r.Method+" "+r.Path] = true
+	}
+	for _, want := range []string{
+		"POST /api/v1/positions",
+		"GET /api/v1/positions",
+		"GET /api/v1/positions/:id",
+		"PUT /api/v1/positions/:id",
+		"DELETE /api/v1/positions/:id",
+	} {
+		if !registered[want] {
+			t.Errorf("route not registered: %s", want)
+		}
+	}
+}
+
+// ---- Audit log routes ----
+
+type fakeListAudit struct{ gotTenant uuid.UUID }
+
+func (f *fakeListAudit) Execute(c context.Context, tenantID uuid.UUID, in altypes.ListAuditLogsQuery) (*altypes.ListAuditLogsResult, error) {
+	f.gotTenant = tenantID
+	return &altypes.ListAuditLogsResult{
+		Entries:  []*entity.AuditLogEntry{{ID: uuid.New(), TenantID: tenantID, Action: "department.create", EntityType: "department", Metadata: `{}`}},
+		Total:    1,
+		Page:     1,
+		PageSize: 20,
+	}, nil
+}
+
+type fakeGetAudit struct {
+	ownerTenant uuid.UUID
+	id          uuid.UUID
+}
+
+func (f *fakeGetAudit) Execute(c context.Context, tenantID uuid.UUID, in altypes.GetAuditLogQuery) (*entity.AuditLogEntry, error) {
+	if in.ID != f.id || tenantID != f.ownerTenant {
+		return nil, domainerrors.ErrAuditLogNotFound
+	}
+	return &entity.AuditLogEntry{ID: in.ID, TenantID: tenantID, Action: "department.create", EntityType: "department", Metadata: `{}`}, nil
+}
+
+func auditLogEngine(t *testing.T, list aluc.ListAuditLogsUseCase, get aluc.GetAuditLogUseCase) (*gin.Engine, domainservice.TokenService) {
+	t.Helper()
+	gin.SetMode(gin.TestMode)
+	jwtSvc := setupTestTokenService(t)
+	cfg := &config.Config{CORS: config.CORSConfig{AllowedOrigins: []string{"*"}}}
+	ctr := testContainer(t, cfg, nil, nil)
+	ctr.Auth = &container.AuthContainer{TokenService: jwtSvc, IdentityVerifier: verifierOf(jwtSvc)}
+	ctr.AuditLog = &container.AuditLogContainer{Handler: handlers.NewAuditLogHandler(list, get)}
+	return SetupRouter(cfg, zerolog.Nop(), ctr), jwtSvc
+}
+
+func TestAuditLogRoutes_AuthAndRoles(t *testing.T) {
+	tenant := uuid.New()
+	id := uuid.New()
+	engine, jwtSvc := auditLogEngine(t, &fakeListAudit{}, &fakeGetAudit{ownerTenant: tenant, id: id})
+
+	for _, path := range []string{"/api/v1/audit-logs", "/api/v1/audit-logs/" + id.String()} {
+		t.Run(path, func(t *testing.T) {
+			if rec := do(engine, http.MethodGet, path, "", ""); rec.Code != http.StatusUnauthorized {
+				t.Errorf("no token: want 401, got %d", rec.Code)
+			}
+			if rec := do(engine, http.MethodGet, path, "Bearer invalid", ""); rec.Code != http.StatusUnauthorized {
+				t.Errorf("bad token: want 401, got %d", rec.Code)
+			}
+			if rec := do(engine, http.MethodGet, path, bearer(t, jwtSvc, tenant, "employee"), ""); rec.Code != http.StatusForbidden {
+				t.Errorf("employee: want 403, got %d", rec.Code)
+			}
+			for _, role := range []string{"admin", "super_admin"} {
+				if rec := do(engine, http.MethodGet, path, bearer(t, jwtSvc, tenant, role), ""); rec.Code != http.StatusOK {
+					t.Errorf("%s: want 200, got %d: %s", role, rec.Code, rec.Body.String())
+				}
+			}
+		})
+	}
+
+	// Read-only: no mutating verbs are registered.
+	for _, m := range []string{http.MethodPost, http.MethodPut, http.MethodPatch, http.MethodDelete} {
+		if rec := do(engine, m, "/api/v1/audit-logs", bearer(t, jwtSvc, tenant, "admin"), "{}"); rec.Code != http.StatusNotFound && rec.Code != http.StatusMethodNotAllowed {
+			t.Errorf("%s: want 404/405, got %d", m, rec.Code)
+		}
+	}
+}
+
+func TestAuditLogRoutes_CrossTenant404(t *testing.T) {
+	owner, other := uuid.New(), uuid.New()
+	id := uuid.New()
+	engine, jwtSvc := auditLogEngine(t, &fakeListAudit{}, &fakeGetAudit{ownerTenant: owner, id: id})
+	for _, role := range []string{"admin", "super_admin"} {
+		rec := do(engine, http.MethodGet, "/api/v1/audit-logs/"+id.String(), bearer(t, jwtSvc, other, role), "")
+		if rec.Code != http.StatusNotFound {
+			t.Errorf("%s cross-tenant: want 404, got %d: %s", role, rec.Code, rec.Body.String())
+		}
+	}
+}
+
+func TestAuditLogRoutes_TenantFromTokenNotClient(t *testing.T) {
+	list := &fakeListAudit{}
+	engine, jwtSvc := auditLogEngine(t, list, &fakeGetAudit{})
+	tenantA, spoofed := uuid.New(), uuid.New()
+
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/audit-logs?tenant_id="+spoofed.String(), nil)
+	req.Header.Set("Authorization", bearer(t, jwtSvc, tenantA, "admin"))
+	req.Header.Set("X-Tenant-ID", spoofed.String())
+	rec := httptest.NewRecorder()
+	engine.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("want 200, got %d: %s", rec.Code, rec.Body.String())
+	}
+	if list.gotTenant != tenantA {
+		t.Errorf("usecase saw tenant %s, want token tenant %s", list.gotTenant, tenantA)
 	}
 }

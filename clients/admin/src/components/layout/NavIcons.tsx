@@ -39,6 +39,16 @@ export function DepartmentsIcon(props: SVGProps<SVGSVGElement>) {
   )
 }
 
+/** Briefcase: positions. */
+export function PositionsIcon(props: SVGProps<SVGSVGElement>) {
+  return (
+    <Icon {...props}>
+      <rect x="3" y="7" width="18" height="13" rx="2" />
+      <path d="M9 7V5a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2M3 13h18" />
+    </Icon>
+  )
+}
+
 /** Four tiles: dashboard. */
 export function DashboardIcon(props: SVGProps<SVGSVGElement>) {
   return (
@@ -57,6 +67,16 @@ export function BuildingIcon(props: SVGProps<SVGSVGElement>) {
     <Icon {...props}>
       <path d="M4 21V5a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2v16M16 9h2a2 2 0 0 1 2 2v10M2 21h20" />
       <path d="M8 7h4M8 11h4M8 15h4" />
+    </Icon>
+  )
+}
+
+/** Clipboard with lines: audit log. */
+export function AuditLogIcon(props: SVGProps<SVGSVGElement>) {
+  return (
+    <Icon {...props}>
+      <rect x="5" y="4" width="14" height="17" rx="2" />
+      <path d="M9 4V3h6v1M9 10h6M9 14h6M9 18h3" />
     </Icon>
   )
 }

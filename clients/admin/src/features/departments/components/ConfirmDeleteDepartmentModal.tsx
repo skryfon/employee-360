@@ -1,5 +1,5 @@
 import { useRef } from 'react'
-import { useDialogFocus } from '../hooks/useDialogFocus'
+import { useDialogFocus } from '../../../hooks/useDialogFocus'
 
 export function ConfirmDeleteDepartmentModal({
   name,

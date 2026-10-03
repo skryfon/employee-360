@@ -6,6 +6,7 @@ import (
 	"github.com/google/uuid"
 	domainerrors "github.com/skryfon/employee360/backend/internal/domain/errors"
 	"github.com/skryfon/employee360/backend/internal/domain/repository"
+	depttypes "github.com/skryfon/employee360/backend/internal/types/department"
 	"github.com/skryfon/employee360/backend/internal/usecase/implementation/ucshared"
 	deptuc "github.com/skryfon/employee360/backend/internal/usecase/interface/department"
 )
@@ -32,7 +33,7 @@ func NewDeleteDepartmentUseCase(
 	}
 }
 
-func (uc *deleteDepartmentUseCase) Execute(c context.Context, tenantID, actorID uuid.UUID, input deptuc.DeleteDepartmentInput) error {
+func (uc *deleteDepartmentUseCase) Execute(c context.Context, tenantID, actorID uuid.UUID, input depttypes.DeleteDepartmentInput) error {
 	if tenantID == uuid.Nil || actorID == uuid.Nil {
 		return domainerrors.ErrUnauthorized
 	}

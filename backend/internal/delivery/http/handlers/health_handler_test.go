@@ -8,23 +8,24 @@ import (
 	"strings"
 	"testing"
 
+	healthtypes "github.com/skryfon/employee360/backend/internal/types/health"
+
 	"github.com/gin-gonic/gin"
-	usecaseinterface "github.com/skryfon/employee360/backend/internal/usecase/interface"
 )
 
 // fakeHealthUseCase implements usecaseinterface.HealthUseCase for tests.
 type fakeHealthUseCase struct {
-	result usecaseinterface.HealthResult
+	result healthtypes.HealthResult
 }
 
-func (f *fakeHealthUseCase) Execute(ctx context.Context) usecaseinterface.HealthResult {
+func (f *fakeHealthUseCase) Execute(ctx context.Context) healthtypes.HealthResult {
 	return f.result
 }
 
 func TestHealthHandler_Health(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 
-	fake := &fakeHealthUseCase{result: usecaseinterface.HealthResult{
+	fake := &fakeHealthUseCase{result: healthtypes.HealthResult{
 		App:      "employee360",
 		Database: "ok",
 		Redis:    "disabled",
@@ -75,7 +76,7 @@ func TestHealthHandler_Health(t *testing.T) {
 func TestHealthHandler_Health_DatabaseUnreachable(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 
-	fake := &fakeHealthUseCase{result: usecaseinterface.HealthResult{
+	fake := &fakeHealthUseCase{result: healthtypes.HealthResult{
 		App:      "employee360",
 		Database: "unreachable",
 		Redis:    "unreachable",

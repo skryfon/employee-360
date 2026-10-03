@@ -162,6 +162,37 @@ func registerRoutes(engine *gin.Engine, c *container.Container) {
 				deptGroup.DELETE("/:id", dh.Delete)
 			}
 		}
+
+		// Positions: tenant-scoped position CRUD (admin/super_admin only).
+		if c.Position != nil && c.Position.Handler != nil && c.Auth != nil && c.Auth.TokenService != nil {
+			ph := c.Position.Handler
+			posGroup := v1.Group("/positions",
+				middleware.Auth(c.Auth.TokenService, c.Auth.IdentityVerifier),
+				middleware.Tenant(),
+				middleware.RequireRole(entity.RoleAdmin, entity.RoleSuperAdmin),
+			)
+			{
+				posGroup.POST("", ph.Create)
+				posGroup.GET("", ph.List)
+				posGroup.GET("/:id", ph.GetByID)
+				posGroup.PUT("/:id", ph.Update)
+				posGroup.DELETE("/:id", ph.Delete)
+			}
+		}
+
+		// Audit log viewer: read-only, tenant-scoped (admin/super_admin only).
+		if c.AuditLog != nil && c.AuditLog.Handler != nil && c.Auth != nil && c.Auth.TokenService != nil {
+			ah := c.AuditLog.Handler
+			auditGroup := v1.Group("/audit-logs",
+				middleware.Auth(c.Auth.TokenService, c.Auth.IdentityVerifier),
+				middleware.Tenant(),
+				middleware.RequireRole(entity.RoleAdmin, entity.RoleSuperAdmin),
+			)
+			{
+				auditGroup.GET("", ah.List)
+				auditGroup.GET("/:id", ah.GetByID)
+			}
+		}
 	}
 
 	// Swagger UI: interactive API docs, always available (no environment gating).

@@ -11,7 +11,7 @@ import (
 
 	"github.com/skryfon/employee360/backend/internal/domain/entity"
 	domainerrors "github.com/skryfon/employee360/backend/internal/domain/errors"
-	deptuc "github.com/skryfon/employee360/backend/internal/usecase/interface/department"
+	depttypes "github.com/skryfon/employee360/backend/internal/types/department"
 )
 
 func TestGetDepartmentUseCase(t *testing.T) {
@@ -35,14 +35,14 @@ func TestGetDepartmentUseCase(t *testing.T) {
 		}
 
 		uc := NewGetDepartmentUseCase(repo)
-		dept, err := uc.Execute(bg, tenantID, deptuc.GetDepartmentInput{ID: deptID})
+		dept, err := uc.Execute(bg, tenantID, depttypes.GetDepartmentQuery{ID: deptID})
 		require.NoError(t, err)
 		assert.Equal(t, expected, dept)
 	})
 
 	t.Run("nil uuid returns ErrDepartmentNotFound", func(t *testing.T) {
 		uc := NewGetDepartmentUseCase(&mockDepartmentRepo{})
-		_, err := uc.Execute(bg, tenantID, deptuc.GetDepartmentInput{ID: uuid.Nil})
+		_, err := uc.Execute(bg, tenantID, depttypes.GetDepartmentQuery{ID: uuid.Nil})
 		require.ErrorIs(t, err, domainerrors.ErrDepartmentNotFound)
 	})
 
@@ -53,13 +53,13 @@ func TestGetDepartmentUseCase(t *testing.T) {
 			},
 		}
 		uc := NewGetDepartmentUseCase(repo)
-		_, err := uc.Execute(bg, tenantID, deptuc.GetDepartmentInput{ID: deptID})
+		_, err := uc.Execute(bg, tenantID, depttypes.GetDepartmentQuery{ID: deptID})
 		require.ErrorIs(t, err, domainerrors.ErrDepartmentNotFound)
 	})
 
 	t.Run("nil tenant returns unauthorized", func(t *testing.T) {
 		uc := NewGetDepartmentUseCase(&mockDepartmentRepo{})
-		_, err := uc.Execute(bg, uuid.Nil, deptuc.GetDepartmentInput{ID: deptID})
+		_, err := uc.Execute(bg, uuid.Nil, depttypes.GetDepartmentQuery{ID: deptID})
 		require.ErrorIs(t, err, domainerrors.ErrUnauthorized)
 	})
 
@@ -71,7 +71,7 @@ func TestGetDepartmentUseCase(t *testing.T) {
 			},
 		}
 		uc := NewGetDepartmentUseCase(repo)
-		_, err := uc.Execute(bg, tenantID, deptuc.GetDepartmentInput{ID: deptID})
+		_, err := uc.Execute(bg, tenantID, depttypes.GetDepartmentQuery{ID: deptID})
 		require.ErrorIs(t, err, boom)
 	})
 }
