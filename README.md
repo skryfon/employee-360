@@ -37,7 +37,7 @@ Scaffolding) is active.
 
 | | |
 |---|---|
-| **Backend** | Go · Gin · GORM + PostgreSQL · `golang-migrate` · JWT · Viper · Zerolog · Clean Architecture (Hexagonal / Ports & Adapters) |
+| **Backend** | Go · Gin · GORM + PostgreSQL · `golang-migrate` · JWT · Viper · Zerolog · Redis (optional) · Clean Architecture (Hexagonal / Ports & Adapters) |
 | **Frontend** | React + TypeScript + Vite · Tailwind CSS · TanStack Query · Zustand · React Hook Form + Zod · `pnpm` workspaces |
 
 See [`plan/architecture/overview.md`](plan/architecture/overview.md) for diagrams,
@@ -54,12 +54,41 @@ you'll need once Cycle 1 scaffolding lands, per the target stack above:
 - **Node.js** + **pnpm** — for the `clients/*` and `packages/*` workspace
 - **PostgreSQL** — the application database (run via `docker-compose` locally, or a
   native install)
+- **Redis** (optional) — cache/counter store, off by default (`REDIS_ENABLED=false`);
+  run via `docker compose up -d redis`
 - **Docker** + **Docker Compose** — for local infra (Postgres, and the API once
   containerised)
 
 Exact minimum versions will be pinned in `backend/go.mod` and the root
 `package.json`/`.nvmrc` as part of Cycle 1 — treat the above as the toolchain to have
 installed, not a version contract yet.
+
+## Redis (optional)
+
+Redis is a self-hostable, optional dependency (foundation only: no feature uses it
+yet). Configure it in `.env` (see `.env.example`):
+
+| Variable | Default | Notes |
+|---|---|---|
+| `REDIS_ENABLED` | `false` | Master switch |
+| `REDIS_HOST` / `REDIS_PORT` | `localhost` / `6379` | Ignored when `REDIS_URL` is set |
+| `REDIS_PASSWORD` | (compose default `redis`) | Required in production/staging when enabled |
+| `REDIS_DB`, `REDIS_TLS` | `0`, `false` | |
+| `REDIS_URL` | empty | `redis://` / `rediss://` URL; overrides the fields above |
+| `REDIS_DIAL_TIMEOUT`, `REDIS_READ_TIMEOUT`, `REDIS_WRITE_TIMEOUT`, `REDIS_POOL_SIZE` | `5s`, `3s`, `3s`, `10` | |
+
+Start it with `docker compose up -d redis` (data persists in the
+`employee360_redis_data` volume). Keys are namespaced `e360:{tenant_id}:<feature>:<key>`
+(or `e360:global:...` pre-auth) via `service.CacheKey`.
+
+Failure modes:
+
+- **Disabled**: a no-op cache is used; `/api/v1/health` reports `redis: "disabled"`.
+- **Enabled but unreachable at startup**: the API exits (fail fast).
+- **Down at runtime**: cache calls return errors and health reports
+  `redis: "unreachable"` (HTTP status stays 200). Each future consumer decides its
+  policy: rate limiting falls back to the in-memory limiter
+  (`middleware/ratelimit.go`); identity caching fails closed.
 
 ## Commands (planned)
 

@@ -22,12 +22,14 @@ type HealthResponse struct {
 	Status   string `json:"status"`
 	App      string `json:"app"`
 	Database string `json:"database"`
+	// Redis is "ok", "unreachable", or "disabled"; it never changes the HTTP status.
+	Redis string `json:"redis"`
 }
 
 // Health handles health check requests and returns system status.
 //
 // @Summary      Report application and database health
-// @Description  Returns application and database connectivity status. Used by load balancers, Kubernetes probes, monitoring, and client SDK smoke tests.
+// @Description  Returns application, database and (optional) Redis connectivity status. Redis reports ok, unreachable or disabled and never changes the HTTP status. Used by load balancers, Kubernetes probes, monitoring, and client SDK smoke tests.
 // @Tags         health
 // @Produce      json
 // @Success      200  {object}  response.Envelope{data=handlers.HealthResponse}
@@ -41,5 +43,6 @@ func (h *HealthHandler) Health(c *gin.Context) {
 		Status:   "ok",
 		App:      result.App,
 		Database: result.Database,
+		Redis:    result.Redis,
 	})
 }

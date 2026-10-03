@@ -27,6 +27,7 @@ func TestHealthHandler_Health(t *testing.T) {
 	fake := &fakeHealthUseCase{result: usecaseinterface.HealthResult{
 		App:      "employee360",
 		Database: "ok",
+		Redis:    "disabled",
 	}}
 	handler := NewHealthHandler(fake)
 
@@ -47,6 +48,7 @@ func TestHealthHandler_Health(t *testing.T) {
 			Status   string `json:"status"`
 			App      string `json:"app"`
 			Database string `json:"database"`
+			Redis    string `json:"redis"`
 		} `json:"data"`
 	}
 	if err := json.Unmarshal(rec.Body.Bytes(), &body); err != nil {
@@ -65,6 +67,9 @@ func TestHealthHandler_Health(t *testing.T) {
 	if body.Data.Database != "ok" {
 		t.Errorf("expected database 'ok', got %q", body.Data.Database)
 	}
+	if body.Data.Redis != "disabled" {
+		t.Errorf("expected redis 'disabled', got %q", body.Data.Redis)
+	}
 }
 
 func TestHealthHandler_Health_DatabaseUnreachable(t *testing.T) {
@@ -73,6 +78,7 @@ func TestHealthHandler_Health_DatabaseUnreachable(t *testing.T) {
 	fake := &fakeHealthUseCase{result: usecaseinterface.HealthResult{
 		App:      "employee360",
 		Database: "unreachable",
+		Redis:    "unreachable",
 	}}
 	handler := NewHealthHandler(fake)
 
@@ -89,5 +95,8 @@ func TestHealthHandler_Health_DatabaseUnreachable(t *testing.T) {
 	}
 	if !strings.Contains(rec.Body.String(), `"database":"unreachable"`) {
 		t.Errorf("expected body to report database unreachable, got: %s", rec.Body.String())
+	}
+	if !strings.Contains(rec.Body.String(), `"redis":"unreachable"`) {
+		t.Errorf("expected body to report redis unreachable, got: %s", rec.Body.String())
 	}
 }

@@ -7,6 +7,8 @@ import "context"
 type HealthResult struct {
 	App      string
 	Database string
+	// Redis is "ok", "unreachable", or "disabled" (Redis is optional).
+	Redis string
 }
 
 // HealthUseCase defines the interface for checking system health.

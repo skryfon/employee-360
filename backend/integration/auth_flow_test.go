@@ -56,7 +56,7 @@ func newAuthFlowEnv(t *testing.T) *authFlowEnv {
 		App:  config.AppConfig{FrontendURL: "http://frontend.test"},
 		CORS: config.CORSConfig{AllowedOrigins: []string{"*"}},
 	}
-	ctr, err := container.New(cfg, db, zerolog.Nop())
+	ctr, err := container.New(cfg, db, nil, zerolog.Nop())
 	require.NoError(t, err)
 	router := deliveryhttp.SetupRouter(cfg, zerolog.Nop(), ctr)
 

@@ -97,7 +97,7 @@ backend/
 │   │   │   ├── password_reset_repository.go
 │   │   │   ├── refresh_token_repository.go
 │   │   │   └── user_invitation_repository.go
-│   │   ├── service/              # Domain service interfaces (Token service, Hasher, Email, Event publisher)
+│   │   ├── service/              # Domain service interfaces (Token service, Hasher, Email, Event publisher, Cache + CachePinger, tenant-namespaced CacheKey helper)
 │   │   │   ├── token_service.go
 │   │   │   ├── hash_service.go
 │   │   │   ├── email_service.go  # EmailService interface, EmailMessage/EmailTemplateName
@@ -198,10 +198,12 @@ backend/
 │   │   │   └── user_invitation_repo.go
 │   │   ├── service/              # External service implementations
 │   │   │   ├── jwt_service.go    # JWT generation & validation
-│   │   │   ├── bcrypt_service.go # Password hashing & comparison
+│   │   │   ├── hash_service.go   # Password hashing & comparison
 │   │   │   ├── mail_service.go   # SMTP EmailService implementation — called only from infrastructure/job/, never from a usecase
-│   │   │   └── mail/
-│   │   │       └── templates/    # Subject + text + HTML template per EmailTemplateName
+│   │   │   ├── mail/
+│   │   │   │   └── templates/    # Subject + text + HTML template per EmailTemplateName
+│   │   │   ├── redis.go          # NewRedisClient (URL/fields, TLS, timeouts, ping) + RedisCache (Cache + CachePinger); only place go-redis is imported (archtest-enforced)
+│   │   │   └── noop_cache.go     # NoopCache used when REDIS_ENABLED=false (returns ErrCacheUnavailable)
 │   │   ├── eventing/              # EventPublisher implementation + event->job mapping
 │   │   │   ├── dispatcher.go      # Maps EventType -> River job args (SendEmailArgs)
 │   │   │   └── river_publisher.go # EventPublisher impl: extracts *sql.Tx from ctx, dispatches, riverClient.InsertTx (same transaction as the caller's business write)

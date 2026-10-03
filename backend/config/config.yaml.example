@@ -60,6 +60,24 @@ smtp:
   from: "Employee360 <no-reply@example.com>"
   use_tls: true
 
+# Optional Redis cache/counter store. Disabled by default; when enabled the API
+# fails fast at startup if Redis is unreachable. `url` (redis:// or rediss://)
+# overrides host/port/password/db/tls. Prefer the REDIS_PASSWORD env var over
+# committing a password. Env: REDIS_ENABLED, REDIS_URL, REDIS_HOST, REDIS_PORT,
+# REDIS_PASSWORD, REDIS_DB, REDIS_TLS, REDIS_DIAL_TIMEOUT, REDIS_READ_TIMEOUT,
+# REDIS_WRITE_TIMEOUT, REDIS_POOL_SIZE
+redis:
+  enabled: false
+  url: ""
+  host: "localhost"
+  port: 6379
+  password: ""
+  db: 0
+  tls: false
+  dial_timeout: 5s
+  read_timeout: 3s
+  write_timeout: 3s
+  pool_size: 10
 
 # Read only by cmd/bootstrap. Prefer the env vars BOOTSTRAP_SUPER_ADMIN_EMAIL /
 # BOOTSTRAP_SUPER_ADMIN_PASSWORD over committing credentials to a file.
