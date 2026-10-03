@@ -170,6 +170,36 @@ FK column. See the `create-migration` skill for the full invariant checklist.
 - [ ] `job/email_worker.go` — `river.Worker[SendEmailArgs]` implementation; calls `EmailService.Send`; `river.JobCancel` on permanent validation errors, otherwise River's default retry/backoff
 - [ ] `backend/cmd/worker/main.go` — boots a River client (registers `EmailWorker`) via the DI container, runs `riverClient.Start(ctx)` with graceful shutdown, mirroring `cmd/api/main.go`'s lifecycle pattern; runs as its own process (add a `worker` service to `docker-compose.yml` and a `make worker` target alongside `make dev`)
 
+### Redis Foundation (backend only; merged from the former Cycle 5, EPIC-F / EMPLOYEE36-29)
+
+Redis is optional infrastructure only — **foundation, no consumers** (rate limiting, OTP
+counters, JWT revocation/identity caching are follow-up tickets). This reverses this cycle's
+earlier "no Redis" stance for the River outbox: River still uses Postgres; Redis is separate.
+
+- [x] `redis` service in `docker-compose.yml` and `backend/docker-compose.yml` (pinned
+      `redis:8.10.2-alpine`, `--requirepass`, AOF, healthcheck, resource limits, named
+      volume `employee360_redis_data`, `${REDIS_PORT:-6379}` mapping)
+- [x] `RedisConfig` (`REDIS_*`, optional `REDIS_URL`), defaults, validation (port range,
+      pool size, password required in production/staging when enabled), `.env.example`,
+      `config.yaml.example`
+- [x] `service.Cache` port (`Get/Set/Delete/Incr/Ping`; ttl required; `ErrCacheMiss`,
+      `ErrCacheUnavailable`) and `service.CachePinger`; `service.CacheKey` / `GlobalCacheKey`
+      tenant-namespaced key helpers
+- [x] go-redis adapter + `NoopCache` in `internal/infrastructure/service/`
+- [x] Health: `redis` field (`ok` / `unreachable` / `disabled`); never changes HTTP status
+- [x] DI (`container.New` takes an optional cache), startup connect + shutdown close in `cmd/api`
+- [x] Archtest: go-redis importable only under `internal/infrastructure/`
+- [x] CI: `redis` service in the integration job; integration tests (`-tags=integration`)
+- [x] Docs: README, `shared-context.md`, `plan/architecture/backend.md`
+
+Failure-mode policy: **disabled** (`REDIS_ENABLED=false`, default) → `NoopCache`, health says
+`disabled`; **enabled but down at startup** → fail fast; **down at runtime** → cache calls
+error, health says `unreachable` (HTTP 200); each consumer decides (rate limiting falls back
+to the in-memory limiter in `middleware/ratelimit.go`; identity caching fails closed).
+Tenant-owned keys must use `CacheKey(tenantID, ...)` with a tenantID from the authenticated
+context (never client input); a nil tenant is rejected. The domain `Cache` port exposes no
+Redis types. Non-goals: any consumer, Redis Cluster/Sentinel, pub/sub, frontend changes.
+
 ### Auth Usecases (`backend/internal/usecase/{interface,implementation}/auth/`)
 
 - [ ] `LoginUseCase` — email + password → access + refresh token pair, for any role (`super_admin`/`admin`/`employee`); same endpoint and usecase for all three, role comes from the resolved user's `user_roles`
@@ -212,8 +242,9 @@ FK column. See the `create-migration` skill for the full invariant checklist.
   - Added during EMPLOYEE36-23: unauthenticated `GET /api/v1/invitations/validate?token=` (same rate limiter as accept). Success returns `{email, role}` where `role` is the invitee's role name (`admin` | `employee` | ...); tenant and role are derived from the invitation row, never from input.
   - Distinct failure states (the endpoint is unauthenticated and the ticket waives enumeration-safety), returned by **both** validate and accept when the token hash matches a row: `INVITATION_EXPIRED` (410), `INVITATION_REVOKED` (403), `INVITATION_ACCEPTED` (409; also when the user is already active). An unknown/empty token stays `INVALID_TOKEN` (400). Clients must branch on the envelope `error.code`, not on message text.
   - Added during the UI-fix review: `InviteUserUseCase` requires the invitee's email domain to be a registered `tenant_domains` entry of the caller's tenant (case-insensitive; soft-deleted domains and inactive tenants don't count), otherwise `400 EMAIL_DOMAIN_NOT_ALLOWED`; emails with more than one `@` are rejected as `ErrInvalidEmail`. Consequence: a tenant must have `tenant_domains` rows for every domain it invites from (login already depends on the same table).
-- [ ] `role_handler.go` — `GET /api/v1/roles` (admin/super_admin only; Auth → Tenant → `RequireRole`): lists the caller-tenant roles an admin may assign, excluding `super_admin`, returning `{id, name}` only. Added during EMPLOYEE36-21 because the invite form needs a `role_id` and no endpoint exposed role IDs. (Position list endpoints are not yet built; the invite form takes raw UUIDs until a follow-up cycle adds them).
+- [ ] `role_handler.go` — `GET /api/v1/roles` (admin/super_admin only; Auth → Tenant → `RequireRole`): lists the caller-tenant roles an admin may assign, excluding `super_admin`, returning `{id, name}` only. Added during EMPLOYEE36-21 because the invite form needs a `role_id` and no endpoint exposed role IDs. (Position CRUD is added below in this cycle; the invite form moves from raw UUIDs to selects once it lands).
 - [x] `department_handler.go` — `POST/GET /api/v1/departments`, `GET/PUT/DELETE /api/v1/departments/:id` (admin/super_admin only; Auth → Tenant → `RequireRole`): full tenant-scoped department CRUD implemented in EMPLOYEE36-26. Departments carry an `is_active` flag (migration `000018_add_is_active_to_departments`, default true): create accepts optional `is_active` (default true), update accepts optional `is_active` (omitted keeps the current value; toggles are audited as `department.activate`/`department.deactivate`), and `GET /departments` takes an optional `is_active=true|false` filter (400 on other values). Deactivating a referenced department is allowed (only delete is blocked); inviting into an inactive department is rejected inside the invite transaction under the department shared lock with 400 `DEPARTMENT_INACTIVE`.
+- [ ] `position_handler.go` — `POST/GET /api/v1/positions`, `GET/PUT/DELETE /api/v1/positions/:id` (admin/super_admin only; Auth → Tenant → `RequireRole`): tenant-scoped position CRUD, mirroring the department CRUD (EMPLOYEE36-26). **In progress (assigned to a teammate)** — this doc only records the scope; implementation details live in that ticket.
 - [ ] `dashboard_handler.go` — `GET /api/v1/dashboard/admin` (`RequireRole(admin)`) and
   `GET /api/v1/dashboard/super-admin` (`RequireRole(super_admin)`); Auth → Tenant → role
   guard; tenant from the auth context only
@@ -248,6 +279,7 @@ frontend item before its backend endpoint is callable.
   revoke actions; the list is the landing page at `/invitations`, the form lives on
   `/invitations/new`; the role select is fed by `GET /api/v1/roles`
 - [x] `clients/admin/src/features/departments/` — departments list/create/edit/delete UI at `/departments` (admin/super_admin sidebar entry), backed by the EMPLOYEE36-26 department CRUD endpoints; create/edit in a modal, delete behind a confirm modal, 409 `CONFLICT` mapped to duplicate-name (create/edit) or in-use (delete) messages.
+- [ ] `clients/admin/src/features/positions/` — positions list/create/edit/delete UI at `/positions`, mirroring `features/departments/`. **In progress (assigned to a teammate).** Once positions land, the invitation form's department/position fields become selects instead of raw UUIDs.
 - [ ] `clients/admin/src/features/tenants/` — super_admin-only "Organization" settings nav item
   and page (`/settings/organization`): view and rename the current tenant, and a domains
   manager (list/add/edit/remove). No tenant list or create screens (self-hosted). Depends on
@@ -266,7 +298,7 @@ frontend item before its backend endpoint is callable.
   confirm before building if that's not yet decided.
   - **Decision (EMPLOYEE36-23, host switching):** the admin and employee apps are separate hosts. The invite email link targets the *invited role's* app (`admin`/`super_admin` -> `APP_ADMIN_URL`, `employee` -> `APP_EMPLOYEE_URL`, each falling back to `APP_FRONTEND_URL` when unset). The accept page exists in both apps; on load it calls validate, and if the returned `role` belongs to the other app it redirects (carrying the token) to the correct app's accept page. Forgot/reset-password links still use `APP_FRONTEND_URL`.
 
-**Done when:** `make migrate` applies all 12 migrations cleanly, `make migrate-down`
+**Done when:** `make migrate` applies all migrations cleanly, `make migrate-down`
 reverses them cleanly, `cmd/bootstrap` seeds a working system tenant + super admin, and
 end-to-end **through the UI, with both `cmd/api` and `cmd/worker` running**: an admin can
 log in on the admin login page, request a password reset and complete it via the
@@ -313,4 +345,5 @@ transaction leaves neither the `user_invitations` row nor the River job behind.
   (`.claude/skills/`)
 - Agent to use: `backend-agent` (`.claude/agents/`)
 - Previous cycle: `plan/cycles/cycle-01-project-setup.md`
+- Redis foundation: merged into this cycle (formerly `cycle-05-redis-foundation.md`)
 - Next cycle: `plan/cycles/cycle-03-holiday-calendar-migrations-seeding.md`
