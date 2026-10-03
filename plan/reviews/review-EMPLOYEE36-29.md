@@ -6,7 +6,7 @@
 **Identifier:** EMPLOYEE36-29
 **State:** backlog (Plane `state_group: backlog`), no child stories, no comments
 **Link:** Plane project 84ac89ce-4980-4bcb-946f-cd252071f83a
-**Cycle:** plan/cycles/cycle-05-redis-foundation.md (foundation only, "no consumers")
+**Cycle:** plan/cycles/cycle-02-auth-onboarding.md (Redis Foundation section; formerly cycle-05) (foundation only, "no consumers")
 
 ### Description
 Introduce pinned Redis 8.x as an optional self-hostable service with a Clean-Architecture
@@ -31,7 +31,7 @@ with mandatory TTL, health check, DI, tests.
 ## Findings
 
 ### 🔴 Critical
-- [x] (resolved: AC-5 split into EMPLOYEE36-33, ticket ACs narrowed) Ticket AC-5 vs cycle scope — AC-5 (auth rate limiting consumer) is unmet; `cycle-05-redis-foundation.md` deliberately excludes consumers. Fix: either file the rate-limiting consumer as a follow-up sub-ticket and narrow EMPLOYEE36-29's ACs to the foundation (then AC-5 is out of scope and this merges), or implement the consumer. Needs a product decision; the code itself is sound.
+- [x] (resolved: AC-5 split into EMPLOYEE36-33, ticket ACs narrowed) Ticket AC-5 vs cycle scope — AC-5 (auth rate limiting consumer) is unmet; cycle-02 Redis Foundation section deliberately excludes consumers. Fix: either file the rate-limiting consumer as a follow-up sub-ticket and narrow EMPLOYEE36-29's ACs to the foundation (then AC-5 is out of scope and this merges), or implement the consumer. Needs a product decision; the code itself is sound.
 
 ### 🟡 Major
 - [ ] (none)
