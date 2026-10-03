@@ -47,7 +47,7 @@ const withQueryKey = <T extends object, K>(query: T, queryKey: K): T & { queryKe
 };
 
 /**
- * Returns application and database connectivity status. Used by load balancers, Kubernetes probes, monitoring, and client SDK smoke tests.
+ * Returns application, database and (optional) Redis connectivity status. Redis reports ok, unreachable or disabled and never changes the HTTP status. Used by load balancers, Kubernetes probes, monitoring, and client SDK smoke tests.
  * @summary Report application and database health
  */
 export const getApiV1Health = (
@@ -140,7 +140,7 @@ export function useGetApiV1Health<TData = Awaited<ReturnType<typeof getApiV1Heal
 
 
 /**
- * Returns application and database connectivity status. Used by load balancers, Kubernetes probes, monitoring, and client SDK smoke tests.
+ * Returns application, database and (optional) Redis connectivity status. Redis reports ok, unreachable or disabled and never changes the HTTP status. Used by load balancers, Kubernetes probes, monitoring, and client SDK smoke tests.
  * @summary Report application and database health
  */
 export const getHealth = (
@@ -233,7 +233,7 @@ export function useGetHealth<TData = Awaited<ReturnType<typeof getHealth>>, TErr
 
 
 /**
- * Returns application and database connectivity status. Used by load balancers, Kubernetes probes, monitoring, and client SDK smoke tests.
+ * Returns application, database and (optional) Redis connectivity status. Redis reports ok, unreachable or disabled and never changes the HTTP status. Used by load balancers, Kubernetes probes, monitoring, and client SDK smoke tests.
  * @summary Report application and database health
  */
 export const getHealthz = (
